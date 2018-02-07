@@ -11,7 +11,6 @@ Data Pipeline:
 	Explainability
 ========================
 
-Header test explians the curve here.
 """
 from __future__ import print_function
 import pdb
@@ -24,17 +23,20 @@ from keras.datasets import mnist
 from keras.models import Model, Sequential
 from keras.layers import Input
 from keras.wrappers.scikit_learn import KerasClassifier
-from keras.layers.core import Dense, Activation
 from keras.optimizers import SGD, RMSprop, Adam
 from keras.utils import np_utils
+from keras.layers.core import Dense, Activation, Dropout
+from keras.callbacks import Callback
 from sklearn.neighbors.kde import KernelDensity
 from sklearn.model_selection import cross_val_score
 from sklearn.preprocessing import LabelEncoder
 from sklearn.preprocessing import StandardScaler
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.pipeline import Pipeline
 from sklearn import preprocessing, linear_model
 from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score, cohen_kappa_score
 from sklearn.model_selection import train_test_split
+from xgboost import XGBClassifier
 import os
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
@@ -46,9 +48,15 @@ from patsy import dmatrices
 import itertools
 from sklearn.metrics import roc_curve, auc, roc_auc_score, log_loss, accuracy_score, confusion_matrix
 import warnings
-from sklearn.feature_selection import SelectKBest, f_classif
+from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif, chi2
+import xgboost as xgb
+from sklearn.manifold import TSNE
+from sklearn import metrics
+import importlib
+
 
 def main():
+	plt.close('all')
 	# get the data in csv format
 	dataset = run_load_csv()
 	# data preparation
@@ -57,9 +65,17 @@ def main():
 	# scatter_plot_target_cond(dataset)
 	X_prep, X_train, X_test, y_train, y_test = run_feature_engineering(dataset)
 	## Build model and fit to data
-	model = ['LogisticRegression','RandomForestClassifier']
+	model = ['LogisticRegression','RandomForestClassifier', 'XGBooster'] 
 	run_fitmodel(model[0], X_train, X_test, y_train, y_test)
+	run_fitmodel(model[1], X_train, X_test, y_train, y_test)
+	run_fitmodel(model[2], X_train, X_test, y_train, y_test)
+
+	model, model2, activations = run_Keras_DN(None, X_train, X_test, y_train, y_test)
+	#activations.shape = X_test.shape[0], number of weights
+	samples = run_tSNE_analysis(activations, y_test)
+	run_TDA_with_Kepler(samples, activations)
 	pdb.set_trace()
+	
 
 
 	[explanatory_features, target_feature] = select_expl_and_target_features(dataset)
@@ -76,25 +92,6 @@ def main():
 	run_logistic_regression(dataset, feature_label)
 	#run_svm()
 	#run_networks()
-
-def run_fitmodel(model, X_train, X_test, y_train, y_test):
-	if model == 'LogisticRegression':
-		# Create logistic regression object
-		regr = linear_model.LogisticRegression()
-		# Train the model using the training sets
-		regr.fit(X_train, y_train)
-		# model prediction
-		y_train_pred = regr.predict_proba(X_train)[:,1]
-		y_test_pred = regr.predict_proba(X_test)[:,1]
-		threshold = 0.5
-
-		fig,ax = plt.subplots(1,3)
-		fig.set_size_inches(15,5)
-		plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'Confusion matrix (TRAIN)', threshold)
-		plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'Confusion matrix (TEST)', threshold)
-		plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, threshold)
-		plt.tight_layout()
-		plt.show()
 
 def run_data_wrangling(dataset, explanatory_features):
 	"""cleaning, transforming, and mapping data from one form to another ready for 
@@ -231,8 +228,9 @@ def selcols(prefix, a=1, b=4):
 	return [prefix+str(i) for i in np.arange(a,b+1)]
 
 def run_feature_engineering(df):
-	""" run_feature_engineering(X, y) laso feature selection"""
-	# Construct a single design matrix given a formula_like and data
+	""" run_feature_engineering(X, y) : builds design matrix also feature selection
+	return X_prep, X_train, X_test, y_train, y_test """
+	# Construct a single design matrix given a formula_ y ~ X
 	formula = 'conversion ~ '
 	# original features
 	formula += 'C(sexo) + C(nivel_educativo) +  C(apoe) '
@@ -241,26 +239,102 @@ def run_feature_engineering(df):
 	#formula += '+' + 'C(visita_1_edad_cat)'
 	#longitudinal
 	formula += '+' + '+'.join(selcols('scd_v'))
+	print("The formula is:", formula)
+	# patsy dmatrices, construct a single design matrix given a formula_like and data.
 	y, X = dmatrices(formula, data=df, return_type='dataframe')
 	y = y.iloc[:, 0]
 	# feature scaling
 	scaler = preprocessing.MinMaxScaler()
 	scaler.fit(X)
-	""" select features and find top indices from the formula y ~X """
+	""" select top features and find top indices from the formula  """
 	nboffeats = 6
 	warnings.simplefilter(action='ignore', category=(UserWarning,RuntimeWarning))
-	selector = SelectKBest(f_classif, nboffeats)
+	# sklearn.feature_selection.SelectKBest, select k features according to the highest scores
+	# SelectKBest(score_func=<function f_classif>, k=10)
+	# f_classif:ANOVA F-value between label/feature for classification tasks.
+	# mutual_info_classif: Mutual information for a discrete target.
+	# chi2: Chi-squared stats of non-negative features for classification tasks.
+	function_f_classif = ['f_classif', 'mutual_info_classif', 'chi2', 'f_regression', 'mutual_info_regression']
+	selector = SelectKBest(chi2, nboffeats)
+	#Run score function on (X, y) and get the appropriate features.
 	selector.fit(X, y)
-	top_indices = np.nan_to_num(selector.scores_).argsort()[-25:][::-1]
-	selector.scores_[top_indices]
-	X.columns[top_indices]
-	pdb.set_trace()
+	# scores_ : array-like, shape=(n_features,) pvalues_ : array-like, shape=(n_features,)
+	top_indices = np.nan_to_num(selector.scores_).argsort()[-nboffeats:][::-1]
+	print("Selector scores:",selector.scores_[top_indices])
+	print("Top features:\n", X.columns[top_indices])
+	# Pipeline of transforms with a final estimator.Sequentially apply a list of transforms and a final estimator.
+	# sklearn.pipeline.Pipeline
 	preprocess = Pipeline([('anova', selector), ('scale', scaler)])
+	print("Estimator parameters:", preprocess.get_params())
+	# Fit the model and transform with the final estimator. X =data to predict on
 	preprocess.fit(X,y)
+	# transform: return the transformed sample: array-like, shape = [n_samples, n_transformed_features]
 	X_prep = preprocess.transform(X)
 	# model selection
-	X_train, X_test, y_train, y_test = train_test_split(X_prep, y, test_size=0.2, random_state=42)
+	X_train, X_test, y_train, y_test = train_test_split(X_prep, y, test_size=0.3, random_state=42)
 	return X_prep, X_train, X_test, y_train, y_test
+
+def run_fitmodel(model, X_train, X_test, y_train, y_test):
+	""" fit the model (LR, random forest others) and plot the confusion matrix and RUC """
+	if model == 'LogisticRegression':
+		# Create logistic regression object
+		regr = linear_model.LogisticRegression()
+		# Train the model using the training sets
+		regr.fit(X_train, y_train)
+		# model prediction
+		y_train_pred = regr.predict_proba(X_train)[:,1]
+		y_test_pred = regr.predict_proba(X_test)[:,1]
+		threshold = 0.5
+
+		fig,ax = plt.subplots(1,3)
+		fig.set_size_inches(15,5)
+		plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'LogisticRegression Confusion matrix (TRAIN)', threshold)
+		plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'LogisticRegression Confusion matrix (TEST)', threshold)
+		plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, threshold)
+		plt.tight_layout()
+		plt.show()
+	if model == 'RandomForestClassifier':
+		rf = RandomForestClassifier(n_estimators=500, min_samples_leaf=5)
+		rf.fit(X_train,y_train)
+		threshold = 0.5
+		y_train_pred = rf.predict_proba(X_train)[:,1]
+		y_test_pred = rf.predict_proba(X_test)[:,1]
+		fig,ax = plt.subplots(1,3)
+		fig.set_size_inches(15,5)
+		plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'RandomForestClassifier Confusion matrix (TRAIN)', threshold)
+		plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'RandomForestClassifier Confusion matrix (TEST)', threshold)
+		plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, threshold)
+		plt.tight_layout()
+		plt.show()
+	if model == 'XGBooster':
+		# gradient boosted decision trees  for speed and performance
+		#https://machinelearningmastery.com/develop-first-xgboost-model-python-scikit-learn/
+		# 2 versions with DMatrix and vanilla classifier
+		dtrain = xgb.DMatrix(X_train, label=y_train)
+		dtest = xgb.DMatrix(X_test, label=y_test)
+		num_round = 5
+		evallist  = [(dtest,'eval'), (dtrain,'train')]
+		param = {'objective':'binary:logistic', 'silent':1, 'eval_metric': ['error', 'logloss']}
+		bst = xgb.train( param, dtrain, num_round, evallist)
+		threshold = 0.5
+		y_train_pred = bst.predict(dtrain)
+		y_test_pred = bst.predict(dtest)
+		fig,ax = plt.subplots(1,3)
+		fig.set_size_inches(15,5)
+		plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'XGBooster Confusion matrix (TRAIN)', threshold)
+		plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'XGBooster Confusion matrix (TEST)', threshold)
+		plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, threshold)
+		plt.tight_layout()
+		# vanilla XGBooster classifie
+		XGBmodel = XGBClassifier()
+		XGBmodel.fit(X_train, y_train)
+		# make predictions for test data
+		y_pred = XGBmodel.predict(X_test)
+		predictions = [round(value) for value in y_pred]
+		# evaluate predictions
+		accuracy = accuracy_score(y_test, predictions)
+		print("Accuracy XGBooster classifier: %.2f%%" % (accuracy * 100.0))
+		plt.show()
 
 def scatter_plot_target_cond(df):	
 	# average and standard deviation of longitudinal status
@@ -347,37 +421,125 @@ def plot_auc(ax, y_train, y_train_pred, y_test, y_test_pred, th=0.5):
     ax.legend([train_text, test_text])
 
 #####
-def run_keras_dn(dataset, features=None):
-	""" deep network classifier using keras"""
-	from keras.models import Sequential
-	from keras.layers import Dense, Dropout
-	from sklearn import metrics
+class BatchLogger(Callback):
+    def on_train_begin(self, epoch, logs={}):
+        self.log_values = {}
+        for k in self.params['metrics']:
+            self.log_values[k] = []
 
-	features = ['Visita_1_MMSE', 'years_school', 'SCD_v1', 'Visita_1_P', 'Visita_1_STAI', 'Visita_1_GDS','Visita_1_CN']
-	df = dataset.fillna(method='ffill')
-	X_all = df[features]
-	y_all = df['Conversion']
-	# split data into training and test sets
-	print("Data set set dimensions: X_all=", X_all.shape, " y_all=", y_all.shape)
-	cutfortraining = int(X_all.shape[0]*0.8)
-	X_train = X_all.values[:cutfortraining, :]
-	y_train = y_all.values[:cutfortraining]
-	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
-	X_test = X_all.values[cutfortraining:,:]
-	y_test = y_all.values[cutfortraining:]
-	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
+    def on_epoch_end(self, batch, logs={}):
+        for k in self.params['metrics']:
+            if k in logs:
+                self.log_values[k].append(logs[k])
+    
+    def get_values(self, metric_name, window):
+        d =  pd.Series(self.log_values[metric_name])
+        return d.rolling(window,center=False).mean()
 
-	model = Sequential()
-	model.add(Dense(15, input_dim=len(features), activation='relu'))
-	model.add(Dense(1, activation='sigmoid'))
-	model.compile(loss='binary_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
-	model.fit(X_train, y_train, epochs=20, batch_size=50)
+def run_Keras_DN(dataset, X_train, X_test, y_train, y_test):
+	""" deep network classifier using keras
+	Remember to activate the virtual environment source ~/git...code/tensorflow/bin/activate"""
 
-	predictions = model.predict_classes(X_test)
-	print('Accuracy:', metrics.accuracy_score(y_true=y_test, y_pred=predictions))
-	print(metrics.classification_report(y_true=y_test, y_pred=predictions))
+	if dataset is not None: 
+		features = ['Visita_1_MMSE', 'years_school', 'SCD_v1', 'Visita_1_P', 'Visita_1_STAI', 'Visita_1_GDS','Visita_1_CN']
+		df = dataset.fillna(method='ffill')
+		X_all = df[features]
+		y_all = df['Conversion']
+		# split data into training and test sets
+		print("Data set set dimensions: X_all=", X_all.shape, " y_all=", y_all.shape)
+		cutfortraining = int(X_all.shape[0]*0.8)
+		X_train = X_all.values[:cutfortraining, :]
+		y_train = y_all.values[:cutfortraining]
+		print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
+		X_test = X_all.values[cutfortraining:,:]
+		y_test = y_all.values[cutfortraining:]
+		print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
+
+		model = Sequential()
+		model.add(Dense(15, input_dim=len(features), activation='relu'))
+		model.add(Dense(1, activation='sigmoid'))
+		model.compile(loss='binary_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
+		model.fit(X_train, y_train, epochs=20, batch_size=50)
+
+		predictions = model.predict_classes(X_test)
+		print('Accuracy:', metrics.accuracy_score(y_true=y_test, y_pred=predictions))
+		print(metrics.classification_report(y_true=y_test, y_pred=predictions))
+	else:
+		####  run_keras_dn(dataset, X_train, X_test, y_train, y_test):
+		input_dim = X_train.shape[1]
+		model = Sequential()
+		model.add(Dense(16, input_shape=(input_dim,), activation='relu'))
+		model.add(Dense(1,  activation='sigmoid'))
+		model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+		bl = BatchLogger()
+		history = model.fit(
+	              np.array(X_train), np.array(y_train),
+	              batch_size=25, epochs=15, verbose=1, callbacks=[bl],
+	              validation_data=(np.array(X_test), np.array(y_test)))
+		score = model.evaluate(np.array(X_test), np.array(y_test), verbose=0)
+		print('Test log loss:', score[0])
+		print('Test accuracy:', score[1])
+		plt.figure(figsize=(15,5))
+		plt.subplot(1, 2, 1)
+		plt.title('loss, per batch')
+		plt.legend(['train', 'test'])
+		plt.plot(bl.get_values('loss',1), 'b-', label='train');
+		plt.plot(bl.get_values('val_loss',1), 'r-', label='test');
+		plt.subplot(1, 2, 2)
+		plt.title('accuracy, per batch')
+		plt.plot(bl.get_values('acc',1), 'b-', label='train');
+		plt.plot(bl.get_values('val_acc',1), 'r-', label='test');
+		plt.show()
+		#
+		y_train_pred = model.predict_on_batch(np.array(X_train))[:,0]
+		y_test_pred = model.predict_on_batch(np.array(X_test))[:,0]
+		fig,ax = plt.subplots(1,3)
+		fig.set_size_inches(15,5)
+		plot_cm(ax[0], y_train, y_train_pred, [0,1], 'DN Confusion matrix (TRAIN)')
+		plot_cm(ax[1], y_test, y_test_pred, [0,1], 'DN Confusion matrix (TEST)')
+		plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred)   
+		plt.tight_layout()
+		plt.show()
+		# we build a new model with the activations of the old model
+		# this model is truncated before the last layer
+		model2 = Sequential()
+		model2.add(Dense(16, input_shape=(input_dim,), activation='relu', weights=model.layers[0].get_weights()))
+		activations = model2.predict_on_batch(np.array(X_test))
+		ax[0].legend('conversion')
+		ax[1].legend('no conversion')
+		return model, model2, activations
+
+def run_TDA_with_Kepler(samples, activations):
+	""" """
+	import keplermap as km
+	from sklearn.cluster import DBSCAN
+	# Initialize
+	mapper = km.KeplerMapper(verbose=1)
+	# Fit to and transform the data
+	projected_data = mapper.fit_transform(samples, projection=[0,1]) #list(range(activations.shape[1])))
+
+	projected_data.shape
+	# Create dictionary called 'complex' with nodes, edges and meta-information
+	complex = mapper.map(projected_data, activations, nr_cubes=4,clusterer=DBSCAN(eps=0.01, min_samples=1), overlap_perc=0.1)
+	# Visualize it
+	mapper.visualize(complex, path_html="output.html", show_title=False, 
+                 show_meta=False, bg_color_css="#FFF", graph_gravity=0.4)
+
+	from IPython.display import IFrame
+	IFrame('output.html', width='100%', height=700)
+	pdb.set_trace()
 
 
+def run_tSNE_analysis(activations, y_test):
+	tsne = TSNE(n_components=2, perplexity=25, verbose=0, n_iter=500, random_state=1337)
+	samples = tsne.fit_transform(activations)
+	fig,ax = plt.subplots(1,2)
+	fig.set_size_inches(15,5)
+	ax[0].scatter(*samples[y_test==0].T,color='b', alpha=0.5, label='conversion: NO')
+	ax[1].scatter(*samples[y_test==1].T,color='r', alpha=0.5, label='conversion: YES')
+	plt.tight_layout()
+	plt.show()
+	return samples
 
 def run_logistic_regression(dataset, features=None):
 	""" logistic regression, answer two points: what is the baseline prediction of disease progression and 
