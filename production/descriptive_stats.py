@@ -511,7 +511,7 @@ def run_Keras_DN(dataset, X_train, X_test, y_train, y_test):
 
 def run_TDA_with_Kepler(samples, activations):
 	""" """
-	import keplermap as km
+	import keplermap as km #https://github.com/natbusa/deepcredit/blob/master/km.py
 	from sklearn.cluster import DBSCAN
 	# Initialize
 	mapper = km.KeplerMapper(verbose=1)
