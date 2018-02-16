@@ -10,7 +10,6 @@ Data Pipeline:
 	Modeling
 	Explainability
 ========================
-
 """
 from __future__ import print_function
 import pdb
@@ -59,11 +58,26 @@ def main():
 	plt.close('all')
 	# get the data in csv format
 	dataset = run_load_csv()
-	# data preparation
-	#cleanup_column_names(df,rename_dict={},do_inplace=True)
-	cleanup_column_names(dataset, {}, True)
+	# 3. Data preparation: 
+	# 	3.1. Transformation (scaling, discretize continuous variables, expand categorical variables )
+	#	3.2. Variable Selection
+	#	3.3. Detect Multicollinearity
+	# cleanup_column_names(df,rename_dict={},do_inplace=True)
+	#cleanup_column_names(dataset, {}, True)
+	# run_data_wrangling: (3.1) cleaning, transforming, and mapping data
+	[explanatory_features, target_feature] = select_expl_and_target_features(dataset)
+	run_data_wrangling(dataset, explanatory_features)
+	# 3.2 filter the features relevant
+	# (3.3) detect multicollinearity: Plot correlation and graphs of variables
+	explanatory_features = ['visita_1_mmse', 'visita_1_fcsrttotdem','anos_escolaridad','apoe','preocupacion_v1','nlg_v1', 'visita_1_cdrtot']
+	explanatory_features = ['visita_1_eqm01', 'visita_1_eqm02', 'visita_1_eqm03', 'visita_1_eqm04']
+	corr_matrix = run_correlation_matrix(dataset,explanatory_features)
+	pdb.set_trace()
+	run_detect_multicollinearity(corr_matrix, threshold = np.mean(corr_matrix))
+
 	# scatter_plot_target_cond(dataset)
 	X_prep, X_train, X_test, y_train, y_test = run_feature_engineering(dataset)
+
 	## Build model and fit to data
 	model = ['LogisticRegression','RandomForestClassifier', 'XGBooster'] 
 	run_fitmodel(model[0], X_train, X_test, y_train, y_test)
@@ -78,9 +92,9 @@ def main():
 	
 
 
-	[explanatory_features, target_feature] = select_expl_and_target_features(dataset)
 	
-	run_data_wrangling(dataset, explanatory_features)
+	
+	
 	# run descriptive analytics for longitudinal variables
 	#longit_pattern = re.compile("^Visita_[0-9]_FCSRTlibinm+$")
 	run_longitudinal_analytics(dataset)
@@ -97,8 +111,7 @@ def run_data_wrangling(dataset, explanatory_features):
 	"""cleaning, transforming, and mapping data from one form to another ready for 
 	analytics, summarization, reporting, visualization etc."""
 	# clean up
-	#cleanup_column_names(df,rename_dict={},do_inplace=True)
-	cleanup_column_names(dataset, {}, True)
+
 	for f in range(len(explanatory_features)):
 		# drop na rows
 		dataset[explanatory_features[f]].dropna(inplace=True)
@@ -112,9 +125,14 @@ def run_data_wrangling(dataset, explanatory_features):
 	return dataset
 	
 def select_expl_and_target_features(dataset):
-	""" select features: explanatory and target AFTER cleanup_column_names because it changes the feature names""" 
+	""" select_expl_and_target_features: select features: explanatory and target.
+	This function is called AFTER cleanup_column_names is called because it changes the feature names
+	""" 
+	#cleanup_column_names(df,rename_dict={},do_inplace=True)
+	cleanup_column_names(dataset, {}, True)
 	explanatory_features = dataset.keys()
 	print("Explanatory variables:  {}".format(len(dataset.columns)-1))
+	# Select subset of explanatory variables from prior information
 	#explanatory_features = [ 'visita_1_EQ5DMOV', 'visita_1_EQ5DCP', 'visita_1_EQ5DACT', 'Visita_1_EQ5DDOL', 'Visita_1_EQ5DANS', 'Visita_1_EQ5DSALUD', 'Visita_1_EQ5DEVA', 'Visita_1_ALFRUT', 'Visita_1_ALCAR', 'Visita_1_ALPESBLAN', 'Visita_1_ALPESZUL', 'Visita_1_ALAVES', 'Visita_1_ALACEIT', 'Visita_1_ALPAST', 'Visita_1_ALPAN', 'Visita_1_ALVERD', 'Visita_1_ALLEG', 'Visita_1_ALEMB', 'Visita_1_ALLACT', 'Visita_1_ALHUEV', 'Visita_1_ALDULC', 'Visita_1_HSNOCT', 'Visita_1_RELAFAMI', 'Visita_1_RELAAMIGO', 'Visita_1_RELAOCIO', 'Visita_1_RSOLED', 'Visita_1_A01', 'Visita_1_A02', 'Visita_1_A03', 'Visita_1_A04', 'Visita_1_A05', 'Visita_1_A06', 'Visita_1_A07', 'Visita_1_A08', 'Visita_1_A09', 'Visita_1_A10', 'Visita_1_A11', 'Visita_1_A12', 'Visita_1_A13', 'Visita_1_A14', 'Visita_1_EJFRE', 'Visita_1_EJMINUT', 'Visita_1_VALCVIDA', 'Visita_1_VALSATVID', 'Visita_1_VALFELC', 'Visita_1_SDESTCIV', 'Visita_1_SDHIJOS', 'Visita_1_NUMHIJ', 'Visita_1_SDVIVE', 'Visita_1_SDECONOM', 'Visita_1_SDRESID', 'Visita_1_SDTRABAJA', 'Visita_1_SDOCUPAC', 'Visita_1_SDATRB', 'Visita_1_HTA', 'Visita_1_HTA_INI', 'Visita_1_GLU', 'Visita_1_LIPID', 'Visita_1_LIPID_INI', 'Visita_1_TABAC', 'Visita_1_TABAC_INI', 'Visita_1_TABAC_FIN', 'Visita_1_SP', 'Visita_1_COR', 'Visita_1_COR_INI', 'Visita_1_ARRI', 'Visita_1_CARD', 'Visita_1_CARD_INI', 'Visita_1_TIR', 'Visita_1_ICTUS',  'Visita_1_ICTUS_INI', 'Visita_1_ICTUS_SECU', 'Visita_1_DEPRE', 'Visita_1_DEPRE_INI', 'Visita_1_DEPRE_NUM', 'Visita_1_ANSI', 'Visita_1_ANSI_NUM', 'Visita_1_ANSI_TRAT', 'Visita_1_TCE', 'Visita_1_TCE_NUM', 'Visita_1_TCE_INI', 'Visita_1_TCE_CON', 'Visita_1_SUE_DIA',  'Visita_1_SUE_CON', 'Visita_1_SUE_MAN', 'Visita_1_SUE_SUF', 'Visita_1_SUE_PRO', 'Visita_1_SUE_RON', 'Visita_1_SUE_MOV', 'Visita_1_SUE_RUI', 'Visita_1_SUE_HOR', 'Visita_1_SUE_DEA', 'Visita_1_SUE_REC', 'Visita_1_EDEMMAD','Visita_1_EDEMPAD', 'Visita_1_PABD', 'Visita_1_PESO', 'Visita_1_TALLA', 'Visita_1_AUDI', 'Visita_1_VISU', 'Visita_1_IMC','Visita_1_GLU_INI','Visita_1_TABAC_CANT','Visita_1_ARRI_INI', 'Visita_1_ICTUS_NUM', 'Visita_1_DEPRE_TRAT','Visita_1_ANSI_INI', 'Visita_1_TCE_SECU', 'Visita_1_SUE_NOC']
 	#print("Explanatory variables:  {}".format(len(explanatory_features)))
 	target_feature = ['conversion']
@@ -224,11 +242,11 @@ def run_longitudinal_analytics(df, longit_pattern=None):
 
 
 def selcols(prefix, a=1, b=4):
-	""" return list of str of longitudinal variables"""
+	""" selcols: return list of str of longitudinal variables"""
 	return [prefix+str(i) for i in np.arange(a,b+1)]
 
 def run_feature_engineering(df):
-	""" run_feature_engineering(X, y) : builds design matrix also feature selection
+	""" run_feature_engineering(X) : builds the design matrix also feature selection
 	return X_prep, X_train, X_test, y_train, y_test """
 	# Construct a single design matrix given a formula_ y ~ X
 	formula = 'conversion ~ '
@@ -785,6 +803,7 @@ def run_correlation_matrix(dataset,feature_label=None):
 	g.set(xticklabels=[])
 	g.set_yticklabels(feature_label, rotation=30)
 	plt.show()
+	return corr
 
 def chi_square_of_df_cols(df, col1, col2):
 	df_col1, df_col2 = df[col1], df[col2]
