@@ -59,24 +59,40 @@ def main():
 	# get the data in csv format
 	dataset = run_load_csv()
 	# 3. Data preparation: 
-	# 	3.1. Transformation (scaling, discretize continuous variables, expand categorical variables )
-	#	3.2. Variable Selection
+	# 	3.1.  Variable Selection 
+	#	3.2.  Transformation (scaling, discretize continuous variables, expand categorical variables)
 	#	3.3. Detect Multicollinearity
-	# cleanup_column_names(df,rename_dict={},do_inplace=True)
-	#cleanup_column_names(dataset, {}, True)
-	# run_data_wrangling: (3.1) cleaning, transforming, and mapping data
-	[explanatory_features, target_feature] = select_expl_and_target_features(dataset)
-	run_data_wrangling(dataset, explanatory_features)
-	# 3.2 filter the features relevant
+
+	# (3.1) Variable Selection : cosmetic name changing and select input and output 
+	# cleanup_column_names(df,rename_dict={},do_inplace=True) cometic cleanup lowercase, remove blanks
+	cleanup_column_names(dataset, {}, True)
+	run_print_dataset(dataset)
+	features_list = dataset.columns.values.tolist()
+	print(features_list)
+	# Select subset of explanatory variables from prior information
+	explanatory_features = ['sexo', 'visita_1_mmse','preocupacion_v1','nivel_educativo', 'anos_escolaridad', 'apoe','scd_v1','visita_1_fcsrtlibdem', 'visita_1_fcsrttotdem', 'visita_1_p']	
+	#explanatory_features = None. # If None explanatory_features assigned to features_list
+	target_variable = None # if none assigned to 'conversion'. target_variable = ['visita_1_EQ5DMOV']
+	print("Calling to run_variable_selection(dataset, explanatory_features= {}, target_variable={})".format(explanatory_features, target_variable))
+	dataset = run_variable_selection(dataset,explanatory_features,target_variable)
+	# (3.2) Transformation (scaling, discretize continuous variables, expand categorical variables)
+	dataset, X_imputed = run_imputations(dataset)
+	print("X_imputed:\n{}".format(X_imputed))
+	# If necessay, run_binarization_features and run_encoding_categorical_features
+	X_imputed_scaled = run_transformations(X_imputed) # standarize to minmaxscale or others make input normal
+	print("X_imputed_scaled:\n{}".format(X_imputed_scaled))
 	# (3.3) detect multicollinearity: Plot correlation and graphs of variables
-	explanatory_features = ['visita_1_mmse', 'visita_1_fcsrttotdem','anos_escolaridad','apoe','preocupacion_v1','nlg_v1', 'visita_1_cdrtot']
-	explanatory_features = ['visita_1_eqm01', 'visita_1_eqm02', 'visita_1_eqm03', 'visita_1_eqm04']
-	corr_matrix = run_correlation_matrix(dataset,explanatory_features)
+	#convert ndarray to pandas DataFrame
+	Xdf_imputed_scaled = pd.DataFrame(X_imputed_scaled, columns=explanatory_features)
+	#corr_matrix = run_correlation_matrix(Xdf_imputed_scaled,explanatory_features)
+	# run_correlation_matrix(Xdf_imputed_scaled, explanatory_features[0:3])
+	corr_df = run_correlation_matrix(Xdf_imputed_scaled)
+	#corr_matrix = corr_df.as_matrix()
+	build_graph_correlation_matrix(corr_df, threshold = np.mean(corr_df.as_matrix()))
 	pdb.set_trace()
-	run_detect_multicollinearity(corr_matrix, threshold = np.mean(corr_matrix))
 
 	# scatter_plot_target_cond(dataset)
-	X_prep, X_train, X_test, y_train, y_test = run_feature_engineering(dataset)
+	X_prep, X_train, X_test, y_train, y_test = run_feature_engineering(dataset) # sacar regression ocuparse solo de Scale y transform y llamsr antes q multicoll
 
 	## Build model and fit to data
 	model = ['LogisticRegression','RandomForestClassifier', 'XGBooster'] 
@@ -107,48 +123,64 @@ def main():
 	#run_svm()
 	#run_networks()
 
-def run_data_wrangling(dataset, explanatory_features):
-	"""cleaning, transforming, and mapping data from one form to another ready for 
-	analytics, summarization, reporting, visualization etc."""
-	# clean up
+def run_print_dataset(dataset):
+	""" run_print_dataset: print information about the dataset, type of features etc
+	Agrs: Pandas dataset
+	Output: None"""
 
-	for f in range(len(explanatory_features)):
+	print("dtypes of the Pandas dataframe :\n\n{}".format(dataset.dtypes))
+	print("\n\n value_counts of dataframe :\n")
+	for colix in range(dataset.shape[1]):
+		print(dataset.ix[:,colix].value_counts())
+
+def select_featuresindataset(dataset, explanatory_features, dropna=None):
+	"""select_featuresindataset: Selects a list of features from the original dataset. Called from select_expl_and_target_features
+	Arg: dataset, explanatory_features,dropna. dropna False by default if True delete NAN rows  
+	"""
+	if dropna is None:
+		dropna = False
+	if dropna is True:
+		subsetdataset = dataset[explanatory_features].dropna()
+	else:
+		subsetdataset = dataset[explanatory_features]
+	return subsetdataset	
+	#for f in range(len(explanatory_features)):
 		# drop na rows
-		dataset[explanatory_features[f]].dropna(inplace=True)
+		#dataset[explanatory_features[f]].dropna(inplace=True)
 		# change str for numeric
 		#if isinstance(dataset[explanatory_features[f]].values[0], basestring):
 		#	print("str column!!",feature_labels_str[f], "\n" )
 		#	pd.to_numeric(dataset[feature_labels_str[f]])
-		print("scaling for: ",explanatory_features[f], " ...")	
+		#print("scaling for: ",explanatory_features[f], " ...")	
 		# select features that need to be preprocessed
 		#dataset[explanatory_features[f]] = preprocessing.scale(dataset[explanatory_features[f]])	
-	return dataset
+	#return dataset
 	
-def select_expl_and_target_features(dataset):
-	""" select_expl_and_target_features: select features: explanatory and target.
-	This function is called AFTER cleanup_column_names is called because it changes the feature names
+def run_variable_selection(dataset, explanatory_features=None,target_variable=None):
+	"""run_variable_selection: select features: explanatory and target.
+	Args: dataset, explanatory_features : list of explanatory variables if None assigned all the features dataset.keys()
+	target_variable: target feature, if None is assigned inside the function 
 	""" 
-	#cleanup_column_names(df,rename_dict={},do_inplace=True)
-	cleanup_column_names(dataset, {}, True)
-	explanatory_features = dataset.keys()
-	print("Explanatory variables:  {}".format(len(dataset.columns)-1))
-	# Select subset of explanatory variables from prior information
-	#explanatory_features = [ 'visita_1_EQ5DMOV', 'visita_1_EQ5DCP', 'visita_1_EQ5DACT', 'Visita_1_EQ5DDOL', 'Visita_1_EQ5DANS', 'Visita_1_EQ5DSALUD', 'Visita_1_EQ5DEVA', 'Visita_1_ALFRUT', 'Visita_1_ALCAR', 'Visita_1_ALPESBLAN', 'Visita_1_ALPESZUL', 'Visita_1_ALAVES', 'Visita_1_ALACEIT', 'Visita_1_ALPAST', 'Visita_1_ALPAN', 'Visita_1_ALVERD', 'Visita_1_ALLEG', 'Visita_1_ALEMB', 'Visita_1_ALLACT', 'Visita_1_ALHUEV', 'Visita_1_ALDULC', 'Visita_1_HSNOCT', 'Visita_1_RELAFAMI', 'Visita_1_RELAAMIGO', 'Visita_1_RELAOCIO', 'Visita_1_RSOLED', 'Visita_1_A01', 'Visita_1_A02', 'Visita_1_A03', 'Visita_1_A04', 'Visita_1_A05', 'Visita_1_A06', 'Visita_1_A07', 'Visita_1_A08', 'Visita_1_A09', 'Visita_1_A10', 'Visita_1_A11', 'Visita_1_A12', 'Visita_1_A13', 'Visita_1_A14', 'Visita_1_EJFRE', 'Visita_1_EJMINUT', 'Visita_1_VALCVIDA', 'Visita_1_VALSATVID', 'Visita_1_VALFELC', 'Visita_1_SDESTCIV', 'Visita_1_SDHIJOS', 'Visita_1_NUMHIJ', 'Visita_1_SDVIVE', 'Visita_1_SDECONOM', 'Visita_1_SDRESID', 'Visita_1_SDTRABAJA', 'Visita_1_SDOCUPAC', 'Visita_1_SDATRB', 'Visita_1_HTA', 'Visita_1_HTA_INI', 'Visita_1_GLU', 'Visita_1_LIPID', 'Visita_1_LIPID_INI', 'Visita_1_TABAC', 'Visita_1_TABAC_INI', 'Visita_1_TABAC_FIN', 'Visita_1_SP', 'Visita_1_COR', 'Visita_1_COR_INI', 'Visita_1_ARRI', 'Visita_1_CARD', 'Visita_1_CARD_INI', 'Visita_1_TIR', 'Visita_1_ICTUS',  'Visita_1_ICTUS_INI', 'Visita_1_ICTUS_SECU', 'Visita_1_DEPRE', 'Visita_1_DEPRE_INI', 'Visita_1_DEPRE_NUM', 'Visita_1_ANSI', 'Visita_1_ANSI_NUM', 'Visita_1_ANSI_TRAT', 'Visita_1_TCE', 'Visita_1_TCE_NUM', 'Visita_1_TCE_INI', 'Visita_1_TCE_CON', 'Visita_1_SUE_DIA',  'Visita_1_SUE_CON', 'Visita_1_SUE_MAN', 'Visita_1_SUE_SUF', 'Visita_1_SUE_PRO', 'Visita_1_SUE_RON', 'Visita_1_SUE_MOV', 'Visita_1_SUE_RUI', 'Visita_1_SUE_HOR', 'Visita_1_SUE_DEA', 'Visita_1_SUE_REC', 'Visita_1_EDEMMAD','Visita_1_EDEMPAD', 'Visita_1_PABD', 'Visita_1_PESO', 'Visita_1_TALLA', 'Visita_1_AUDI', 'Visita_1_VISU', 'Visita_1_IMC','Visita_1_GLU_INI','Visita_1_TABAC_CANT','Visita_1_ARRI_INI', 'Visita_1_ICTUS_NUM', 'Visita_1_DEPRE_TRAT','Visita_1_ANSI_INI', 'Visita_1_TCE_SECU', 'Visita_1_SUE_NOC']
-	#print("Explanatory variables:  {}".format(len(explanatory_features)))
-	target_feature = ['conversion']
+	if target_variable is None:
+		target_variable = ['conversion']
+	target_feature = target_variable
+	if explanatory_features is None:
+		explanatory_features = dataset.keys()
+	else:
+		print("Original dataframe features:  {}".format(len(dataset.columns)-1))
+		dataset = select_featuresindataset(dataset, explanatory_features, dropna=False)
+			
 	print("Number of Observations: {}".format(dataset.shape[0]))
+	print("Number of selected dataframe explanatory features:  {}".format(len(dataset.columns)-1))
 	print("Target variable:       '{}' -> '{}'".format('conversion', 'target'))
-	return explanatory_features, target_feature 
+	print(" explanatory features:  {}".format(dataset.keys()))
+	return dataset 
 
 def cleanup_column_names(df,rename_dict={},do_inplace=True):
-    """This function renames columns of a pandas dataframe
-       It converts column names to snake case if rename_dict is not passed. 
-    Args:
-        rename_dict (dict): keys represent old column names and values point to 
-                            newer ones
+    """cleanup_column_names: renames columns of a pandas dataframe. It converts column names to snake case if rename_dict is not passed. 
+    Args: rename_dict (dict): keys represent old column names and values point to newer ones
         do_inplace (bool): flag to update existing dataframe or return a new one
-    Returns:
-        pandas dataframe if do_inplace is set to False, None otherwise
+    Returns: pandas dataframe if do_inplace is set to False, None otherwise
     """
     if not rename_dict:
         return df.rename(columns={col: col.replace('/','').lower().replace(' ','_') 
@@ -244,6 +276,60 @@ def run_longitudinal_analytics(df, longit_pattern=None):
 def selcols(prefix, a=1, b=4):
 	""" selcols: return list of str of longitudinal variables"""
 	return [prefix+str(i) for i in np.arange(a,b+1)]
+
+def run_imputations(dataset):
+	""" run_imputations: datasets with missign values are incompatible with scikit-learn 
+	estimators which assume that all values in an array are numerical, and that all have and hold meaning.
+	http://scikit-learn.org/stable/modules/preprocessing.html
+	 """
+	from sklearn.preprocessing import Imputer
+	print( "Number of rows in the dataframe:{}".format(dataset.shape[0]))
+	print ("Features containing NAN values:\n {}".format(dataset.isnull().any()))
+	print(dataset) 
+	imp = Imputer(missing_values='NaN', strategy='mean', axis=1)
+	imp.fit(dataset)
+	X_train_imputed = imp.transform(dataset)
+	print( "Number of rows in Imputed dataframe:{}".format(np.count_nonzero(~np.isnan(X_train_imputed))))
+	return dataset, X_train_imputed
+
+def run_binarization_features(dataset):
+	"""run_binarizations thresholding numerical features to get boolean values.
+	Useful for downstream probabilistic estimators that make assumption that the input data is distributed according to a multi-variate Bernoulli distribution
+	Args: dataset ndarray 
+	Output: binary matrix, 1 if value larger than threshold"""
+	threshold = np.mean(dataset)
+	binarizer = preprocessing.Binarizer(threshold=threshold)  # fit does nothing
+	X_binarized = binarizer.transform(dataset)
+	return X_binarized
+
+def run_encoding_categorical_features(dataset):
+	"""run_encoding_categorical_features: Often features are not given as continuous values but categorical. They could be
+	efficiently coded as integers, eg male, female -> 0,1 BUT this cannot be used directly with scikit-learn estimators, 
+	as these expect continuous input, and would interpret the categories as being ordered.
+	OneHotEncoder. is an estimator transforms each categorical feature with m possible values into m binary features, with only one active.
+	http://pbpython.com/categorical-encoding.html"""
+	enc = preprocessing.OneHotEncoder()
+	enc.fit(dataset)
+
+def run_transformations(dataset):
+	""" run_transformations performs scaling discretization and categorization. Estimators may behave badly of data are not normally distributed:
+	Gaussian with zero mean and unit variance.In practice we often ignore the shape of the distribution and just transform the data to 
+	center it by removing the mean value of each feature, then scale it by dividing non-constant features by their standard deviation.
+	IMPORTANT : RBF kernel of Support Vector Machines or the l1 and l2 regularizers of linear models) assume that all features are centered around zero and 
+	have variance in the same order. If a feature has a variance that is orders of magnitude larger than others, it might dominate the objective 
+	function and make the estimator unable to learn from other features correctly as expected.
+	Args: dataset:ndarray """
+	# feature scaling scaling individual samples to have unit norm
+	# the quick way to normalize : X_scaled = preprocessing.scale(X_train), fit_transform is practical if we are going to train models 
+	# To scale [-1,1] use MaxAbsScaler(). MinMaxScaler formula is std*(max-min) + min
+	scaler = preprocessing.MinMaxScaler()
+	#The same instance of the transformer can then be applied to some new test data unseen during the fit call:
+	# the same scaling and shifting operations will be applied to be consistent with the transformation performed on the train data
+	X_train_minmax = scaler.fit_transform(dataset)
+	print("Orignal ndarray \n {}".format(dataset))
+	#print("X_train_minmax \n {}".format(X_train_minmax))
+	return X_train_minmax
+
 
 def run_feature_engineering(df):
 	""" run_feature_engineering(X) : builds the design matrix also feature selection
@@ -602,8 +688,6 @@ def run_logistic_regression(dataset, features=None):
 	#The score method of a LassoCV instance returns the R-Squared score, which can be negative, means performing poorly
 	estimator.score(X_test,y_test)
 	
-
-
 def run_naive_Bayes(dataset, features=None):
 	from plot_learning_curve import plot_learning_curve
 	from sklearn.naive_bayes import GaussianNB
@@ -787,14 +871,52 @@ def run_histogram_and_scatter(dataset, feature_label=None):
 	plt.show()
 	return feature_label
 
+def build_graph_correlation_matrix(corr_df, threshold=None):
+	""" build_graph_correlation_matrix: requires package pip install pygraphviz
+	Args:A is the dataframe correlation matrix
+	Output:
+	"""
+	import networkx as nx
+	import string
+	# extract corr matrix fro the dataframe
+	A_df = corr_df.as_matrix()
+
+	node_names = corr_df.keys().tolist()
+	if threshold is None:
+		threshold = mean(corr_matrix)
+	A = np.abs(A_df) > threshold
+	fig, ax = plt.subplots()
+	
+	labels = {}
+	for idx,val in enumerate(node_names):
+		labels[idx] = val
+	G = nx.from_numpy_matrix(A)
+	pos=nx.spring_layout(G)
+	nx.draw_networkx_nodes(G, pos)
+	nx.draw_networkx_edges(G, pos)
+	nx.draw_networkx_labels(G, pos, labels, font_size=9)
+	plt.title('Binary Graph from correlation matrix{}'.format(node_names))
+	plt.title('Binary Graph, threshold={0:.3g}'.format(threshold))
+	pdb.set_trace()
+	#G.node_attr.update(color="red", style="filled")
+	#G.edge_attr.update(color="blue", width="2.0")
+
+	#G.draw('/tmp/out.png', format='png', prog='neato')
+
 def run_correlation_matrix(dataset,feature_label=None):
-	""" plot sns map with correlation matrix"""
+	""" run_correlation_matrix: calculate the correlation matrix and plot sns map with correlation matrix
+	Args: dataset pandas dataframe, feature_label list of features of interest, if None calculate corr with all features in te dataframe
+	Output: DataFrame containing the correlation matrix """
 	fig, ax = plt.subplots(1,1)
 	ax.xaxis.set_tick_params(which='both')
 	ax.tick_params(direction='out', length=6, width=2, colors='b')
 	cmethod = ['pearson', 'kendall', 'spearman']
-	cmethod = cmethod[-1]
-	corr = dataset[feature_label].corr(method=cmethod) #method : {‘pearson’, ‘kendall’, ‘spearman’}
+	cmethod = cmethod[1] #method : {‘pearson’, ‘kendall’, ‘spearman’}
+	if feature_label is None:
+		corr = dataset.corr(method=cmethod) 
+		feature_label = dataset.columns
+	else:
+		corr = dataset[feature_label].corr(method=cmethod) 
 	g = sns.heatmap(corr, xticklabels=corr.columns.values,yticklabels=corr.columns.values, vmin =-1, vmax=1, center=0,annot=True)
 	g.set(xticklabels=[])
 	#ax.set_xlabel("Features")
