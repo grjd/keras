@@ -3,15 +3,18 @@
 ========================
 Data Pipeline:
 	Import data (csv or xlsx)
-	Data Preparation
-	Descriptive analytics
-	Feature Engineering
-	Dimensionality Reduction
-	Modeling
+	3. Data Preparation
+	4. Descriptive analytics
+	5. Dimensionality Reduction
+	6. Feature Engineering
+	
+	7. Modeling
 	Explainability
 ========================
 """
 from __future__ import print_function
+import os
+import sys
 import pdb
 import numpy as np
 import pandas as pd
@@ -36,13 +39,11 @@ from sklearn import preprocessing, linear_model
 from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score, cohen_kappa_score
 from sklearn.model_selection import train_test_split
 from xgboost import XGBClassifier
-import os
 import matplotlib.pyplot as plt
 from sklearn.preprocessing import StandardScaler
 from random import randint
 import seaborn as sns
-# regex
-import re
+import re # regex
 from patsy import dmatrices
 import itertools
 from sklearn.metrics import roc_curve, auc, roc_auc_score, log_loss, accuracy_score, confusion_matrix
@@ -51,7 +52,9 @@ from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classi
 import xgboost as xgb
 from sklearn.manifold import TSNE
 from sklearn import metrics
+import networkx as nx
 import importlib
+
 
 
 def main():
@@ -59,122 +62,190 @@ def main():
 	# get the data in csv format
 	dataset = run_load_csv()
 	# 3. Data preparation: 
-	# 	3.1.  Variable Selection 
-	#	3.2.  Transformation (scaling, discretize continuous variables, expand categorical variables)
+	# 	3.1. Variable Selection 
+	#	3.2. Transformation (scaling, discretize continuous variables, expand categorical variables)
 	#	3.3. Detect Multicollinearity
 
 	# (3.1) Variable Selection : cosmetic name changing and select input and output 
 	# cleanup_column_names(df,rename_dict={},do_inplace=True) cometic cleanup lowercase, remove blanks
 	cleanup_column_names(dataset, {}, True)
+	dataset_orig = dataset
 	run_print_dataset(dataset)
 	features_list = dataset.columns.values.tolist()
 	print(features_list)
-	# Select subset of explanatory variables from prior information
-	explanatory_features = ['sexo', 'visita_1_mmse','preocupacion_v1','nivel_educativo', 'anos_escolaridad', 'apoe','scd_v1','visita_1_fcsrtlibdem', 'visita_1_fcsrttotdem', 'visita_1_p']	
-	#explanatory_features = None. # If None explanatory_features assigned to features_list
-	target_variable = None # if none assigned to 'conversion'. target_variable = ['visita_1_EQ5DMOV']
+	# Select subset of explanatory variables from prior information MUST include the target_variable
+	#explanatory_features = ['sexo', 'nivel_educativo', 'anos_escolaridad', 'apoe',  'conversion', 'tiempo', 'dx_visita1', 'tpo1.2', 'edad_visita1', 'scd_visita1', 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'preocupacion_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1', 'act_aten_visita1', 'act_orie_visita1', 'act_mrec_visita1', 'act_memt_visita1', 'act_visu_visita1', 'act_expr_visita1', 'act_comp_visita1', 'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'act_apat_visita1', 'mmse_visita1', 'reloj_visita1', 'faq_visita1', 'fcsrtlibinm_visita1', 'fcsrtlibdem_visita1', 'p_visita1', 'animales_visita1', 'cn_visita1', 'gds_visita1', 'stai_visita1', 'cdrsum_visita1', 'lat_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'eq5dsalud_visita1', 'eq5deva_visita1', 'alfrut_visita1', 'alcar_visita1', 'alpesblan_visita1', 'alpeszul_visita1', 'alaves_visita1', 'alaceit_visita1', 'alpast_visita1', 'alpan_visita1', 'alverd_visita1', 'alleg_visita1', 'alemb_visita1', 'allact_visita1', 'alhuev_visita1', 'aldulc_visita1', 'hsnoct_visita1', 'relafami_visita1', 'relaamigo_visita1', 'relaocio_visita1', 'rsoled_visita1', 'a01_visita1', 'a02_visita1', 'a03_visita1', 'a04_visita1', 'a05_visita1', 'a06_visita1', 'a07_visita1', 'a08_visita1', 'a09_visita1', 'a10_visita1', 'a11_visita1', 'a12_visita1', 'a13_visita1', 'a14_visita1', 'ejfre_visita1', 'ejminut_visita1', 'valcvida_visita1', 'valsatvid_visita1', 'valfelc_visita1', 'sdestciv_visita1', 'sdhijos_visita1', 'numhij_visita1', 'sdvive_visita1', 'sdeconom_visita1', 'sdresid_visita1', 'sdtrabaja_visita1', 'sdocupac_visita1', 'sdatrb_visita1', 'hta_visita1', 'hta_ini_visita1', 'glu_visita1', 'lipid_visita1', 'tabac_visita1', 'tabac_ini_visita1', 'tabac_fin_visita1', 'tabac_cant_visita1', 'sp_visita1', 'cor_visita1', 'cor_ini_visita1', 'arri_visita1', 'arri_ini_visita1', 'card_visita1', 'card_ini_visita1', 'tir_visita1', 'ictus_visita1', 'ictus_num_visita1', 'ictus_ini_visita1', 'ictus_secu_visita1', 'depre_visita1', 'depre_ini_visita1', 'depre_num_visita1', 'depre_trat_visita1', 'ansi_visita1', 'ansi_ini_visita1', 'ansi_num_visita1', 'ansi_trat_visita1', 'tce_visita1', 'tce_num_visita1', 'tce_ini_visita1', 'tce_con_visita1', 'tce_secu_visita1', 'sue_dia_visita1', 'sue_noc_visita1', 'sue_con_visita1', 'sue_man_visita1', 'sue_suf_visita1', 'sue_pro_visita1', 'sue_ron_visita1', 'sue_mov_visita1', 'sue_rui_visita1', 'sue_hor_visita1', 'sue_rec_visita1', 'dempad_visita1', 'edempad_visita1', 'demmad_visita1', 'edemmad_visita1', 'pabd_visita1', 'peso_visita1', 'talla_visita1', 'audi_visita1', 'visu_visita1', 'imc_visita1']
+
+	features_static = ['sexo', 'nivel_educativo', 'anos_escolaridad', 'apoe',  'conversion', 'tiempo', 'conversion']
+	features_year1 = [s for s in dataset_orig.keys().tolist()  if "visita1" in s]; features_year1.remove('fecha_visita1')
+	features_year2 = [s for s in dataset_orig.keys().tolist()  if "visita2" in s]; features_year2.remove('fecha_visita2')
+	features_year3 = [s for s in dataset_orig.keys().tolist()  if "visita3" in s]; features_year3.remove('fecha_visita3')
+	features_year4 = [s for s in dataset_orig.keys().tolist()  if "visita4" in s]; features_year4.remove('fecha_visita4')
+	features_year5 = [s for s in dataset_orig.keys().tolist()  if "visita5" in s]; features_year5.remove('fecha_visita5')
+	explanatory_features = features_static + features_year2
+	#explanatory_features = None # If None explanatory_features assigned to features_list
+	target_variable = 'conversion' # if none assigned to 'conversion'. target_variable = ['visita_1_EQ5DMOV']
 	print("Calling to run_variable_selection(dataset, explanatory_features= {}, target_variable={})".format(explanatory_features, target_variable))
-	dataset = run_variable_selection(dataset,explanatory_features,target_variable)
+	dataset, explanatory_features = run_variable_selection(dataset, explanatory_features, target_variable)
+	# dataset with all features including the target and removed NaN
+	print ("Features containing NAN values:\n {}".format(dataset.isnull().any()))
+	print( "Number of NaN cells in original dataframe:{} / {}, total rows:{}".format(pd.isnull(dataset.values).sum(axis=1).sum(), dataset.size, dataset.shape[0]))
+	#ss = dataset.isnull().sum(axis=1)
+	#print(" Number of cells with NaNs per Row:\n{}".format(ss[ss==0]))
+
+	dataset.dropna(axis=0, how='any', inplace=True)
+	print( "Number of NaN cells in the imputed dataframe: {} / {}, total rows:{}".format(pd.isnull(dataset.values).sum(axis=1).sum(), dataset.size, dataset.shape[0]))
 	# (3.2) Transformation (scaling, discretize continuous variables, expand categorical variables)
-	dataset, X_imputed = run_imputations(dataset)
-	print("X_imputed:\n{}".format(X_imputed))
+	# to imput missing values uncomment these 2 lines
+	#dataset, Xy_imputed = run_imputations(dataset, type_imput='zero')
+	#print("Xy_imputed:\n{}".format(Xy_imputed))	
 	# If necessay, run_binarization_features and run_encoding_categorical_features
-	X_imputed_scaled = run_transformations(X_imputed) # standarize to minmaxscale or others make input normal
-	print("X_imputed_scaled:\n{}".format(X_imputed_scaled))
+	# remove duplicated feature names, NOTE conver to set rearrange the order of the features
+	#explanatory_features = list(set(explanatory_features))
+	unique_explanatory = []
+	[unique_explanatory.append(item) for item in explanatory_features if item not in unique_explanatory]
+	explanatory_features = []
+	explanatory_features = unique_explanatory
+
+	if explanatory_features.index(target_variable) > 0:
+		# this is already checked in run_variable_selection
+		print("target variable:{} in position:{}".format(target_variable,explanatory_features.index(target_variable)))
+
+	dataset=dataset.T.drop_duplicates().T
+	Xy = dataset[explanatory_features].values
+	Xy_scaled = run_transformations(Xy) # standarize to minmaxscale or others make input normal
+	print("Xy scaled dimensions:{} \n {}".format(Xy_scaled.shape, Xy_scaled))
 	# (3.3) detect multicollinearity: Plot correlation and graphs of variables
 	#convert ndarray to pandas DataFrame
-	Xdf_imputed_scaled = pd.DataFrame(X_imputed_scaled, columns=explanatory_features)
-	#corr_matrix = run_correlation_matrix(Xdf_imputed_scaled,explanatory_features)
-	# run_correlation_matrix(Xdf_imputed_scaled, explanatory_features[0:3])
-	corr_df = run_correlation_matrix(Xdf_imputed_scaled)
-	#corr_matrix = corr_df.as_matrix()
-	build_graph_correlation_matrix(corr_df, threshold = np.mean(corr_df.as_matrix()))
+	#Xy_df_scaled = pd.DataFrame(Xy_scaled, columns=explanatory_features)
+	# removed repeated elements (conversion)
+	pdb.set_trace()
+	Xy_df_scaled = pd.DataFrame(Xy_scaled, columns=unique_explanatory)
+	X_df_scaled = Xy_df_scaled.drop('conversion',1)
+	####
 	pdb.set_trace()
 
-	# scatter_plot_target_cond(dataset)
-	X_prep, X_train, X_test, y_train, y_test = run_feature_engineering(dataset) # sacar regression ocuparse solo de Scale y transform y llamsr antes q multicoll
 
+	####
+	# corr_X_df = run_correlation_matrix(X_df_scaled, explanatory_features[0:30]) # correlation matrix of features
+	corr_Xy_df = run_correlation_matrix(Xy_df_scaled, explanatory_features) # correlation matrix of features and target
+	#corr_matrix = corr_df.as_matrix()
+	corr_with_target = corr_Xy_df[target_variable]
+	#corr_with_target = calculate_correlation_with_target(Xdf_imputed_scaled, target_values) # correlation array of features with the target
+	threshold = np.mean(np.abs(corr_Xy_df.as_matrix())) + 1*np.std(np.abs(corr_Xy_df.as_matrix()))
+	graph = build_graph_correlation_matrix(corr_Xy_df, threshold, corr_with_target)
+	graph_metrics = calculate_network_metrics(graph)
+	pdb.set_trace()
+	# (6) Dimensionality Reduction
+	pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
+	print("The variance ratio by the {} principal compments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
+	
+	#(4) Descriptive analytics: plot scatter and histograms
+	longit_xy_scatter = ['scd_visita', 'fcsrtlibinm_visita'] #it works for longitudinal
+	plot_scatter_target_cond(Xy_df_scaled,longit_xy_scatter, target_variable)
+	features_to_plot = ['scd_visita1', 'fcsrtlibinm_visita1'] 
+	plot_histogram_pair_variables(dataset, features_to_plot)
+	#sp_visita (sobrepeso), depre_(depresion),ansi_,tce_(traumatismo), sue_dia_(duerme dia), sue_noc_(duerme noche), imc_(imc), cor_(corazon)
+	#tabac_(fuma), valfelc_(felicidad) 
+	longit_pattern = re.compile("^fcsrtlibinm_+visita[1-5]+$") 
+	longit_pattern = re.compile("^mmse_+visita[1-5]+$") 
+	# plot N histograms one each each variable_visitai
+	plot_histograma_one_longitudinal(dataset_orig, longit_pattern)
+	#plot 1 histogram by grouping vlalues of one continuous feature 
+	plot_histograma_bygroup(dataset_orig, 'mmse_visita1')
+	# plot one histogram grouping by the value of the target variable
+	plot_histograma_bygroup_target(dataset_orig, 'conversion')
+	# plot some categorical features hardcoded inside the function gropued by target
+	# categorical_features = ['sexo','nivel_educativo', 'apoe', 'edad']
+	plot_histograma_bygroup_categorical(dataset_orig, target_variable)
+	
+	# perform statistical tests: ANOVA
+	features_to_test = ['scd_visita1']
+	target_anova_variable = 'valsatvid_visita1'#'conversion' nivel_educativo' #tabac_visita1 depre_visita1
+	run_statistical_tests(Xy_df_scaled,features_to_test, target_anova_variable)
+
+
+	#logistic regression with Lasso normalization
+	features_to_regress = ['scd_visita1', 'apoe', 'anos_escolaridad','ansi_visita1','lat_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'act_apat_visita1', 'mmse_visita1']
+	target_of_regress = 'conversion'
+	run_logistic_regression(Xy_df_scaled, features_to_regress, target_of_regress)
+	pdb.set_trace()
+	
+	#run_svm()
+
+
+	# (5) Feature Engineering
+	y = Xy_df_scaled[target_variable].values
+	X_features = explanatory_features
+	if target_variable in explanatory_features:
+		X_features.remove(target_variable)
+	X = Xy_df_scaled[X_features].values
+	X_train, X_test, y_train, y_test = run_split_dataset_in_train_test(X, y)
+
+	# (7) Modelling
 	## Build model and fit to data
 	model = ['LogisticRegression','RandomForestClassifier', 'XGBooster'] 
 	run_fitmodel(model[0], X_train, X_test, y_train, y_test)
 	run_fitmodel(model[1], X_train, X_test, y_train, y_test)
 	run_fitmodel(model[2], X_train, X_test, y_train, y_test)
-
 	model, model2, activations = run_Keras_DN(None, X_train, X_test, y_train, y_test)
 	#activations.shape = X_test.shape[0], number of weights
 	samples = run_tSNE_analysis(activations, y_test)
 	run_TDA_with_Kepler(samples, activations)
 	pdb.set_trace()
-	
 
 
-	
-	
-	
-	# run descriptive analytics for longitudinal variables
-	#longit_pattern = re.compile("^Visita_[0-9]_FCSRTlibinm+$")
-	run_longitudinal_analytics(dataset)
-	#run_feature_engineering(dataset)
 
-	feature_label = run_histogram_and_scatter(dataset)
-	run_correlation_matrix(dataset,feature_label)
-	run_descriptive_stats(dataset,feature_label)
-	run_logistic_regression(dataset, feature_label)
-	#run_svm()
-	#run_networks()
+	X_prep, X_train, X_test, y_train, y_test = run_feature_engineering(dataset) # sacar regression ocuparse solo de Scale y transform y llamsr antes q multicoll
+	pdb.set_trace()
 
+	
 def run_print_dataset(dataset):
 	""" run_print_dataset: print information about the dataset, type of features etc
-	Agrs: Pandas dataset
+	Args: Pandas dataset
 	Output: None"""
 
 	print("dtypes of the Pandas dataframe :\n\n{}".format(dataset.dtypes))
-	print("\n\n value_counts of dataframe :\n")
-	for colix in range(dataset.shape[1]):
-		print(dataset.ix[:,colix].value_counts())
-
-def select_featuresindataset(dataset, explanatory_features, dropna=None):
-	"""select_featuresindataset: Selects a list of features from the original dataset. Called from select_expl_and_target_features
-	Arg: dataset, explanatory_features,dropna. dropna False by default if True delete NAN rows  
-	"""
-	if dropna is None:
-		dropna = False
-	if dropna is True:
-		subsetdataset = dataset[explanatory_features].dropna()
-	else:
-		subsetdataset = dataset[explanatory_features]
-	return subsetdataset	
-	#for f in range(len(explanatory_features)):
-		# drop na rows
-		#dataset[explanatory_features[f]].dropna(inplace=True)
-		# change str for numeric
-		#if isinstance(dataset[explanatory_features[f]].values[0], basestring):
-		#	print("str column!!",feature_labels_str[f], "\n" )
-		#	pd.to_numeric(dataset[feature_labels_str[f]])
-		#print("scaling for: ",explanatory_features[f], " ...")	
-		# select features that need to be preprocessed
-		#dataset[explanatory_features[f]] = preprocessing.scale(dataset[explanatory_features[f]])	
-	#return dataset
+	print(" Number of cells with NaNs per Column:\n{}".format(dataset.isnull().sum()))
+	ss = dataset.isnull().sum(axis=1)
+	print(" Number of cells with NaNs per Row:\n{}".format(ss[ss==0 ]))
+	print("List of rows that contain some NaNs:{}".format(ss[ss>0].index[:].tolist()))
+	#for colix in range(dataset.shape[1]):
+	#	print(dataset.ix[:,colix].value_counts())
 	
-def run_variable_selection(dataset, explanatory_features=None,target_variable=None):
-	"""run_variable_selection: select features: explanatory and target.
-	Args: dataset, explanatory_features : list of explanatory variables if None assigned all the features dataset.keys()
+def run_variable_selection(dataframe, explanatory_features=None,target_variable=None):
+	"""run_variable_selection: select features: explanatory and target. check if target var is in explanatory if not EXIT
+	Args: dataset, explanatory_features, target_variable : list of explanatory variables if None assigned all the features dataset.keys()
 	target_variable: target feature, if None is assigned inside the function 
+	Output: dataframe containing the selected explanatory and target variables
+	Example: run_variable_selection(dataset, ['', ''...], 'conversion')
+	run_variable_selection(dataset, ['', ''...])
+	run_variable_selection(dataset)
+
 	""" 
 	if target_variable is None:
-		target_variable = ['conversion']
+		target_variable = 'conversion'
 	target_feature = target_variable
 	if explanatory_features is None:
-		explanatory_features = dataset.keys()
-	else:
-		print("Original dataframe features:  {}".format(len(dataset.columns)-1))
-		dataset = select_featuresindataset(dataset, explanatory_features, dropna=False)
-			
-	print("Number of Observations: {}".format(dataset.shape[0]))
-	print("Number of selected dataframe explanatory features:  {}".format(len(dataset.columns)-1))
+		explanatory_features = dataframe.keys().tolist()
+	print("Original dataframe number of features: {}".format(len(dataframe.columns)-1))
+	#explanatory_features.append(target_variable)
+	dataframe = dataframe[explanatory_features]
+	if target_variable not in explanatory_features:
+		sys.exit('Error! You need to add the target variable in the list of features!!')	
+	# remove the object type fields, eg dates and other crappy features
+	dataframe  = dataframe.select_dtypes(exclude=['object'])
+	print("Dataframe shape after removing object type features:{}".format(dataframe.keys().shape[0]))
+	excludefeatures = ['dx_visita1','dx_visita2', 'dx_visita3', 'dx_visita4','dx_visita5']
+	if set(excludefeatures).issubset(dataframe.keys().tolist()) is True:
+		print("Dropping features:{} \n".format(excludefeatures))
+		dataframe.drop(excludefeatures, axis=1, inplace=True)
+	print("Selected features after removing excludefeatures: {}".format(dataframe.keys().shape[0]))
+	print("Number of Observations: {}".format(dataframe.shape[0]))
+	print("Number of selected dataframe explanatory features + target: {}".format(len(dataframe.columns)))
 	print("Target variable:       '{}' -> '{}'".format('conversion', 'target'))
-	print(" explanatory features:  {}".format(dataset.keys()))
-	return dataset 
+	print(" explanatory features:  {}".format(dataframe.keys()))
+	return dataframe, explanatory_features 
 
 def cleanup_column_names(df,rename_dict={},do_inplace=True):
     """cleanup_column_names: renames columns of a pandas dataframe. It converts column names to snake case if rename_dict is not passed. 
@@ -190,22 +261,18 @@ def cleanup_column_names(df,rename_dict={},do_inplace=True):
     #to drop coulumns
     #df = df.drop('ferature_name', axis=1)
 
-def run_longitudinal_analytics(df, longit_pattern=None):
-	""" descriptive analytics for longitudinal features e.g. test results for each visit"""
-	if longit_pattern is None:
-		longit_pattern = re.compile("^visita_[0-9]_fcsrtlibinm+$") 
-		#longit_pattern = re.compile("^scd_v[0-9]+$") 
-		#(Visita_1_SP) sobrepeso, Visita_1_DEPRE,Visita_1_ANSI,Visita_1_TCE (traumatismo cabeza)
-		#Visita_1_SUE_DIA (duerme dia) Visita_1_SUE_NOC (duerme noche) Visita_1_IMC (indice masa corp) Visita_1_COR(corazon)
-		#Visita_1_TABAC (fumador) Visita_1_VALFELC(felicidad)
+def plot_histograma_one_longitudinal(df, longit_pattern=None):
+	""" plot_histogram_pair_variables: histograma 1 for each year 
+	Args: Pandas dataframe , regular expression pattern eg mmse_visita """
+
 	longit_status_columns = [ x for x in df.columns if (longit_pattern.match(x))]
 	df[longit_status_columns].head(10)
-	# plot histogram for longit pattern
-	fig, ax = plt.subplots(2,2)
+	# plot histogram for longitudinal pattern
+	fig, ax = plt.subplots(2,3)
 	fig.set_size_inches(15,5)
-	fig.suptitle('Distribution of scd 4 visits')
+	fig.suptitle('Distribution of scd 5 visits')
 	for i in range(len(longit_status_columns)):
-		row,col = int(i/2), i%2
+		row,col = int(i/3), i%3
 		d  = df[longit_status_columns[i]].value_counts()
 		#n, bins, patches = ax[row,col].hist(d, 50, normed=1, facecolor='green', alpha=0.75)
     	# kernel density estimation
@@ -219,78 +286,106 @@ def run_longitudinal_analytics(df, longit_pattern=None):
 		ax[row,col].set_title(longit_status_columns[i])
 	plt.tight_layout(pad=3.0, w_pad=0.5, h_pad=1.0)
 	plt.show()
-	# histograms group by
-	df.anos_escolaridad.describe()
+
+def plot_histograma_bygroup(df, label=None):
+	""" plot_histograma_bygroup: plot one histogram grouping by values of numeric feature label"""
+	# plot_histograma_bygroup: histogram group by label
+	print("Plotting histogram in log scale grouping by:{}".format(label))
+	df[label].describe()
 	fig = plt.figure()
 	fig.set_size_inches(20,5)
 	ax = fig.add_subplot(111)
-	grd = df.groupby(['anos_escolaridad']).size()
+	grd = df.groupby([label]).size()
 	ax.set_yscale("log")
 	ax.set_xticks(np.arange(len(grd)))
-	fig.suptitle('anos_escolaridad')
+	ax.set_xlabel(label + ': values ')
+	fig.suptitle(label)
 	#ax.set_xticklabels(['%d'  %i for i in d.index], rotation='vertical')
-	p = ax.bar(np.arange(len(grd)), grd, color='purple')
-	# plot histogram target feature
+	p = ax.bar(np.arange(len(grd)), grd, color='orange')
+	plt.show()
+
+def plot_histograma_bygroup_target(df, target_label=None):
+	""" plot_histograma_bygroup_target : histogram grouped by the target (binary) """
+	#plot histogram target feature
 	fig = plt.figure()
 	fig.set_size_inches(5,5)
-	grd2 = df.groupby(['conversion']).size()
+	ax = fig.add_subplot(111)
+	ax.set_xlabel('number of subjects ')
+	ax.set_ylabel('conversion y/n')
+	grd2 = df.groupby([target_label]).size()
 	print("conversion subjects are {}% out of {} observations".format(100* grd2[1]/(grd2[1]+grd2[0]), grd2[1]+grd2[0]))
 	p = grd2.plot(kind='barh', color='orange')
 	fig.suptitle('number of conversors vs non conversors')
+	plt.show()
+
+def plot_histograma_bygroup_categorical(df, target_variable=None):
 	# target related to categorical features
-	categorical_features = ['sexo', 'nivel_educativo', 'apoe']
+	#categorical_features = ['sexo','nivel_educativo', 'apoe', 'edad']
 	df['sexo'] = df['sexo'].astype('category').cat.rename_categories(['M', 'F'])
 	df['nivel_educativo'] = df['nivel_educativo'].astype('category').cat.rename_categories(['~Pr', 'Pr', 'Se', 'Su'])
 	df['apoe'] = df['apoe'].astype('category').cat.rename_categories(['No', 'Het', 'Hom'])
-	df['visita_1_edad_cat'] = pd.cut(df['visita_1_edad'], range(0, 100, 10), right=False)
+	df['edad_visita1_cat'] = pd.cut(df['edad_visita1'], range(0, 100, 10), right=False)
 	#in absolute numbers
 	fig, ax = plt.subplots(1,4)
 	fig.set_size_inches(20,5)
 	fig.suptitle('Conversion by absolute numbers, for various demographics')
-	d = df.groupby(['conversion', 'sexo']).size()
+	d = df.groupby([target_variable, 'sexo']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[0])
-	d = df.groupby(['conversion', 'nivel_educativo']).size()
+	d = df.groupby([target_variable, 'nivel_educativo']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[1])
-	d = df.groupby(['conversion', 'apoe']).size()
+	d = df.groupby([target_variable, 'apoe']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[2])
-	d = df.groupby(['conversion', 'visita_1_edad_cat']).size()
+	d = df.groupby([target_variable, 'edad_visita1_cat']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[3])
 	#in relative numbers
 	fig, ax = plt.subplots(1,4)
 	fig.set_size_inches(20,5)
 	fig.suptitle('Conversion by relative numbers, for various demographics')
-	d = df.groupby(['conversion', 'sexo']).size().unstack(level=1)
+	d = df.groupby([target_variable, 'sexo']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[0])
-	d = df.groupby(['conversion', 'nivel_educativo']).size().unstack(level=1)
+	d = df.groupby([target_variable, 'nivel_educativo']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[1])
-	d = df.groupby(['conversion', 'apoe']).size().unstack(level=1)
+	d = df.groupby([target_variable, 'apoe']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[2])
-	d = df.groupby(['conversion', 'visita_1_edad_cat']).size().unstack(level=1)
+	d = df.groupby([target_variable, 'edad_visita1_cat']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[3])
+	plt.show()
 
 
-def selcols(prefix, a=1, b=4):
-	""" selcols: return list of str of longitudinal variables"""
+def selcols(prefix, a=1, b=5):
+	""" selcols: return list of str of longitudinal variables
+	Args:prefix name of the variable
+	a: initial index year, b last year
+	Output: list of feature names
+	Example: selcols('scd_visita',1,3) returns [scd_visita,scd_visita2,scd_visita3] """
 	return [prefix+str(i) for i in np.arange(a,b+1)]
 
-def run_imputations(dataset):
+def run_imputations(dataset, type_imput=None):
 	""" run_imputations: datasets with missign values are incompatible with scikit-learn 
 	estimators which assume that all values in an array are numerical, and that all have and hold meaning.
+	Args: dataset is a Pandas dataframe, type_imput='zero', 'mean', 'median', 'most_frequent'
 	http://scikit-learn.org/stable/modules/preprocessing.html
-	 """
+	Output:dataset datframe modified for 'zero' strategy , nmnodified for nonzero strategy and Xy_train_imputed : ndarray modief with the imputed method
+	"""
 	from sklearn.preprocessing import Imputer
 	print( "Number of rows in the dataframe:{}".format(dataset.shape[0]))
 	print ("Features containing NAN values:\n {}".format(dataset.isnull().any()))
-	print(dataset) 
-	imp = Imputer(missing_values='NaN', strategy='mean', axis=1)
-	imp.fit(dataset)
-	X_train_imputed = imp.transform(dataset)
-	print( "Number of rows in Imputed dataframe:{}".format(np.count_nonzero(~np.isnan(X_train_imputed))))
-	return dataset, X_train_imputed
+	print( "Number of NaN cells in original dataframe:{}".format(np.count_nonzero(np.isnan(dataset.values))))
+	if type_imput is None or type_imput is 'zero':
+		print("Imputations replacing NaNs for 0")
+		dataset.fillna(0, inplace=True)
+		Xy_train_imputed = dataset.values
+	else:
+		#print(dataset) 
+		imp = Imputer(missing_values='NaN', strategy=type_imput, axis=1)
+		imp.fit(dataset)
+		Xy_train_imputed = imp.transform(dataset)
+		print( "Number of NaN cells in imputed dataframe, strategy:{}, {}".format(type_imput, np.count_nonzero(np.isnan(Xy_train_imputed))))
+	return dataset, Xy_train_imputed
 
 def run_binarization_features(dataset):
 	"""run_binarizations thresholding numerical features to get boolean values.
@@ -318,7 +413,10 @@ def run_transformations(dataset):
 	IMPORTANT : RBF kernel of Support Vector Machines or the l1 and l2 regularizers of linear models) assume that all features are centered around zero and 
 	have variance in the same order. If a feature has a variance that is orders of magnitude larger than others, it might dominate the objective 
 	function and make the estimator unable to learn from other features correctly as expected.
-	Args: dataset:ndarray """
+	Args: dataset:ndarray
+	Output: X_train_minmax transformed by scaling ndarray. 
+	Note: If NaN values doesnt work """
+
 	# feature scaling scaling individual samples to have unit norm
 	# the quick way to normalize : X_scaled = preprocessing.scale(X_train), fit_transform is practical if we are going to train models 
 	# To scale [-1,1] use MaxAbsScaler(). MinMaxScaler formula is std*(max-min) + min
@@ -330,6 +428,13 @@ def run_transformations(dataset):
 	#print("X_train_minmax \n {}".format(X_train_minmax))
 	return X_train_minmax
 
+
+def run_split_dataset_in_train_test(X,y,test_size=None):
+	""" run_split_dataset_in_train_test """
+	if test_size is None:
+		test_size = 0.2
+	X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
+	return X_train, X_test, y_train, y_test
 
 def run_feature_engineering(df):
 	""" run_feature_engineering(X) : builds the design matrix also feature selection
@@ -377,6 +482,54 @@ def run_feature_engineering(df):
 	# model selection
 	X_train, X_test, y_train, y_test = train_test_split(X_prep, y, test_size=0.3, random_state=42)
 	return X_prep, X_train, X_test, y_train, y_test
+
+def run_PCA_for_visualization(Xy_df, target_label, explained_variance=None):
+	""" run_PCA_for_visualization Linear dimensionality reduction using Singular Value Decomposition 
+	of the data to project it to a lower dimensional space. 
+	http://scikit-learn.org/stable/modules/generated/sklearn.decomposition.PCA.html"""
+	from sklearn.decomposition import PCA
+	from mpl_toolkits.mplot3d import Axes3D
+	# Choose number of components
+	fig = plt.figure(figsize = (8,8))
+	ax = fig.add_subplot(1,1,1)
+	pca = PCA().fit(Xy_df.values)
+	cumvar = np.cumsum(pca.explained_variance_ratio_)
+	if explained_variance is None:
+		explained_variance = 0.7
+	optimal_comp = np.where(cumvar >explained_variance )[0][0]
+	print("With at least {} components we explain {}'%'' of the {} dimensional input data".format(optimal_comp,explained_variance,Xy_df.values.shape[1] ))
+	plt.plot(cumvar)
+	plt.xlabel('number of components')
+	plt.ylabel('cumulative explained variance')
+	
+	#Visualize
+	fig = plt.figure(figsize = (8,8))
+	ax = fig.add_subplot(1,1,1)
+	#optimal_comp = 2
+	if optimal_comp > 2:
+		ax = Axes3D(fig)
+	pca = PCA(n_components=optimal_comp)
+	projected = pca.fit_transform(Xy_df.values)
+	print("Dimensions original input:{} \n".format(Xy_df.values.shape))
+	print("Dimensions projected input:{} \n".format(projected.shape))
+	print("PCA {} components_:{} \n".format(pca.n_components_, pca.components_))
+	print("PCA explained variance ratio:{} \n".format(pca.explained_variance_ratio_))
+	# plot the principal components
+	targets = Xy_df[target_label].unique().astype(int)
+	if optimal_comp > 2:
+		plt.scatter(projected[:, 0], projected[:, 1],projected[:, 2], c=Xy_df[target_label].astype(int), edgecolor='none', alpha=0.6)
+	else:
+		plt.scatter(projected[:, 0], projected[:, 1], c=Xy_df[target_label].astype(int), edgecolor='none', alpha=0.6)
+	ax.grid()
+	ax.set_xlabel('PC 1', fontsize = 10)
+	ax.set_ylabel('PC 2', fontsize = 10)
+	if optimal_comp > 2:
+		ax.set_zlabel('PC 3', fontsize = 10)
+	msgtitle = str(pca.n_components_) + ' components PCA'
+	ax.set_title(msgtitle, fontsize = 10)
+	#Noise filtering https://jakevdp.github.io/PythonDataScienceHandbook/05.09-principal-component-analysis.html
+	return pca, projected
+
 
 def run_fitmodel(model, X_train, X_test, y_train, y_test):
 	""" fit the model (LR, random forest others) and plot the confusion matrix and RUC """
@@ -440,39 +593,40 @@ def run_fitmodel(model, X_train, X_test, y_train, y_test):
 		print("Accuracy XGBooster classifier: %.2f%%" % (accuracy * 100.0))
 		plt.show()
 
-def scatter_plot_target_cond(df):	
-	# average and standard deviation of longitudinal status
-	df['scd_avg'] = df[selcols('scd_v')].mean(axis=1)
-	df['scd_std'] = df[selcols('scd_v')].std(axis=1)
-	# sobre peso
-	suffix = '_sp'
-	suffix = '_stai'
-	prefix = selcols('visita_')
-	for idx, val in enumerate(prefix):
-		val += suffix
-		prefix[idx] = val
-	df['stai_avg'] = df[prefix].mean(axis=1)
-	df['stai_std'] = df[prefix].std(axis=1)
-	#scatter plot 2 averages and conversion non conversion
-	def_no = df[df['conversion']==0]
-	def_yes = df[df['conversion']==1]
-	fig,ax = plt.subplots(2,2)
-	fig.set_size_inches(15,10)
-
-	x_lab = 'scd_avg'
-	y_lab = 'stai_avg'
-	ax[0,0].set_title('conversion')
-	ax[0,0].set_ylabel(y_lab)
-	ax[0,0].set_xlabel(x_lab)
-	p = ax[0,0].semilogy(def_yes['scd_avg'].dropna(inplace=False), def_yes['stai_avg'].dropna(inplace=False), 'bo', markersize=5, alpha=0.1)
-
-	ax[0,1].set_title('non conversors')
-	ax[0,1].set_ylabel(y_lab)
-	ax[0,1].set_xlabel(x_lab)
-	p = ax[0,1].semilogy(def_no['scd_avg'].dropna(inplace=False), def_no['scd_avg'].dropna(inplace=False), 'ro', markersize=5, alpha=0.1)
-	plt.tight_layout(pad=0.4, w_pad=0.5, h_pad=1.0)
+def plot_scatter_target_cond(df, preffix_longit_xandy, target_variable=None):	
+	"""scatter_plot_pair_variables_target: scatter dataframe features and coloured based on target variable values
+	Args:df: Pandas dataframe, preffix_longitx:preffix of longitudinal variable to plot in X axiseg dx_visita, 
+	preffix_longit_y:preffix of longitudinal variable to plot in Y axis eg audi_visita, target_variable: target feature contained in dataframe 
+	Example: scatter_plot_target_cond(df, 'conversion')"""
+	
+	# scatter_plot_target_cond: average and standard deviation of longitudinal status
+	
+	#selcols(prefix,year ini,year end), if we dont have longitudinal set to 1,1
+	df['longit_x_avg'] = df[selcols(preffix_longit_xandy[0],1,1)].mean(axis=1)
+	df['longit_y_avg'] = df[selcols(preffix_longit_xandy[1],1,1)].mean(axis=1)
+	#df['longit_x_std'] = df[selcols(preffix_longit_x,1,1)].std(axis=1)
+	def_no = df[df[target_variable]==0]
+	def_yes = df[df[target_variable]==1]
+	print("Rows with 0 target={} and with 1 target={}".format(def_no.shape[0],def_yes.shape[0] ))
+	#target_noes = df[target_variable].where(df[target_variable] == 0).dropna()
+	#target_yes = df[target_variable].where(df[target_variable] == 1).dropna()
+	fig,ax = plt.subplots(1,2)
+	#ax.set_xlim([min(def_no['longit_y_avg'],def_yes['longit_y_avg']),max(def_no['longit_y_avg'],def_yes['longit_y_avg'])])
+	fig.set_size_inches(10,10)
+	x_lab = preffix_longit_xandy[0]
+	y_lab = preffix_longit_xandy[1]
+	ax[0].set_title(target_variable)
+	ax[0].set_ylabel(y_lab)
+	ax[0].set_ylimit = (0,1)
+	ax[0].set_xlabel(x_lab)
+	ax[0].scatter(def_yes['longit_x_avg'], def_yes['longit_y_avg'],color='r',alpha=0.1)
+	ax[1].set_title('no ' + target_variable)
+	ax[1].set_ylimit = (0,1)
+	ax[1].set_xlabel(x_lab)
+	ax[1].scatter(def_no['longit_x_avg'], def_no['longit_y_avg'],color='b',alpha=0.1)
+	plt.tight_layout(pad=0.1, w_pad=0.1, h_pad=0.1)
 	plt.show()
-
+	#p = ax[0,0].semilogy(def_yes['scd_avg'].dropna(inplace=False), def_yes['stai_avg'].dropna(inplace=False), 'bo', markersize=5, alpha=0.1)
 
 def plot_cm(ax, y_true, y_pred, classes, title, th=0.5, cmap=plt.cm.Blues):
     y_pred_labels = (y_pred>th).astype(int)
@@ -645,7 +799,7 @@ def run_tSNE_analysis(activations, y_test):
 	plt.show()
 	return samples
 
-def run_logistic_regression(dataset, features=None):
+def run_logistic_regression(df, features=None, target_label=None):
 	""" logistic regression, answer two points: what is the baseline prediction of disease progression and 
 	which independent variables are important facors for predicting disease progression"""
 	#diabetes dataset
@@ -658,11 +812,11 @@ def run_logistic_regression(dataset, features=None):
 	from sklearn.linear_model import Lasso
 	from sklearn import linear_model
 	from sklearn.model_selection import GridSearchCV
-	features =['years_school', 'SCD_v1']
+	#features =['years_school', 'SCD_v1']
 	#features = ['Visita_1_MMSE', 'years_school', 'SCD_v1', 'Visita_1_P', 'Visita_1_STAI', 'Visita_1_GDS','Visita_1_CN']
-	df = dataset.fillna(method='ffill')
+	#df = dataset.fillna(method='ffill')
 	X_all = df[features]
-	y_all = df['Conversion']
+	y_all = df[target_label]
 	# split data into training and test sets
 	print("Data set set dimensions: X_all=", X_all.shape, " y_all=", y_all.shape)
 	cutfortraining = int(X_all.shape[0]*0.8)
@@ -687,6 +841,7 @@ def run_logistic_regression(dataset, features=None):
 	#Best possible score is 1.0, lower values are worse. Unlike most other scores
 	#The score method of a LassoCV instance returns the R-Squared score, which can be negative, means performing poorly
 	estimator.score(X_test,y_test)
+	pdb.set_trace()
 	
 def run_naive_Bayes(dataset, features=None):
 	from plot_learning_curve import plot_learning_curve
@@ -768,7 +923,7 @@ def run_load_csv(csv_path = None):
 	""" load csv database, print summary of data"""
 	if csv_path is None:
 		csv_path = "/Users/jaime/vallecas/data/scc/sccplus-24012018.csv"
-		csv_path = "/Users/jaime/vallecas/data/scc/SCDPlus_IM-MA-29012018-6years.csv"
+		csv_path = "/Users/jaime/vallecas/data/scc/SCDPlus_IM_22022018.csv"
 	dataset = pd.read_csv(csv_path) #, sep=';')
 	#summary of data
 	print("Number f Rows=", dataset.shape[0])
@@ -783,65 +938,23 @@ def run_load_csv(csv_path = None):
 	print("Summary Stats::" )
 	print(dataset.describe())
 	return dataset
-	# filtering data
-	#mydict = {'ID/': 'myid'}
-	muydict = {}
-	# rename colum names as in mydict and remove blanks in colum names
-	cleanup_column_names(dataset, mydict, True)
-	#typecasting
-	#dataset['date'] = pd.to_datetime(dataset.date)
-	# transform categorical columns
-	# input missing values: dataframe with rows without any missing dates
-	#print("Drop Rows with missing dates::" )
-	df_dropped = df.dropna(subset=['date'])
-	dataset.dropna(subset=['SCD_v1'], thresh=0.5)
-	#print("Shape::",df_dropped.shape)
-	# less expensive is to replace missing values with a central tendency measure like mean or median
-	print("Fill Missing Price values with mean price::" )
-	df_dropped['price'].fillna(value=np.round(df.price.mean(),decimals=2),inplace=True)
-	print("Fill Missing user_type values with value from  previous row (forward fill) ::" )
-	df_dropped['user_type'].fillna(method='ffill',inplace=True)
-	print("Fill Missing user_type values with value from next row (backward fill) ::" )
-	df_dropped['user_type'].fillna(method='bfill',inplace=True)
-	#handling duplicates
-	dataset[dataset.duplicated(subset=['ID'])]
-	dataset.drop_duplicates(subset=['ID'],inplace=True)
-	# categorical data using get_dummies to one hot encode
-	dataset_categorical = pd.get_dummies(dataset,columns=['Visita_1_ALEMB'])
-	print(dataset_categorical.head())
-	# normalizing values or feature scaling
-	min_max_scaler = preprocessing.MinMaxScaler()
-	np_scaled = min_max_scaler.fit_transform(dataset['EdadInicio_v1'].reshape(-1,1))
-	dataset['normalized_EdadInicio_v1'] = np_scaled.reshape(-1,1)
-	#data seummarization
-	print(dataset['Visita_1_RELAFAMI'][dataset['EdadInicio_v1'] >70].mean())
-	print(dataset['Visita_1_RELAFAMI'][dataset['Visita_1_ALPESZUL'] == 0].mean())
-	print(dataset['Visita_1_RELAFAMI'][dataset['EdadInicio_v1'] >80].value_counts())
-	print(df.groupby(['Visita_1_ALPESZUL'])['EdadInicio_v1'].sum())
-	print(dataset['EdadInicio_v1'].value_counts())
 
-
-
-	return dataset
-
-
-def run_descriptive_stats(dataset,feature_label):
+def run_statistical_tests(dataset, feature_label, target_label):
 	#chi_square_of_df_cols(dataset, feature_label[0], feature_label[1])
-	anova_test(dataset, [feature_label[1], feature_label[3]])
+	anova_test(dataset, feature_label, target_label)
 
-def run_datavisualization(dataset, feature_label=None):
-	""" line charts, box plots"""
-	# histogram gouped by visita 1 =0,1,2,3
-	dataset[['Visita_1_ALPESZUL','EdadInicio_v1']].hist(by='Visita_1_ALPESZUL' ,sharex=True)
 
-def run_histogram_and_scatter(dataset, feature_label=None):
-	"""" plotting histogram and scatter """
+
+def plot_histogram_pair_variables(dataset, feature_label=None):
+	"""" histogram_plot_pair_variables: plot 2 hisotgram one for each variables
+	Args: dataset Pandas dataframe and festure_label list of variables with at least two contained in the dataset
+	Example: histogram_plot_pair_variables(dataset, ['var1, 'var2']) """
+	
 	nb_of_bins = 15
 	fig, ax = plt.subplots(1, 2)
-	feature_label = ['Visita_1_MMSE', 'years_school', 'SCD_v1', 'Visita_1_P', 'Visita_1_STAI', 'Visita_1_GDS','Visita_1_CN']
 	# features = [dataset.Visita_1_MMSE, dataset.years_school ]
 	features = [dataset[feature_label[f]] for f in range(len(feature_label))]
-	#features = [dataset[feature_label[0]], dataset[feature_label[1]]] 
+	#plot two first features
 	ax[0].hist(features[0].dropna(), nb_of_bins, facecolor='red', alpha=0.5, label="scc")
 	ax[1].hist(features[1].dropna(), nb_of_bins, facecolor='red', alpha=0.5, label="scc")
 	#fig.subplots_adjust(left=0, right=1, bottom=0, top=0.5, hspace=0.05, wspace=1)
@@ -851,36 +964,19 @@ def run_histogram_and_scatter(dataset, feature_label=None):
 	ax[0].set_xlabel(feature_label[0])
 	ax[0].set_ylabel("Frequency")
 	ax[1].set_xlabel(feature_label[1])
-	ax[1].set_ylabel("Frequency")
+	#ax[1].set_ylabel("Frequency")
 	msgsuptitle = feature_label[0] + " and " + feature_label[1]
 	fig.suptitle(msgsuptitle)
 	plt.show()
-	fig, ax = plt.subplots(1,2, figsize=(8,4))
-	ax[0].scatter(features[4], features[5], color="red")
-	ax[1].scatter(features[2], features[3], color="blue")
-	ax[0].set_title(feature_label[4] + " - " + feature_label[5])
-	ax[1].set_title(feature_label[2] + " - " + feature_label[3])
-	ax[0].set_xlabel(feature_label[4])
-	ax[1].set_xlabel(feature_label[2])
-	ax[0].set_ylabel(feature_label[5])
-	ax[1].set_ylabel(feature_label[3])
-	#ax[0].set_xlim([0,10])
-	#ax[1].set_ylim([0,14])
-	#fig.subplots_adjust(wspace=0.5)
-	#fig.suptitle("Scatter plots")
-	plt.show()
-	return feature_label
 
-def build_graph_correlation_matrix(corr_df, threshold=None):
+def build_graph_correlation_matrix(corr_df, threshold=None, corr_target=None):
 	""" build_graph_correlation_matrix: requires package pip install pygraphviz
 	Args:A is the dataframe correlation matrix
-	Output:
+	Output:None
 	"""
-	import networkx as nx
 	import string
 	# extract corr matrix fro the dataframe
 	A_df = corr_df.as_matrix()
-
 	node_names = corr_df.keys().tolist()
 	if threshold is None:
 		threshold = mean(corr_matrix)
@@ -890,23 +986,92 @@ def build_graph_correlation_matrix(corr_df, threshold=None):
 	labels = {}
 	for idx,val in enumerate(node_names):
 		labels[idx] = val
+		# plot label and correlation with the target 
+		if corr_target is not None:
+			labels[idx] = val+ ' ' + `'{0:.2g}'.format(corr_target[idx])`
+
 	G = nx.from_numpy_matrix(A)
 	pos=nx.spring_layout(G)
 	nx.draw_networkx_nodes(G, pos)
 	nx.draw_networkx_edges(G, pos)
 	nx.draw_networkx_labels(G, pos, labels, font_size=9)
-	plt.title('Binary Graph from correlation matrix{}'.format(node_names))
+	# plt.title('Binary Graph from correlation matrix{}'.format(node_names))
 	plt.title('Binary Graph, threshold={0:.3g}'.format(threshold))
-	pdb.set_trace()
-	#G.node_attr.update(color="red", style="filled")
-	#G.edge_attr.update(color="blue", width="2.0")
+	return G
 
-	#G.draw('/tmp/out.png', format='png', prog='neato')
+def calculate_network_metrics(G):
+	""" calculate_network_metrics: study the netwok properties
+	Args:G networkx graph object
+	Output: dictionary with network metrics"""
+
+	G_metrics = {}
+	#info(G[, n]) 	Print short summary of information for the graph G or the node n.
+	print("Graph directed:{}, characteristics:\n{}".format(nx.is_directed(G), nx.info(G)))
+	# Degree
+	degree_G = nx.degree(G); G_metrics["degree"] = degree_G
+	#a list of the frequency of each degree value.
+	freq_degree = nx.degree_histogram(G); G_metrics["degree_histogram"] = freq_degree
+	density_G = nx.density(G); G_metrics["density"] = density_G
+	# Clustering
+	nb_triangles = nx.triangles(G); G_metrics["triangles"] = nb_triangles
+	#fraction of all possible triangles present in G.
+	frac_triangles = nx.transitivity(G); G_metrics["transitivity"] = frac_triangles
+	#clustering coefficient for nodes.
+	clustering_coeff = nx.clustering(G); G_metrics["clustering"] = clustering_coeff
+	clustering_avg = nx.average_clustering(G); G_metrics["average_clustering"] = clustering_avg
+	#clique_G = nx.max_clique(G) ; G_metrics["max_clique"] = clique_G
+	# Assortativity degree_assortativity_coefficient(G[, x, y, ...]) 	Compute degree assortativity of graph.
+	degassor_coeff = nx.degree_assortativity_coefficient(G);  G_metrics["degree_assortativity_coefficient"] = degassor_coeff
+	#average degree connectivity of graph
+	degconn_avg = nx.average_degree_connectivity(G); G_metrics["average_degree_connectivity"] = degconn_avg
+	degconn_k_avg = nx.k_nearest_neighbors(G); G_metrics["k_nearest_neighbors"] = degconn_k_avg
+	# Centrality
+	centrality_deg = nx.degree_centrality(G); G_metrics["degree_centrality"] = centrality_deg
+	# Compute the shortest-path betweenness centrality for nodes.
+	centrality_clo = nx.closeness_centrality(G); G_metrics["closeness_centrality"] = centrality_clo
+	# shortest-path betweenness centrality for nodes. 	
+	centrality_btw = nx.betweenness_centrality(G); G_metrics["betweenness_centrality"] = centrality_btw
+	# communicability between all pairs of nodes in G.
+	comunica = nx.communicability(G); G_metrics["communicability"] = comunica
+	#In chemical graph theory, is a topological index of protein folding
+	estrada_idx = nx.estrada_index(G); G_metrics["estrada_index"] = estrada_idx
+	#dispersion(G[, u, v, normalized, alpha, b, c]) 	Calculate dispersion between u and v in G.
+	
+	# Connectivity
+	is_conn_G = nx.is_connected(G); G_metrics["is_connected"] = is_conn_G
+	# Distance measures
+	if is_conn_G is True:
+		#eccentricity(G[, v, sp]) 	Return the eccentricity of nodes in G.
+		ecc_G = nx.eccentricity(G); G_metrics["eccentricity"] = ecc_G
+		#center(G[, e]) 	Return the center of the graph G.
+		center_G = nx.center(G); G_metrics["center"] = center_G
+		#diameter(G[, e]) 	Return the diameter of the graph G.
+		diam_G = nx.diameter(G); G_metrics["diameter"] = diam_G
+		#periphery(G[, e]) 	Return the periphery of the graph G.
+		peri_G = nx.periphery(G); G_metrics["periphery"] = peri_G
+		#radius(G[, e]) 	Return the radius of the graph G.
+		rad_G = nx.radius(G); G_metrics["radius"] = rad_G
+	ncc_G = nx.number_connected_components(G); G_metrics["number_connected_components"] = ncc_G
+	# these are only for directed graph
+	#is_strongly_conn_G = nx.is_strongly_connected(G); G_metrics["is_strongly_connected"] = is_strongly_conn_G 
+	#ncc_strongly_G = nx.number_strongly_connected_components(G); G_metrics["number_strongly_connected_components"] = ncc_strongly_G
+	#is_weakly_conn_G = nx.is_weakly_connected(G); G_metrics["is_weakly_connected"] = is_weakly_conn_G
+	#ncc_weakly_G = nx.number_weakly_connected_components(G); G_metrics["number_weakly_connected_components"] = ncc_weakly_G
+
+	return G_metrics
 
 def run_correlation_matrix(dataset,feature_label=None):
-	""" run_correlation_matrix: calculate the correlation matrix and plot sns map with correlation matrix
+	""" run_correlation_matrix: calculate the correlation matrix and plot sns map with correlation matrix. feature_label MUST be a subset of the dataset.keys()
 	Args: dataset pandas dataframe, feature_label list of features of interest, if None calculate corr with all features in te dataframe
-	Output: DataFrame containing the correlation matrix """
+	Output: DataFrame containing the correlation matrix 
+	Example: run_correlation_matrix(dataset) return matrix all with all in dataset
+	run_correlation_matrix(dataset, ['a','b']) return 2x2 matrix both labels must be in dataset.keys()"""
+	# if set(feature_label) > set(dataset.keys().tolist()):
+	# 	warnings.warn('The list of features is not contained in the dataframe, trying to fix this by removing the target variable')
+	# 	feature_label.remove('conversion')
+	# 	if set(feature_label) <= set(dataset.keys().tolist()):
+	# 		print("Removed 'conversion' in the features list, the function run_correlation_matrix can continue now...")
+	# 	#sys.exit('Error! features list need to be included in the dataset!! Check that the target variable is present/absent in both')
 	fig, ax = plt.subplots(1,1)
 	ax.xaxis.set_tick_params(which='both')
 	ax.tick_params(direction='out', length=6, width=2, colors='b')
@@ -917,13 +1082,13 @@ def run_correlation_matrix(dataset,feature_label=None):
 		feature_label = dataset.columns
 	else:
 		corr = dataset[feature_label].corr(method=cmethod) 
-	g = sns.heatmap(corr, xticklabels=corr.columns.values,yticklabels=corr.columns.values, vmin =-1, vmax=1, center=0,annot=True)
-	g.set(xticklabels=[])
+	g = sns.heatmap(corr, xticklabels=corr.columns.values,yticklabels=corr.columns.values, vmin =-1, vmax=1, center=0,annot=False)
 	#ax.set_xlabel("Features")
 	#ax.set_ylabel("Features")
 	ax.set_title(cmethod + " correlation")
-	g.set(xticklabels=[])
-	g.set_yticklabels(feature_label, rotation=30)
+	#g.set(xticklabels=[])
+	g.set_xticklabels(feature_label, fontsize=4)
+	g.set_yticklabels(feature_label, rotation=30, fontsize=9)
 	plt.show()
 	return corr
 
@@ -932,7 +1097,7 @@ def chi_square_of_df_cols(df, col1, col2):
 	obs = np.array(df_col1, df_col2 ).T
 	pdb.set_trace()
 
-def anova_test(df, features=None):
+def anova_test(df, feature=None, target_label=None):
 	""" The one-way analysis of variance (ANOVA) is used to determine whether there are any statistically significant differences between the means of three or more independent (unrelated) groups.
 	ANOVA test for pandas data set and features.  one-way ANOVA is an omnibus test statistic and cannot tell you which specific groups were statistically significantly different from each other, only that at least two groups were
 	Example: anova_test(dataset, features = [dataset.keys()[1], dataset.keys()[2]]) 
@@ -943,18 +1108,19 @@ def anova_test(df, features=None):
 	import scipy.stats as ss
 	import statsmodels.api as sm
 	from statsmodels.formula.api import ols
-	ctrl = df[features[0]].where(df['Conversion']==0).dropna()
-	sccs = df[features[0]].where(df['Conversion']==1).dropna()
+	ctrl = df[feature[0]].where(df[target_label]==0).dropna()
+	sccs = df[feature[0]].where(df[target_label]==1).dropna()
 	print("Number of control subjects=",len(ctrl.notnull()))
 	print("Number of scc subjects=",len(sccs.notnull()))
-	for idx, val in enumerate(features):
-		expl_control_var = features[idx] + ' ~ Conversion'
+	for idx, val in enumerate(feature):
+		#expl_control_var = feature[idx] + ' ~ conversion'
+		expl_control_var = "{} ~ {}".format(feature[idx],target_label)
 		mod = ols(expl_control_var, data=df).fit()
 		aov_table = sm.stats.anova_lm(mod, typ=2)
 		print("ANOVA table feature:", val) 
 		print(aov_table)
 		#Create a boxplot
-		df.boxplot(features[idx], by='Conversion', figsize=(12, 8))
+		df.boxplot(feature[idx], by=target_label, figsize=(12, 8))
 
 def ancova_test(dataset, features=None):
 	""" ACNOVA test controlling for features that may have a relationship with the dependent variable"""
