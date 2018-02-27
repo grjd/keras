@@ -9,7 +9,7 @@ Data Pipeline:
 	6. Feature Engineering
 	
 	7. Modeling
-	Explainability
+	8. Explainability
 ========================
 """
 from __future__ import print_function
@@ -74,15 +74,14 @@ def main():
 	features_list = dataset.columns.values.tolist()
 	print(features_list)
 	# Select subset of explanatory variables from prior information MUST include the target_variable
-	#explanatory_features = ['sexo', 'nivel_educativo', 'anos_escolaridad', 'apoe',  'conversion', 'tiempo', 'dx_visita1', 'tpo1.2', 'edad_visita1', 'scd_visita1', 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'preocupacion_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1', 'act_aten_visita1', 'act_orie_visita1', 'act_mrec_visita1', 'act_memt_visita1', 'act_visu_visita1', 'act_expr_visita1', 'act_comp_visita1', 'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'act_apat_visita1', 'mmse_visita1', 'reloj_visita1', 'faq_visita1', 'fcsrtlibinm_visita1', 'fcsrtlibdem_visita1', 'p_visita1', 'animales_visita1', 'cn_visita1', 'gds_visita1', 'stai_visita1', 'cdrsum_visita1', 'lat_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'eq5dsalud_visita1', 'eq5deva_visita1', 'alfrut_visita1', 'alcar_visita1', 'alpesblan_visita1', 'alpeszul_visita1', 'alaves_visita1', 'alaceit_visita1', 'alpast_visita1', 'alpan_visita1', 'alverd_visita1', 'alleg_visita1', 'alemb_visita1', 'allact_visita1', 'alhuev_visita1', 'aldulc_visita1', 'hsnoct_visita1', 'relafami_visita1', 'relaamigo_visita1', 'relaocio_visita1', 'rsoled_visita1', 'a01_visita1', 'a02_visita1', 'a03_visita1', 'a04_visita1', 'a05_visita1', 'a06_visita1', 'a07_visita1', 'a08_visita1', 'a09_visita1', 'a10_visita1', 'a11_visita1', 'a12_visita1', 'a13_visita1', 'a14_visita1', 'ejfre_visita1', 'ejminut_visita1', 'valcvida_visita1', 'valsatvid_visita1', 'valfelc_visita1', 'sdestciv_visita1', 'sdhijos_visita1', 'numhij_visita1', 'sdvive_visita1', 'sdeconom_visita1', 'sdresid_visita1', 'sdtrabaja_visita1', 'sdocupac_visita1', 'sdatrb_visita1', 'hta_visita1', 'hta_ini_visita1', 'glu_visita1', 'lipid_visita1', 'tabac_visita1', 'tabac_ini_visita1', 'tabac_fin_visita1', 'tabac_cant_visita1', 'sp_visita1', 'cor_visita1', 'cor_ini_visita1', 'arri_visita1', 'arri_ini_visita1', 'card_visita1', 'card_ini_visita1', 'tir_visita1', 'ictus_visita1', 'ictus_num_visita1', 'ictus_ini_visita1', 'ictus_secu_visita1', 'depre_visita1', 'depre_ini_visita1', 'depre_num_visita1', 'depre_trat_visita1', 'ansi_visita1', 'ansi_ini_visita1', 'ansi_num_visita1', 'ansi_trat_visita1', 'tce_visita1', 'tce_num_visita1', 'tce_ini_visita1', 'tce_con_visita1', 'tce_secu_visita1', 'sue_dia_visita1', 'sue_noc_visita1', 'sue_con_visita1', 'sue_man_visita1', 'sue_suf_visita1', 'sue_pro_visita1', 'sue_ron_visita1', 'sue_mov_visita1', 'sue_rui_visita1', 'sue_hor_visita1', 'sue_rec_visita1', 'dempad_visita1', 'edempad_visita1', 'demmad_visita1', 'edemmad_visita1', 'pabd_visita1', 'peso_visita1', 'talla_visita1', 'audi_visita1', 'visu_visita1', 'imc_visita1']
 
-	features_static = ['sexo', 'nivel_educativo', 'anos_escolaridad', 'apoe',  'conversion', 'tiempo', 'conversion']
+	features_static = ['sexo', 'nivel_educativo', 'apoe',  'conversion', 'tiempo']
 	features_year1 = [s for s in dataset_orig.keys().tolist()  if "visita1" in s]; features_year1.remove('fecha_visita1')
 	features_year2 = [s for s in dataset_orig.keys().tolist()  if "visita2" in s]; features_year2.remove('fecha_visita2')
-	features_year3 = [s for s in dataset_orig.keys().tolist()  if "visita3" in s]; features_year3.remove('fecha_visita3')
-	features_year4 = [s for s in dataset_orig.keys().tolist()  if "visita4" in s]; features_year4.remove('fecha_visita4')
-	features_year5 = [s for s in dataset_orig.keys().tolist()  if "visita5" in s]; features_year5.remove('fecha_visita5')
-	explanatory_features = features_static + features_year2
+	features_year3 = [s for s in dataset_orig.keys().tolist()  if "visita3" in s]; features_year3.remove('fecha_visita3'); features_year3.remove('act_prax_visita3'), features_year3.remove('act_comp_visita3')
+	features_year4 = [s for s in dataset_orig.keys().tolist()  if "visita4" in s]; features_year4.remove('fecha_visita4'); features_year4.remove('act_prax_visita4'), features_year4.remove('act_comp_visita4')
+	features_year5 = [s for s in dataset_orig.keys().tolist()  if "visita5" in s]; features_year5.remove('fecha_visita5'); features_year5.remove('act_prax_visita5'), features_year5.remove('act_comp_visita5')
+	explanatory_features = features_static + features_year1
 	#explanatory_features = None # If None explanatory_features assigned to features_list
 	target_variable = 'conversion' # if none assigned to 'conversion'. target_variable = ['visita_1_EQ5DMOV']
 	print("Calling to run_variable_selection(dataset, explanatory_features= {}, target_variable={})".format(explanatory_features, target_variable))
@@ -110,23 +109,14 @@ def main():
 	if explanatory_features.index(target_variable) > 0:
 		# this is already checked in run_variable_selection
 		print("target variable:{} in position:{}".format(target_variable,explanatory_features.index(target_variable)))
-
-	dataset=dataset.T.drop_duplicates().T
+	#dataset=dataset.T.drop_duplicates().T
 	Xy = dataset[explanatory_features].values
-	Xy_scaled = run_transformations(Xy) # standarize to minmaxscale or others make input normal
+	Xy_scaled, scaler = run_transformations(Xy) # standarize to minmaxscale or others make input normal
 	print("Xy scaled dimensions:{} \n {}".format(Xy_scaled.shape, Xy_scaled))
 	# (3.3) detect multicollinearity: Plot correlation and graphs of variables
 	#convert ndarray to pandas DataFrame
-	#Xy_df_scaled = pd.DataFrame(Xy_scaled, columns=explanatory_features)
-	# removed repeated elements (conversion)
-	pdb.set_trace()
 	Xy_df_scaled = pd.DataFrame(Xy_scaled, columns=unique_explanatory)
 	X_df_scaled = Xy_df_scaled.drop('conversion',1)
-	####
-	pdb.set_trace()
-
-
-	####
 	# corr_X_df = run_correlation_matrix(X_df_scaled, explanatory_features[0:30]) # correlation matrix of features
 	corr_Xy_df = run_correlation_matrix(Xy_df_scaled, explanatory_features) # correlation matrix of features and target
 	#corr_matrix = corr_df.as_matrix()
@@ -135,19 +125,17 @@ def main():
 	threshold = np.mean(np.abs(corr_Xy_df.as_matrix())) + 1*np.std(np.abs(corr_Xy_df.as_matrix()))
 	graph = build_graph_correlation_matrix(corr_Xy_df, threshold, corr_with_target)
 	graph_metrics = calculate_network_metrics(graph)
-	pdb.set_trace()
-	# (6) Dimensionality Reduction
-	pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
-	print("The variance ratio by the {} principal compments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
+	# print sumary network metrics
+	print_summary_network(graph_metrics, nodes=corr_Xy_df.keys().tolist(), corrtarget=corr_with_target)
 	
 	#(4) Descriptive analytics: plot scatter and histograms
-	longit_xy_scatter = ['scd_visita', 'fcsrtlibinm_visita'] #it works for longitudinal
+	longit_xy_scatter = ['scd_visita', 'fcsrtlibdem_visita'] #it works for longitudinal
 	plot_scatter_target_cond(Xy_df_scaled,longit_xy_scatter, target_variable)
-	features_to_plot = ['scd_visita1', 'fcsrtlibinm_visita1'] 
+	features_to_plot = ['scd_visita1', 'fcsrtlibdem_visita1'] 
 	plot_histogram_pair_variables(dataset, features_to_plot)
 	#sp_visita (sobrepeso), depre_(depresion),ansi_,tce_(traumatismo), sue_dia_(duerme dia), sue_noc_(duerme noche), imc_(imc), cor_(corazon)
 	#tabac_(fuma), valfelc_(felicidad) 
-	longit_pattern = re.compile("^fcsrtlibinm_+visita[1-5]+$") 
+	longit_pattern = re.compile("^fcsrtlibdem_+visita[1-5]+$") 
 	longit_pattern = re.compile("^mmse_+visita[1-5]+$") 
 	# plot N histograms one each each variable_visitai
 	plot_histograma_one_longitudinal(dataset_orig, longit_pattern)
@@ -158,46 +146,63 @@ def main():
 	# plot some categorical features hardcoded inside the function gropued by target
 	# categorical_features = ['sexo','nivel_educativo', 'apoe', 'edad']
 	plot_histograma_bygroup_categorical(dataset_orig, target_variable)
-	
 	# perform statistical tests: ANOVA
 	features_to_test = ['scd_visita1']
 	target_anova_variable = 'valsatvid_visita1'#'conversion' nivel_educativo' #tabac_visita1 depre_visita1
 	run_statistical_tests(Xy_df_scaled,features_to_test, target_anova_variable)
-
-
-	#logistic regression with Lasso normalization
-	features_to_regress = ['scd_visita1', 'apoe', 'anos_escolaridad','ansi_visita1','lat_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'act_apat_visita1', 'mmse_visita1']
-	target_of_regress = 'conversion'
-	run_logistic_regression(Xy_df_scaled, features_to_regress, target_of_regress)
-	pdb.set_trace()
 	
-	#run_svm()
+	# (5) Dimensionality Reduction
+	pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
+	print("The variance ratio by the {} principal compments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
+	
+	# (6) Feature Engineering
+	formula= build_formula()
+	# build design matrix(patsy.dmatrix) and rank the features in the formula y ~ X 
+	X_prep = run_feature_ranking(Xy_df_scaled, scaler, formula)
 
-
-	# (5) Feature Engineering
 	y = Xy_df_scaled[target_variable].values
 	X_features = explanatory_features
 	if target_variable in explanatory_features:
 		X_features.remove(target_variable)
 	X = Xy_df_scaled[X_features].values
-	X_train, X_test, y_train, y_test = run_split_dataset_in_train_test(X, y)
+	X_train, X_test, y_train, y_test = run_split_dataset_in_train_test(X, y, test_size=0.2)
 
 	# (7) Modelling
-	## Build model and fit to data
-	model = ['LogisticRegression','RandomForestClassifier', 'XGBooster'] 
-	run_fitmodel(model[0], X_train, X_test, y_train, y_test)
-	run_fitmodel(model[1], X_train, X_test, y_train, y_test)
-	run_fitmodel(model[2], X_train, X_test, y_train, y_test)
+	## Build model and fit to data http://xgboost.readthedocs.io/en/latest/tutorials/index.html
+	# XGBoost is an implementation of gradient boosted decision trees designed for speed and performance
+	model = ['LogisticRegression','RandomForestClassifier', 'XGBooster']
+	thres_bin = 0.5
+	y_pred = run_fitmodel(model[0], X_train, X_test, y_train, y_test, thres_bin)	
+	run_model_evaluation(y_test,y_pred)
+
+	y_pred = run_fitmodel(model[1], X_train, X_test, y_train, y_test)
+	#how to evaluate random forest??? 
+	#run_model_evaluation(y_test,y_pred)
+	y_pred = run_fitmodel(model[2], X_train, X_test, y_train, y_test)
+	run_model_evaluation(y_test,y_pred)
+
 	model, model2, activations = run_Keras_DN(None, X_train, X_test, y_train, y_test)
 	#activations.shape = X_test.shape[0], number of weights
 	samples = run_tSNE_analysis(activations, y_test)
 	run_TDA_with_Kepler(samples, activations)
 	pdb.set_trace()
 
-
-
-	X_prep, X_train, X_test, y_train, y_test = run_feature_engineering(dataset) # sacar regression ocuparse solo de Scale y transform y llamsr antes q multicoll
+	#logistic regression with Lasso normalization
+	features_to_regress = ['scd_visita1', 'apoe', 'anos_escolaridad','ansi_visita1','lat_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'act_apat_visita1', 'mmse_visita1']
+	target_of_regress = 'conversion'
+	run_logistic_regression(Xy_df_scaled, features_to_regress, target_of_regress)
 	pdb.set_trace()
+	#run_naive_Bayes()
+	#run_svm()
+
+
+
+
+
+
+
+
+	
 
 	
 def run_print_dataset(dataset):
@@ -355,6 +360,24 @@ def plot_histograma_bygroup_categorical(df, target_variable=None):
 	p = d.plot(kind='bar', ax=ax[3])
 	plt.show()
 
+def build_formula():
+	""" build formula to be used for  run_feature_slection. 'C' for categorical features
+	Args: None
+	Outputs: formula"""
+	#formula = 'conversion ~ '; formula += 'C(sexo) + C(nivel_educativo) + C(apoe)'; 
+	formula = 'conversion ~ '; formula += 'sexo + nivel_educativo + apoe'; 
+	formula += ' + ' + ' + '.join(selcols('scd_visita',1,1)); formula += ' + ' + ' + '.join(selcols('gds_visita',1,1)); formula += ' + ' + ' + '.join(selcols('eqm10_visita',1,1));formula += ' + ' + ' + '.join(selcols('eqm09_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('hta_visita',1,1)); formula += ' + ' + ' + '.join(selcols('sue_con_visita',1,1));formula += ' + ' + ' + '.join(selcols('sue_rec_visita',1,1))
+	formula += ' + ' + ' + '.join(selcols('lipid_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('sdvive_visita',1,1));formula += ' + ' + ' + '.join(selcols('sdhijos_visita',1,1));formula += ' + ' + ' + '.join(selcols('valsatvid_visita',1,1))
+	formula += ' + ' + ' + '.join(selcols('ejfre_visita',1,1));formula += ' + ' + ' + '.join(selcols('a13_visita',1,1));formula += ' + ' + ' + '.join(selcols('a10_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('rsoled_visita',1,1));formula += ' + ' + ' + '.join(selcols('relaocio_visita',1,1));formula += ' + ' + ' + '.join(selcols('preocupacion_visita',1,1))
+	formula += ' + ' + ' + '.join(selcols('act_depre_visita',1,1));formula += ' + ' + ' + '.join(selcols('act_ansi_visita',1,1));formula += ' + ' + ' + '.join(selcols('act_orie_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('card_visita',1,1));formula += ' + ' + ' + '.join(selcols('sp_visita',1,1));formula += ' + ' + ' + '.join(selcols('tabac_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('imc_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('fcsrtrl1_visita',1,1));formula += ' + ' + ' + '.join(selcols('fcsrtrl3_visita',1,1));formula += ' + ' + ' + '.join(selcols('fcsrtlibdem_visita',1,1));
+	return formula
+
 
 def selcols(prefix, a=1, b=5):
 	""" selcols: return list of str of longitudinal variables
@@ -426,7 +449,7 @@ def run_transformations(dataset):
 	X_train_minmax = scaler.fit_transform(dataset)
 	print("Orignal ndarray \n {}".format(dataset))
 	#print("X_train_minmax \n {}".format(X_train_minmax))
-	return X_train_minmax
+	return X_train_minmax, scaler
 
 
 def run_split_dataset_in_train_test(X,y,test_size=None):
@@ -436,27 +459,27 @@ def run_split_dataset_in_train_test(X,y,test_size=None):
 	X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
 	return X_train, X_test, y_train, y_test
 
-def run_feature_engineering(df):
-	""" run_feature_engineering(X) : builds the design matrix also feature selection
-	return X_prep, X_train, X_test, y_train, y_test """
+def run_feature_ranking(df, scaler, formula=None):
+	""" run_feature_ranking(X) : builds the design matrix for feature ranking (selection)
+	Args: panas dataframe scaled and normalized
+	Outputs: design matrix for given formula"""
 	# Construct a single design matrix given a formula_ y ~ X
-	formula = 'conversion ~ '
-	# original features
-	formula += 'C(sexo) + C(nivel_educativo) +  C(apoe) '
-	#### engineered / normalized features
-	# categorical age
-	#formula += '+' + 'C(visita_1_edad_cat)'
-	#longitudinal
-	formula += '+' + '+'.join(selcols('scd_v'))
+	if formula is None:
+		formula = 'conversion ~ '
+		# original features
+		#formula += 'C(sexo) + C(nivel_educativo) +  C(apoe) '
+		formula += 'sexo + nivel_educativo + apoe '
+		formula += '+' + '+'.join(selcols('scd_visita',1,1))
 	print("The formula is:", formula)
 	# patsy dmatrices, construct a single design matrix given a formula_like and data.
 	y, X = dmatrices(formula, data=df, return_type='dataframe')
 	y = y.iloc[:, 0]
 	# feature scaling
-	scaler = preprocessing.MinMaxScaler()
-	scaler.fit(X)
+	if scaler is None:
+		scaler = preprocessing.MinMaxScaler()
+		scaler.fit(X)
 	""" select top features and find top indices from the formula  """
-	nboffeats = 6
+	nboffeats = 12
 	warnings.simplefilter(action='ignore', category=(UserWarning,RuntimeWarning))
 	# sklearn.feature_selection.SelectKBest, select k features according to the highest scores
 	# SelectKBest(score_func=<function f_classif>, k=10)
@@ -479,9 +502,10 @@ def run_feature_engineering(df):
 	preprocess.fit(X,y)
 	# transform: return the transformed sample: array-like, shape = [n_samples, n_transformed_features]
 	X_prep = preprocess.transform(X)
+	return X_prep
 	# model selection
-	X_train, X_test, y_train, y_test = train_test_split(X_prep, y, test_size=0.3, random_state=42)
-	return X_prep, X_train, X_test, y_train, y_test
+	#X_train, X_test, y_train, y_test = train_test_split(X_prep, y, test_size=0.3, random_state=42)
+	#return X_prep, X_train, X_test, y_train, y_test
 
 def run_PCA_for_visualization(Xy_df, target_label, explained_variance=None):
 	""" run_PCA_for_visualization Linear dimensionality reduction using Singular Value Decomposition 
@@ -530,9 +554,42 @@ def run_PCA_for_visualization(Xy_df, target_label, explained_variance=None):
 	#Noise filtering https://jakevdp.github.io/PythonDataScienceHandbook/05.09-principal-component-analysis.html
 	return pca, projected
 
+def compare_against_dummy_estimators(estimator1, X_train, X_test, y_train, y_test):
+	""" compare_against_dummy_estimators: When doing supervised learning, a simple sanity check consists of comparing one's
+	estimator against simple rules of thumb. DummyClassifier implements such strategies(stratified
+	most_frequent, prior, uniform, constant). Used for imbalanced datasets
+	Args: fitted estimator1 eg clf = SVC(kernel='linear',..).fit(X_train, y_train)
+	X_train, X_test, y_train, y_test
+	Outputs: """
+	from sklearn.dummy import DummyClassifier
+	estimator1.score(X_test, y_test)
+	estimator_dummy = Dummyclassifier(strategy='most_frequent', random_state=0)
+	estimator_dummy.fit(X_train, y_train)
+	# see if estimator_1 does much better than the dummy, if it doesnt we can change for example the kernel
+	#if estimator_1 is SVC and see of the score compreed to the dummy is better
+	estimator_dummy.score(X_test, y_test)
+	# comapre scores estimator_1 vs estimator_dummy
 
-def run_fitmodel(model, X_train, X_test, y_train, y_test):
-	""" fit the model (LR, random forest others) and plot the confusion matrix and RUC """
+
+def run_model_evaluation(y_true, y_pred):
+	""" """
+	from sklearn.metrics import accuracy_score, cohen_kappa_score, classification_report, matthews_corrcoef, f1_score, precision_score, recall_score
+	print("Accuracy score={}".format(accuracy_score(y_true, y_pred))) 
+	print("Cohen kappa score={} (expected kcohen < accuracy)".format(cohen_kappa_score(y_true, y_pred))) 
+	print("Precision (not to label + when is - (do not miss sick patients) score={}".format(precision_score(y_true, y_pred))) 
+	print("Recall (find all the positives) score={}".format(recall_score(y_true, y_pred))) 
+	print("F1(weighted harmonic mean of precision and recall) score={}".format(f1_score(y_true, y_pred))) 
+	target_names = ['class 0', 'class 1']
+	print(classification_report(y_true, y_pred, target_names=target_names))
+	#matthews_corrcoef a balance measure useful even if the classes are of very different sizes.
+	print("The matthews_corrcoef(+1 is perfect prediction , 0 average random prediction and -1 inverse prediction)={}. \n ".format(matthews_corrcoef(y_true, y_pred))) 
+
+def run_fitmodel(model, X_train, X_test, y_train, y_test, threshold=None):
+	""" fit the model (LR, random forest others) and plot the confusion matrix and RUC 
+	Args:model:string,X_train, X_test, y_train, y_test , threshold for binarize prediction
+	Outputs: predictions (y_test_pred)"""
+	if threshold is None:
+		threshold = 0.5
 	if model == 'LogisticRegression':
 		# Create logistic regression object
 		regr = linear_model.LogisticRegression()
@@ -541,8 +598,7 @@ def run_fitmodel(model, X_train, X_test, y_train, y_test):
 		# model prediction
 		y_train_pred = regr.predict_proba(X_train)[:,1]
 		y_test_pred = regr.predict_proba(X_test)[:,1]
-		threshold = 0.5
-
+		
 		fig,ax = plt.subplots(1,3)
 		fig.set_size_inches(15,5)
 		plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'LogisticRegression Confusion matrix (TRAIN)', threshold)
@@ -553,7 +609,6 @@ def run_fitmodel(model, X_train, X_test, y_train, y_test):
 	if model == 'RandomForestClassifier':
 		rf = RandomForestClassifier(n_estimators=500, min_samples_leaf=5)
 		rf.fit(X_train,y_train)
-		threshold = 0.5
 		y_train_pred = rf.predict_proba(X_train)[:,1]
 		y_test_pred = rf.predict_proba(X_test)[:,1]
 		fig,ax = plt.subplots(1,3)
@@ -573,7 +628,6 @@ def run_fitmodel(model, X_train, X_test, y_train, y_test):
 		evallist  = [(dtest,'eval'), (dtrain,'train')]
 		param = {'objective':'binary:logistic', 'silent':1, 'eval_metric': ['error', 'logloss']}
 		bst = xgb.train( param, dtrain, num_round, evallist)
-		threshold = 0.5
 		y_train_pred = bst.predict(dtrain)
 		y_test_pred = bst.predict(dtest)
 		fig,ax = plt.subplots(1,3)
@@ -587,11 +641,13 @@ def run_fitmodel(model, X_train, X_test, y_train, y_test):
 		XGBmodel.fit(X_train, y_train)
 		# make predictions for test data
 		y_pred = XGBmodel.predict(X_test)
-		predictions = [round(value) for value in y_pred]
+		y_test_pred = [round(value) for value in y_pred]
 		# evaluate predictions
-		accuracy = accuracy_score(y_test, predictions)
+		accuracy = accuracy_score(y_test, y_test_pred)
 		print("Accuracy XGBooster classifier: %.2f%%" % (accuracy * 100.0))
 		plt.show()
+	# return ground truth and predictions	
+	return y_test_pred
 
 def plot_scatter_target_cond(df, preffix_longit_xandy, target_variable=None):	
 	"""scatter_plot_pair_variables_target: scatter dataframe features and coloured based on target variable values
@@ -923,7 +979,7 @@ def run_load_csv(csv_path = None):
 	""" load csv database, print summary of data"""
 	if csv_path is None:
 		csv_path = "/Users/jaime/vallecas/data/scc/sccplus-24012018.csv"
-		csv_path = "/Users/jaime/vallecas/data/scc/SCDPlus_IM_22022018.csv"
+		csv_path = "/Users/jaime/vallecas/data/scc/SCDPlus_IM_27022018.csv"
 	dataset = pd.read_csv(csv_path) #, sep=';')
 	#summary of data
 	print("Number f Rows=", dataset.shape[0])
@@ -999,6 +1055,36 @@ def build_graph_correlation_matrix(corr_df, threshold=None, corr_target=None):
 	plt.title('Binary Graph, threshold={0:.3g}'.format(threshold))
 	return G
 
+def print_summary_network(Gmetrics, nodes=None, corrtarget=None):
+	"""print_summary_network: print summary of the graph metrics (clustering, centrality )
+	Args: Gmetrics: dictionar keys() are the metrics and values the values, nodes: list of node labels, corrtarget:corrleation value with the target of each node
+	Output: None """
+	import operator
+	nbitems = 6 # top nbitems nodes
+	ignored_list = ['communicability','degree', 'density','is_connected','degree_assortativity_coefficient','degree_histogram','estrada_index','number_connected_components','transitivity']
+	ignored =set(ignored_list)
+	for key, value in Gmetrics.iteritems():
+		if key not in ignored:
+			print("Summary for: {} : best {} nodes\n".format(key, nbitems))
+			sorted_value = sorted(value.items(), key=operator.itemgetter(1))
+			if type(Gmetrics[key]) is dict:
+				for labeli in sorted_value[-nbitems:]:
+					nodeindex = labeli[0]
+					metricvalue = labeli[1]
+					labelname =  nodes[nodeindex]
+					print("		{} at node: {} = {}, correlation with target={}".format(key, labelname, metricvalue,corrtarget[labelname]))
+			else:
+				print("{} = {} \n".format(key, Gmetrics[key]))
+		else:
+			print("Skipping {} \n".format(key))
+	print("Density ={} ".format(Gmetrics['density']))
+	print("Is connected ={} ".format(Gmetrics['is_connected']))
+	print("degree_assortativity_coefficient ={}".format(Gmetrics['degree_assortativity_coefficient']))
+	print("estrada_index ={} ".format(Gmetrics['estrada_index']))
+	print("number_connected_components ={}, Normalized ncc/totalnodes={}".format(Gmetrics['number_connected_components'], Gmetrics['number_connected_components']/float(len(nodes))))
+	print("transitivity ={} ".format(Gmetrics['transitivity']))
+		
+
 def calculate_network_metrics(G):
 	""" calculate_network_metrics: study the netwok properties
 	Args:G networkx graph object
@@ -1018,7 +1104,7 @@ def calculate_network_metrics(G):
 	frac_triangles = nx.transitivity(G); G_metrics["transitivity"] = frac_triangles
 	#clustering coefficient for nodes.
 	clustering_coeff = nx.clustering(G); G_metrics["clustering"] = clustering_coeff
-	clustering_avg = nx.average_clustering(G); G_metrics["average_clustering"] = clustering_avg
+	#clustering_avg = nx.average_clustering(G); G_metrics["average_clustering"] = clustering_avg
 	#clique_G = nx.max_clique(G) ; G_metrics["max_clique"] = clique_G
 	# Assortativity degree_assortativity_coefficient(G[, x, y, ...]) 	Compute degree assortativity of graph.
 	degassor_coeff = nx.degree_assortativity_coefficient(G);  G_metrics["degree_assortativity_coefficient"] = degassor_coeff
