@@ -13,13 +13,38 @@ Data Pipeline:
 ========================
 """
 from __future__ import print_function
-import os
-import sys
-import pdb
+import os, sys, pdb, operator
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import r2_score
+import importlib
+from random import randint
+import matplotlib.pyplot as plt
+from plot_learning_curve import plot_learning_curve
+import seaborn as sns
+import re # regex
+from patsy import dmatrices
+import itertools
+import warnings
+
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, StratifiedKFold, ShuffleSplit
+from sklearn.metrics import r2_score, roc_curve, auc, roc_auc_score, log_loss, accuracy_score, confusion_matrix
+from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif, chi2
+from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score, cohen_kappa_score,accuracy_score, classification_report, matthews_corrcoef
+from sklearn.neighbors.kde import KernelDensity
+from sklearn.neighbors import KNeighborsClassifier
+from sklearn import preprocessing, linear_model, metrics
+from sklearn.preprocessing import LabelEncoder, StandardScaler
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.pipeline import Pipeline
+from sklearn.manifold import TSNE
+from sklearn.datasets.mldata import fetch_mldata
+from sklearn.svm import SVC
+from sklearn.dummy import DummyClassifier
+from plot_learning_curve import plot_learning_curve
+from sklearn.naive_bayes import GaussianNB
+import xgboost as xgb
+from xgboost import XGBClassifier
+	
 from keras import regularizers
 from keras.datasets import mnist
 from keras.models import Model, Sequential
@@ -29,31 +54,9 @@ from keras.optimizers import SGD, RMSprop, Adam
 from keras.utils import np_utils
 from keras.layers.core import Dense, Activation, Dropout
 from keras.callbacks import Callback
-from sklearn.neighbors.kde import KernelDensity
-from sklearn.model_selection import cross_val_score
-from sklearn.preprocessing import LabelEncoder
-from sklearn.preprocessing import StandardScaler
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.pipeline import Pipeline
-from sklearn import preprocessing, linear_model
-from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score, cohen_kappa_score
-from sklearn.model_selection import train_test_split
-from xgboost import XGBClassifier
-import matplotlib.pyplot as plt
-from sklearn.preprocessing import StandardScaler
-from random import randint
-import seaborn as sns
-import re # regex
-from patsy import dmatrices
-import itertools
-from sklearn.metrics import roc_curve, auc, roc_auc_score, log_loss, accuracy_score, confusion_matrix
-import warnings
-from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif, chi2
-import xgboost as xgb
-from sklearn.manifold import TSNE
-from sklearn import metrics
+
 import networkx as nx
-import importlib
+
 
 
 
@@ -159,50 +162,68 @@ def main():
 	formula= build_formula()
 	# build design matrix(patsy.dmatrix) and rank the features in the formula y ~ X 
 	X_prep = run_feature_ranking(Xy_df_scaled, scaler, formula)
-
+	#Split dataset into train and test
 	y = Xy_df_scaled[target_variable].values
 	X_features = explanatory_features
 	if target_variable in explanatory_features:
 		X_features.remove(target_variable)
 	X = Xy_df_scaled[X_features].values
 	X_train, X_test, y_train, y_test = run_split_dataset_in_train_test(X, y, test_size=0.2)
-
+	######
+	naive_bayes_estimator = run_naive_Bayes(X_train, y_train, X_test, y_test)
+	compare_against_dummy_estimators(naive_bayes_estimator, X_train, y_train, X_test, y_test)
+	pdb.set_trace()
+	#####
 	# (7) Modelling
-	## Build model and fit to data http://xgboost.readthedocs.io/en/latest/tutorials/index.html
-	# XGBoost is an implementation of gradient boosted decision trees designed for speed and performance
+	# (7.1) Linear Classifiers
+	# 7.1.1 Regression with Lasso normalization. NOT good method for binary classification
+	# 7.1.2  (vanilla) Logistic Regression, SVM
+	# 7.1.3 Logistic Regression, SVM with SGD training setting the SGD loss parameter to 'log' for Logistic Regression or 'hinge' for SVM SGD
 	model = ['LogisticRegression','RandomForestClassifier', 'XGBooster']
 	thres_bin = 0.5
-	y_pred = run_fitmodel(model[0], X_train, X_test, y_train, y_test, thres_bin)	
-	run_model_evaluation(y_test,y_pred)
-
-	y_pred = run_fitmodel(model[1], X_train, X_test, y_train, y_test)
-	#how to evaluate random forest??? 
+	
+	# (7.1.1)
+	lasso_estimator = regression_Lasso(X_train, y_train, X_test, y_test)
+	print("Regression Lasso best score={}".format(lasso_estimator.best_score_))
+	calculate_top_features_contributing_class(lasso_estimator, X_features, 10)
+	# (7.1.2)a vanilla logistic regression
+	y_pred = run_fitmodel(model[0], X_train, y_train, X_test, y_test, thres_bin)
+	
 	#run_model_evaluation(y_test,y_pred)
-	y_pred = run_fitmodel(model[2], X_train, X_test, y_train, y_test)
+	
+	# (7.1.2)b LinearSVM
+	lsvm_estimator_vanilla, lsvm_estimator_grid = linear_svm_classifier(X_train, y_train, X_test, y_test, X_features)
+	#calculate_top_features_contributing_class(lsvm_estimator_vanilla, X_features, 10) error
+	# (7.1.3) SGD classifier better for binary classification and can go both Log Reg and SVM
+	sgd_estimator = SGD_classifier(X_train, y_train, X_test, y_test, X_features)
+	calculate_top_features_contributing_class(sgd_estimator, X_features, 10)
+	
+	
+	# (7.2) NON Linear Classifiers RandomForest and XGBooster http://xgboost.readthedocs.io/en/latest/tutorials/index.html
+	## (7.2.1) RandomForestClassifier
+	y_pred = run_fitmodel(model[1], X_train, y_train, X_test, y_test)
+	#run_model_evaluation(y_test,y_pred)
+	#how to evaluate random forest??? 
+	# (7.2.2) XGBoost is an implementation of gradient boosted decision trees designed for speed and performance
+	y_pred = run_fitmodel(model[2], X_train, y_train, X_test, y_test)
 	run_model_evaluation(y_test,y_pred)
+	# (7.2.3) Kneighbors classifier
+	knn = kneighbors_classifier(X_train, y_train, X_test, y_test)
+	compare_against_dummy_estimators(knn, X_train, y_train, X_test, y_test)
 
-	model, model2, activations = run_Keras_DN(None, X_train, X_test, y_train, y_test)
+
+
+	######
+	# kneighbors
+	#run_naive_Bayes()
+	#run_Keras_DN(dataset, X_train, y_train, X_test, y_test)
+
+	#########
+	# algebraic topology
 	#activations.shape = X_test.shape[0], number of weights
 	samples = run_tSNE_analysis(activations, y_test)
 	run_TDA_with_Kepler(samples, activations)
 	pdb.set_trace()
-
-	#logistic regression with Lasso normalization
-	features_to_regress = ['scd_visita1', 'apoe', 'anos_escolaridad','ansi_visita1','lat_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'act_apat_visita1', 'mmse_visita1']
-	target_of_regress = 'conversion'
-	run_logistic_regression(Xy_df_scaled, features_to_regress, target_of_regress)
-	pdb.set_trace()
-	#run_naive_Bayes()
-	#run_svm()
-
-
-
-
-
-
-
-
-	
 
 	
 def run_print_dataset(dataset):
@@ -554,26 +575,32 @@ def run_PCA_for_visualization(Xy_df, target_label, explained_variance=None):
 	#Noise filtering https://jakevdp.github.io/PythonDataScienceHandbook/05.09-principal-component-analysis.html
 	return pca, projected
 
-def compare_against_dummy_estimators(estimator1, X_train, X_test, y_train, y_test):
+def compare_against_dummy_estimators(estimator1, X_train, y_train, X_test, y_test):
 	""" compare_against_dummy_estimators: When doing supervised learning, a simple sanity check consists of comparing one's
 	estimator against simple rules of thumb. DummyClassifier implements such strategies(stratified
 	most_frequent, prior, uniform, constant). Used for imbalanced datasets
 	Args: fitted estimator1 eg clf = SVC(kernel='linear',..).fit(X_train, y_train)
 	X_train, X_test, y_train, y_test
 	Outputs: """
-	from sklearn.dummy import DummyClassifier
-	estimator1.score(X_test, y_test)
-	estimator_dummy = Dummyclassifier(strategy='most_frequent', random_state=0)
+	print("Estimator {}\n".format(estimator1))
+	print("Score ={} \n".format(estimator1.score(X_test, y_test)))
+	dummy_strategy = 'uniform'# 'most_frequent'  'constant'. constant=1
+	estimator_dummy = DummyClassifier(strategy=dummy_strategy, random_state=0)
 	estimator_dummy.fit(X_train, y_train)
 	# see if estimator_1 does much better than the dummy, if it doesnt we can change for example the kernel
 	#if estimator_1 is SVC and see of the score compreed to the dummy is better
-	estimator_dummy.score(X_test, y_test)
+	print("Score of Dummy estimator={}".format(estimator_dummy.score(X_test, y_test)))
 	# comapre scores estimator_1 vs estimator_dummy
-
+	estimator_dummy = DummyClassifier(strategy='constant', random_state=0, constant=1)
+	estimator_dummy.fit(X_train, y_train)
+	print("Score of Dummy constant estimator (always 1)={}".format(estimator_dummy.score(X_test, y_test)))
+	estimator_dummy = DummyClassifier(strategy='constant', random_state=0, constant=0)
+	estimator_dummy.fit(X_train, y_train)
+	print("Score of Dummy constant estimator (always 0)={}".format(estimator_dummy.score(X_test, y_test)))
+	
 
 def run_model_evaluation(y_true, y_pred):
 	""" """
-	from sklearn.metrics import accuracy_score, cohen_kappa_score, classification_report, matthews_corrcoef, f1_score, precision_score, recall_score
 	print("Accuracy score={}".format(accuracy_score(y_true, y_pred))) 
 	print("Cohen kappa score={} (expected kcohen < accuracy)".format(cohen_kappa_score(y_true, y_pred))) 
 	print("Precision (not to label + when is - (do not miss sick patients) score={}".format(precision_score(y_true, y_pred))) 
@@ -584,7 +611,7 @@ def run_model_evaluation(y_true, y_pred):
 	#matthews_corrcoef a balance measure useful even if the classes are of very different sizes.
 	print("The matthews_corrcoef(+1 is perfect prediction , 0 average random prediction and -1 inverse prediction)={}. \n ".format(matthews_corrcoef(y_true, y_pred))) 
 
-def run_fitmodel(model, X_train, X_test, y_train, y_test, threshold=None):
+def run_fitmodel(model, X_train, y_train, X_test, y_test, threshold=None):
 	""" fit the model (LR, random forest others) and plot the confusion matrix and RUC 
 	Args:model:string,X_train, X_test, y_train, y_test , threshold for binarize prediction
 	Outputs: predictions (y_test_pred)"""
@@ -750,7 +777,7 @@ class BatchLogger(Callback):
         d =  pd.Series(self.log_values[metric_name])
         return d.rolling(window,center=False).mean()
 
-def run_Keras_DN(dataset, X_train, X_test, y_train, y_test):
+def run_Keras_DN(dataset, X_train, y_train, X_test, y_test):
 	""" deep network classifier using keras
 	Remember to activate the virtual environment source ~/git...code/tensorflow/bin/activate"""
 
@@ -855,124 +882,175 @@ def run_tSNE_analysis(activations, y_test):
 	plt.show()
 	return samples
 
-def run_logistic_regression(df, features=None, target_label=None):
-	""" logistic regression, answer two points: what is the baseline prediction of disease progression and 
-	which independent variables are important facors for predicting disease progression"""
-	#diabetes dataset
-	#from sklearn import datasets
-	#diabetes = datasets.load_diabetes()
-	#X = diabetes.data
-	#y = diabetes.target
-	#feature_names=['age', 'sex', 'bmi', 'bp','s1', 's2', 's3', 's4', 's5', 's6']
-	# Lasso normal linear regression with L1 regularization (minimize the number of features or predictors int he model )
-	from sklearn.linear_model import Lasso
-	from sklearn import linear_model
-	from sklearn.model_selection import GridSearchCV
-	#features =['years_school', 'SCD_v1']
-	#features = ['Visita_1_MMSE', 'years_school', 'SCD_v1', 'Visita_1_P', 'Visita_1_STAI', 'Visita_1_GDS','Visita_1_CN']
-	#df = dataset.fillna(method='ffill')
-	X_all = df[features]
-	y_all = df[target_label]
-	# split data into training and test sets
-	print("Data set set dimensions: X_all=", X_all.shape, " y_all=", y_all.shape)
-	cutfortraining = int(X_all.shape[0]*0.8)
-	X_train = X_all.values[:cutfortraining, :]
-	y_train = y_all.values[:cutfortraining]
-	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
-	X_test = X_all.values[cutfortraining:,:]
-	y_test = y_all.values[cutfortraining:]
-	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
-	# define the model and the hyperparamer alpha (controls the stricteness of the regularization)
-	lasso = Lasso(random_state=0)
-	alphas = np.logspace(-6, -0.5, 10)
-	# estimator with our model, in this case a grid search of model of Lasso type
-	estimator = GridSearchCV(lasso, dict(alpha=alphas))
-	# take train set and learn a group of Lasso models by varying the value of the alpha hyperparameter.
-	estimator.fit(X_train, y_train)
-	estimator.best_score_
-	estimator.best_estimator_
-	estimator.predict(X_test)
-	# print results and ITERATE: making changes to the data transformation, Machine Learning algorithm, 
-	#tuning hyperparameters of the algorithm etc.
-	#Best possible score is 1.0, lower values are worse. Unlike most other scores
-	#The score method of a LassoCV instance returns the R-Squared score, which can be negative, means performing poorly
-	estimator.score(X_test,y_test)
-	pdb.set_trace()
-	
-def run_naive_Bayes(dataset, features=None):
-	from plot_learning_curve import plot_learning_curve
-	from sklearn.naive_bayes import GaussianNB
-	title = "Learning Curves (Naive Bayes)"
-	# Cross validation with 100 iterations to get smoother mean test and train
-	# score curves, each time with 20% data randomly selected as a validation set.
-	features =['years_school', 'SCD_v1']
-	df = dataset.fillna(method='ffill')
-	X_all = df[features]
-	y_all = df['Conversion']
-	print("Data set set dimensions: X_all=", X_all.shape, " y_all=", y_all.shape)
-	cutfortraining = int(X_all.shape[0]*0.8)
-	X = X_all.values[:cutfortraining, :]
-	y = y_all.values[:cutfortraining]
-	print("Training set set dimensions: X=", X.shape, " y=", y.shape)
-	X_test = X_all.values[cutfortraining:,:]
-	y_test = y_all.values[cutfortraining:]
-	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
-	
-	estimator = GaussianNB()
-	estimator.fit(X,y)
-	# test
-	predictions = [int(a) for a in estimator.predict(X_test)]
-	num_correct = sum(int(a == ye) for a, ye in zip(predictions, y_test))
-	print("Baseline classifier using an Naive Bayes.")
-	print("%s of %s values correct." % (num_correct, len(y_test)))
-	# plot learning curve
-	cv = ShuffleSplit(n_splits=100, test_size=0.2, random_state=0)
-	plot_learning_curve(estimator, title, X_all.values, y_all.values, cv=cv, n_jobs=4)
+def linear_svm_classifier(X_train, y_train, X_test, y_test, features=None):
+	""" linear_svm_classifier: is the linear classifier with the maximum margin"""
 
-def run_svm(dataset, features=None):
-	""" svm classifier"""
-	from sklearn.datasets.mldata import fetch_mldata
-	from sklearn.svm import SVC
-	from sklearn.model_selection import GridSearchCV
-	from sklearn.model_selection import StratifiedKFold
-	from plot_learning_curve import plot_learning_curve
-	#from sklearn.grid_search import GridSearchCV
-	# Fill NA/NaN values using the specified method: ffill: propagate last valid observation forward to next valid backfill 
-	features =['Visita_1_EQ5DMOV', 'Visita_1_EQ5DCP', 'years_school', 'SCD_v1']
-	df = dataset.fillna(method='ffill')
-	#df = df.shift()
-	X_all = df.loc[:, df.columns != 'Conversion']
-	X_all = df[features]
-	y_all = df['Conversion'] #.dropna()
-	print("Data set set dimensions: X_all=", X_all.shape, " y_all=", y_all.shape)
-	cutfortraining = int(X_all.shape[0]*0.8)
-	X = X_all.values[:cutfortraining, :]
-	y = y_all.values[:cutfortraining]
-	print("Training set set dimensions: X=", X.shape, " y=", y.shape)
-	X_test = X_all.values[cutfortraining:,:]
-	y_test = y_all.values[cutfortraining:]
+	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
 	# SVM model, cost and gamma parameters for RBF kernel. out of the box
 	svm = SVC(cache_size=1000, kernel='rbf')
-	svm.fit(X, y)
+	svm.fit(X_train, y_train)
 	# test
-	predictions = [int(a) for a in svm.predict(X_test)]
-	num_correct = sum(int(a == ye) for a, ye in zip(predictions, y_test))
-	print("Baseline classifier using an SVM.")
-	print("%s of %s values correct." % (num_correct, len(y_test)))
+	y_pred = [int(a) for a in svm.predict(X_test)]
+	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
+	print("Vanilla classifier using linear SVM: %s of %s values correct." % (num_correct, len(y_test)))
 	# plot learning curves
 	kfolds = StratifiedKFold(5)
-	cv = kfolds.split(X,y)
-	title =  "Learning Curves (SVM)"
-	plot_learning_curve(svm, title, X_all.values, y_all.values, ylim=(0.7, 1.01), cv=cv, n_jobs=4)
+	X_all = np.concatenate((X_train, X_test), axis=0)
+	y_all = np.concatenate((y_train, y_test), axis=0)
+	#Generate indices to split data into training and test set.
+	cv = kfolds.split(X_all,y_all)
+	title ='Learning Curves vanilla linearSVM'
+	plot_learning_curve(svm, title, X_all, y_all, ylim=(0.7, 1.01), cv=cv, n_jobs=4)
 
-	# Exhaustive search for SVM parameters to improve the out-of-the-box performance of vanilla SVM.
+	print("Exhaustive search for SVM parameters to improve the out-of-the-box performance of vanilla SVM.")
 	parameters = {'C':10. ** np.arange(5,10), 'gamma':2. ** np.arange(-5, -1)}
-	grid = GridSearchCV(svm, parameters, cv=cv, verbose=3, n_jobs=2)
-	grid.fit(X, y)
-	print("predicting")
-	print("score: ", grid.score(X_test, y_test))
+	grid = GridSearchCV(svm, parameters, cv=5, verbose=3, n_jobs=2)
+	grid.fit(X_train, y_train)
 	print(grid.best_estimator_)
+	print("LVSM GridSearchCV. The best alpha is:{}".format(grid.best_params_)) 
+	print("Linear SVM accuracy of the given test data and labels={} ", grid.score(X_test, y_test))
+	return svm, grid
+
+def run_naive_Bayes(X_train, y_train, X_test, y_test):
+	""" run_naive_Bayes"""
+
+	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
+	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
+	X_all = np.concatenate((X_train, X_test), axis=0)
+	y_all = np.concatenate((y_train, y_test), axis=0)
+	kfolds = StratifiedKFold(5)
+	cv = kfolds.split(X_all,y_all)
+	cv = ShuffleSplit(n_splits=100, test_size=0.2, random_state=0)
+	estimator = GaussianNB()
+	estimator.fit(X_train,y_train)
+	# test
+	y_pred = [int(a) for a in estimator.predict(X_test)]
+	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
+	print("Baseline classifier using Naive Bayes: %s of %s values correct." % (num_correct, len(y_test)))
+	# plot learning curve
+	#http://scikit-learn.org/stable/auto_examples/model_selection/plot_learning_curve.html#sphx-glr-auto-examples-model-selection-plot-learning-curve-py
+	plot_learning_curve(estimator, 'Naive Bayes classifier', X_all, y_all, cv=cv, n_jobs=4)	
+	return estimator
+
+def SGD_classifier(X_train, y_train, X_test, y_test, features=None):
+	"""SGD_classifier: Stochastic Gradient Descent classifier. Performs Log Regression and/or SVM (loss parameter) with SGD training 
+	Args:X_train,y_train,X_test,y_test
+	Output: SGD fitted estimator"""
+	#find an opimum value of 'alpha' by either looping over different values of alpha and evaluating the performance over a validation set
+	#use gridsearchcv
+	from sklearn.linear_model import SGDClassifier
+	tuned_parameters = {'alpha': [10 ** a for a in range(-6, -2)]}
+	#class_weight='balanced' addresses the skewness of the dataset in terms of labels
+	# loss='hinge' LSVM,  loss='log' gives logistic regression, a probabilistic classifier
+	# ‘l1’ and ‘elasticnet’ might bring sparsity to the model (feature selection) not achievable with ‘l2’.
+	clf = GridSearchCV(SGDClassifier(loss='log', penalty='elasticnet',l1_ratio=0.15, n_iter=5, shuffle=True, verbose=False, n_jobs=10, average=False, class_weight='balanced')
+                  , tuned_parameters, cv=10, scoring='f1_macro')
+	#now clf is the best classifier found given the search space
+	clf.fit(X_train, y_train)
+	print("LVSM GridSearchCV SGDClassifier. The best alpha is:{}".format(clf.best_params_)) 
+	print("The classifier accuracy of the given test data and labels={}".format(clf.score(X_train,y_train)))
+	return clf
+
+def calculate_top_features_contributing_class(clf, features, numbertop=None):
+	""" calculate_top_features_contributing_class: print the n features tcontributing the most to class labels for a fitted estimator.
+	Args: estimator, features lits and number of features"""
+	if numbertop is None:
+		numbertop = 10
+	print("The estimator is:{} \n".format(clf))
+	for i in range(0, clf.best_estimator_.coef_.shape[0]):
+		toplist = np.argsort(clf.best_estimator_.coef_[i])[-numbertop:]
+	print("the top {} features indices contributing to the class labels are:{}".format(numbertop, toplist))
+	if features is not None:
+		print("\tand the top {} features labels contributing to the class labels are:{} \n".format(numbertop, operator.itemgetter(*toplist)(features)))
+
+def kneighbors_classifier(X_train, y_train, X_test, y_test):
+	""" kneighbors_classifier : KNN is non-parametric, instance-based and used in a supervised learning setting. Minimal training but expensive testing.
+	KNN is used as a benchmark for more complex classifiers such as (ANN) (SVM).
+	KNN classifier is also a non parametric ( it makes no explicit assumptions about the functional form of h:X->y) 
+	this is protection against for example assume data are Gaussian and they are not.
+	and instance-based (algorithm doesnt explicitely learn a model) so it chooses to memorize the training instances 
+	which are subsequently used as “knowledge” for the prediction phase, that is, only when a query to our database is made
+	(i.e. when we ask it to predict a label given an input), will the algorithm use the training instances to spit out an answer
+	https://kevinzakka.github.io/2016/07/13/k-nearest-neighbor/
+	CONS: Note the rigid dichotomy between KNN and the more sophisticated Neural Network which has a lengthy training phase albeit a very fast testing phase.
+	Furthermore, KNN can suffer from skewed class distributions. For example, if a certain class is very frequent in the training set,
+	it will tend to dominate the majority voting of the new example (large number = more common). 
+	Finally, the accuracy of KNN can be severely degraded with high-dimension data because there is little difference between the nearest and farthest neighbor.
+	Args:  
+	Output: knn estimator"""
+
+	#Randomly dividing the training set into k groups (k and k_hyper are nothinmg to do with each other), or folds, of approximately equal size.
+	# The first fold is treated as a validation set, and the method is fit on the remaining k−1 folds.
+	#The misclassification rate is then computed on the observations in the held-out fold. 
+	#This procedure is repeated k times; each time, a different group of observations is treated as a validation set. 
+	#This process results in k estimates of the test error which are then averaged out
+	#performing a 10-fold cross validation on our dataset using a generated list of odd K’s ranging from 1 to 50.
+	# creating odd list of K for KNN
+	myList = list(range(1,50)) #odd to avoid tie of points
+	# subsetting just the odd ones
+	neighbors = filter(lambda x: x % 2 != 0, myList)
+	# empty list that will hold cv scores
+	# perform 10-fold cross validation
+	cv_scores = [] # list with x validation scores
+	for k in neighbors:
+		knn = KNeighborsClassifier(n_neighbors=k)
+		scores = cross_val_score(knn, X_train, y_train, cv=10, scoring='accuracy')
+		cv_scores.append(scores.mean())
+	MSE = [1 - x for x in cv_scores]
+	# determining best k
+	optimal_k = neighbors[MSE.index(min(MSE))]
+	# instantiate learning model
+	knn = KNeighborsClassifier(n_neighbors=optimal_k)
+	knn.fit(X_train, y_train)
+	# predict the response
+	y_pred = knn.predict(X_test)
+	# evaluate accuracy
+	print("KNN classifier with optimal k={}, accuracy={}".format(optimal_k, accuracy_score(y_test, y_pred)))
+	fig, ax = plt.subplots(1, 1, figsize=(6,9))
+	# plot misclassification error vs k
+	ax.plot(neighbors, MSE)
+	ax.set_xlabel('Number of Neighbors K')
+	ax.set_ylabel('Misclassification Error')
+	ax.set_title('KNN classifier')
+	plt.show()
+	return knn
+
+def regression_Lasso(X_train, y_train, X_test, y_test):
+	""" logistic regression, answer two points: what is the baseline prediction of disease progression and 
+	which independent variables are important facors for predicting disease progression.
+	VERY SUBOPTIMAL method for binary classification (scores 0.1~0.2)
+	Args:(X_train,y_train,X_test,y_test, features, target_label
+	Output: GridSearchCV Lasso estimator """
+	# Lasso normal linear regression with L1 regularization (minimize the number of features or predictors int he model)
+	from sklearn.linear_model import Lasso
+	from sklearn import linear_model
+
+	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
+	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
+	# define the model and the hyperparameter alpha (controls the stricteness of the regularization)
+	lasso = Lasso(random_state=0)
+	alphas = np.logspace(-6, -0.5, 10)
+	# estimator with our model, in this case a grid search of model of Lasso type
+	# GridSearchCV does exhaustive search over specified parameter values for an estimator
+	# fit of an estimator on a parameter grid and chooses the parameters to maximize the cross-validation score
+	estimator = GridSearchCV(lasso, dict(alpha=alphas))
+	# take train set and learn a group of Lasso models by varying the value of the alpha hyperparameter.
+	#Best possible score is 1.0, lower values are worse. Unlike most other scores
+	#The score method of a LassoCV instance returns the R-Squared score, which can be negative, means performing poorly
+	#Estimator score method is a default evaluation criterion for the problem they are designed to solve
+	#By default, the GridSearchCV uses a 3-fold cross-validation
+	estimator.fit(X_train, y_train)
+	print("Lasso estimator cv results:{}".format(sorted(estimator.cv_results_.keys())))
+	print("Mean cross-validated score of the best estimator:{}".format(estimator.best_score_))
+	print("Estimator was chosen by the search(highest score):{} ".format(estimator.best_estimator_))
+	print("Calling to estimator.predict with the best estimator parameters...")
+	y_pred = estimator.predict(X_test)
+	
+	scores = estimator.score(X_test,y_test)
+	print("Scores:{}".format(scores))
+	return estimator
+	
 
 
 def run_load_csv(csv_path = None):
@@ -1059,7 +1137,7 @@ def print_summary_network(Gmetrics, nodes=None, corrtarget=None):
 	"""print_summary_network: print summary of the graph metrics (clustering, centrality )
 	Args: Gmetrics: dictionar keys() are the metrics and values the values, nodes: list of node labels, corrtarget:corrleation value with the target of each node
 	Output: None """
-	import operator
+	
 	nbitems = 6 # top nbitems nodes
 	ignored_list = ['communicability','degree', 'density','is_connected','degree_assortativity_coefficient','degree_histogram','estrada_index','number_connected_components','transitivity']
 	ignored =set(ignored_list)
@@ -1181,7 +1259,6 @@ def run_correlation_matrix(dataset,feature_label=None):
 def chi_square_of_df_cols(df, col1, col2):
 	df_col1, df_col2 = df[col1], df[col2]
 	obs = np.array(df_col1, df_col2 ).T
-	pdb.set_trace()
 
 def anova_test(df, feature=None, target_label=None):
 	""" The one-way analysis of variance (ANOVA) is used to determine whether there are any statistically significant differences between the means of three or more independent (unrelated) groups.
