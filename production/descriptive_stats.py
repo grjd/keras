@@ -26,15 +26,15 @@ from patsy import dmatrices
 import itertools
 import warnings
 
-from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, StratifiedKFold, ShuffleSplit
-from sklearn.metrics import r2_score, roc_curve, auc, roc_auc_score, log_loss, accuracy_score, confusion_matrix
+from sklearn.linear_model import SGDClassifier, LogisticRegression, Lasso
+from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, StratifiedKFold, ShuffleSplit, KFold
+from sklearn.metrics import r2_score, roc_curve, auc, roc_auc_score, log_loss, accuracy_score, confusion_matrix, classification_report, precision_score, matthews_corrcoef, recall_score, f1_score, cohen_kappa_score
 from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif, chi2
-from sklearn.metrics import confusion_matrix, precision_score, recall_score, f1_score, cohen_kappa_score,accuracy_score, classification_report, matthews_corrcoef
 from sklearn.neighbors.kde import KernelDensity
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn import preprocessing, linear_model, metrics
+from sklearn import preprocessing, metrics
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.manifold import TSNE
 from sklearn.datasets.mldata import fetch_mldata
@@ -42,7 +42,7 @@ from sklearn.svm import SVC
 from sklearn.dummy import DummyClassifier
 from plot_learning_curve import plot_learning_curve
 from sklearn.naive_bayes import GaussianNB
-import xgboost as xgb
+from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
 	
 from keras import regularizers
@@ -56,9 +56,7 @@ from keras.layers.core import Dense, Activation, Dropout
 from keras.callbacks import Callback
 
 import networkx as nx
-
-
-
+from adspy_shared_utilities import plot_class_regions_for_classifier, plot_decision_tree, plot_feature_importances, plot_class_regions_for_classifier_subplot
 
 def main():
 	plt.close('all')
@@ -126,37 +124,37 @@ def main():
 	corr_with_target = corr_Xy_df[target_variable]
 	#corr_with_target = calculate_correlation_with_target(Xdf_imputed_scaled, target_values) # correlation array of features with the target
 	threshold = np.mean(np.abs(corr_Xy_df.as_matrix())) + 1*np.std(np.abs(corr_Xy_df.as_matrix()))
-	graph = build_graph_correlation_matrix(corr_Xy_df, threshold, corr_with_target)
-	graph_metrics = calculate_network_metrics(graph)
-	# print sumary network metrics
-	print_summary_network(graph_metrics, nodes=corr_Xy_df.keys().tolist(), corrtarget=corr_with_target)
+	# graph = build_graph_correlation_matrix(corr_Xy_df, threshold, corr_with_target)
+	# graph_metrics = calculate_network_metrics(graph)
+	# # print sumary network metrics
+	# print_summary_network(graph_metrics, nodes=corr_Xy_df.keys().tolist(), corrtarget=corr_with_target)
 	
-	#(4) Descriptive analytics: plot scatter and histograms
-	longit_xy_scatter = ['scd_visita', 'fcsrtlibdem_visita'] #it works for longitudinal
-	plot_scatter_target_cond(Xy_df_scaled,longit_xy_scatter, target_variable)
-	features_to_plot = ['scd_visita1', 'fcsrtlibdem_visita1'] 
-	plot_histogram_pair_variables(dataset, features_to_plot)
-	#sp_visita (sobrepeso), depre_(depresion),ansi_,tce_(traumatismo), sue_dia_(duerme dia), sue_noc_(duerme noche), imc_(imc), cor_(corazon)
-	#tabac_(fuma), valfelc_(felicidad) 
-	longit_pattern = re.compile("^fcsrtlibdem_+visita[1-5]+$") 
-	longit_pattern = re.compile("^mmse_+visita[1-5]+$") 
-	# plot N histograms one each each variable_visitai
-	plot_histograma_one_longitudinal(dataset_orig, longit_pattern)
-	#plot 1 histogram by grouping vlalues of one continuous feature 
-	plot_histograma_bygroup(dataset_orig, 'mmse_visita1')
-	# plot one histogram grouping by the value of the target variable
-	plot_histograma_bygroup_target(dataset_orig, 'conversion')
-	# plot some categorical features hardcoded inside the function gropued by target
-	# categorical_features = ['sexo','nivel_educativo', 'apoe', 'edad']
-	plot_histograma_bygroup_categorical(dataset_orig, target_variable)
-	# perform statistical tests: ANOVA
-	features_to_test = ['scd_visita1']
-	target_anova_variable = 'valsatvid_visita1'#'conversion' nivel_educativo' #tabac_visita1 depre_visita1
-	run_statistical_tests(Xy_df_scaled,features_to_test, target_anova_variable)
+	# #(4) Descriptive analytics: plot scatter and histograms
+	# longit_xy_scatter = ['scd_visita', 'fcsrtlibdem_visita'] #it works for longitudinal
+	# plot_scatter_target_cond(Xy_df_scaled,longit_xy_scatter, target_variable)
+	# features_to_plot = ['scd_visita1', 'fcsrtlibdem_visita1'] 
+	# plot_histogram_pair_variables(dataset, features_to_plot)
+	# #sp_visita (sobrepeso), depre_(depresion),ansi_,tce_(traumatismo), sue_dia_(duerme dia), sue_noc_(duerme noche), imc_(imc), cor_(corazon)
+	# #tabac_(fuma), valfelc_(felicidad) 
+	# longit_pattern = re.compile("^fcsrtlibdem_+visita[1-5]+$") 
+	# longit_pattern = re.compile("^mmse_+visita[1-5]+$") 
+	# # plot N histograms one each each variable_visitai
+	# plot_histograma_one_longitudinal(dataset_orig, longit_pattern)
+	# #plot 1 histogram by grouping vlalues of one continuous feature 
+	# plot_histograma_bygroup(dataset_orig, 'mmse_visita1')
+	# # plot one histogram grouping by the value of the target variable
+	# plot_histograma_bygroup_target(dataset_orig, 'conversion')
+	# # plot some categorical features hardcoded inside the function gropued by target
+	# # categorical_features = ['sexo','nivel_educativo', 'apoe', 'edad']
+	# plot_histograma_bygroup_categorical(dataset_orig, target_variable)
+	# # perform statistical tests: ANOVA
+	# features_to_test = ['scd_visita1']
+	# target_anova_variable = 'valsatvid_visita1'#'conversion' nivel_educativo' #tabac_visita1 depre_visita1
+	# run_statistical_tests(Xy_df_scaled,features_to_test, target_anova_variable)
 	
-	# (5) Dimensionality Reduction
-	pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
-	print("The variance ratio by the {} principal compments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
+	# # (5) Dimensionality Reduction
+	# pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
+	# print("The variance ratio by the {} principal compments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
 	
 	# (6) Feature Engineering
 	formula= build_formula()
@@ -169,12 +167,45 @@ def main():
 		X_features.remove(target_variable)
 	X = Xy_df_scaled[X_features].values
 	X_train, X_test, y_train, y_test = run_split_dataset_in_train_test(X, y, test_size=0.2)
-	######
-	naive_bayes_estimator = run_naive_Bayes(X_train, y_train, X_test, y_test)
-	compare_against_dummy_estimators(naive_bayes_estimator, X_train, y_train, X_test, y_test)
-	pdb.set_trace()
+
 	#####
-	# (7) Modelling
+	#https://github.com/mapattacker/datascience/blob/master/supervised.rst
+	knn = run_kneighbors(X_train, y_train, X_test, y_test)
+	metrics_estimator = compute_metrics_estimator(knn,X_test,y_test)
+	metrics_estimator_with_cv = compute_metrics_estimator_with_cv(knn,X_test,y_test,5)
+	pdb.set_trace()
+	lr_estimator = run_logreg(X_train, y_train, X_test, y_test, 0.5)
+	naive_bayes_estimator = run_naive_Bayes(X_train, y_train, X_test, y_test, 0)
+	dectree_estimator =run_random_decision_tree(X_train, y_train, X_test, y_test, X_features,target_variable)
+	rf_estimator =run_randomforest(X_train, y_train, X_test, y_test, X_features)
+	gbm_estimator = run_gradientboosting(X_train, y_train, X_test, y_test, X_features)
+	xgbm_estimator = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
+	compare_against_dummy_estimators(xgbm_estimator, X_train, y_train, X_test, y_test)
+	
+	# QUICK Model selection accuracy 0 for Train test, >0 for the number of folds
+
+	grid_values = {'gamma': [0.001, 0.01, 0.1, 1, 10]}
+	#print_model_selection_metrics(X_train, y_train, X_test, y_test,0) -train/test; print_model_selection_metrics(X_train, y_train, X_test, y_test,10) KFold
+	#print_model_selection_metrics(X_train, y_train, X_test, y_test,grid_values) 
+	print_model_selection_metrics(X_train, y_train, X_test, y_test, grid_values)
+	compare_against_dummy_estimators(naive_bayes_estimator, X_train, y_train, X_test, y_test)
+	#####
+
+
+
+
+
+	#############
+	
+
+
+
+
+
+
+
+	# (7) Modelling. 
+
 	# (7.1) Linear Classifiers
 	# 7.1.1 Regression with Lasso normalization. NOT good method for binary classification
 	# 7.1.2  (vanilla) Logistic Regression, SVM
@@ -187,7 +218,6 @@ def main():
 	print("Regression Lasso best score={}".format(lasso_estimator.best_score_))
 	calculate_top_features_contributing_class(lasso_estimator, X_features, 10)
 	# (7.1.2)a vanilla logistic regression
-	y_pred = run_fitmodel(model[0], X_train, y_train, X_test, y_test, thres_bin)
 	
 	#run_model_evaluation(y_test,y_pred)
 	
@@ -208,7 +238,7 @@ def main():
 	y_pred = run_fitmodel(model[2], X_train, y_train, X_test, y_test)
 	run_model_evaluation(y_test,y_pred)
 	# (7.2.3) Kneighbors classifier
-	knn = kneighbors_classifier(X_train, y_train, X_test, y_test)
+	#knn = run_kneighbors_classifier(X_train, y_train, X_test, y_test)
 	compare_against_dummy_estimators(knn, X_train, y_train, X_test, y_test)
 
 
@@ -247,7 +277,7 @@ def run_variable_selection(dataframe, explanatory_features=None,target_variable=
 	Example: run_variable_selection(dataset, ['', ''...], 'conversion')
 	run_variable_selection(dataset, ['', ''...])
 	run_variable_selection(dataset)
-
+	%https://www.coursera.org/learn/python-machine-learning/lecture/meBKr/model-selection-optimizing-classifiers-for-different-evaluation-metrics
 	""" 
 	if target_variable is None:
 		target_variable = 'conversion'
@@ -575,6 +605,105 @@ def run_PCA_for_visualization(Xy_df, target_label, explained_variance=None):
 	#Noise filtering https://jakevdp.github.io/PythonDataScienceHandbook/05.09-principal-component-analysis.html
 	return pca, projected
 
+def compute_metrics_estimator(estimator,X_test,y_test):
+	""" compute_metrics_estimator compute metrics between a pair of arrays y_pred and y_test
+	Args:estimator(object),X_test,y_test
+	Output: dictionary label:value"""
+	print("Computing metrics for estimator {}".format(estimator))
+	y_pred = estimator.predict(X_test)
+	scores = {'accuracy_score':accuracy_score(y_test, y_pred), 'matthews_corrcoef':matthews_corrcoef(y_test, y_pred), \
+	'f1_score':f1_score(y_test, y_pred),'cohen_kappa_score':cohen_kappa_score(y_test, y_pred), \
+	'recall_score': recall_score(y_test, y_pred), 'precision_score':precision_score(y_test, y_pred), \
+	'roc_auc_score':roc_auc_score(y_pred,y_test),'log_loss':log_loss(y_pred,y_test),\
+	'confusion_matrix':confusion_matrix(y_pred,y_test).T}
+	print('Estimator metrics:{}'.format(scores))
+	pdb.set_trace()
+	return scores
+
+def compute_metrics_estimator_with_cv(estimator,X_test,y_test,cv):
+	""" compute_metrics_estimator_with_cv : sklearn.model_selection.cross_val_score for X_test y_test 
+	Args:estimator(object),X_test,y_test,cv the number of splits (int)
+	Output:
+	Example: compute_metrics_estimator_with_cv(estimator,X_test,y_test,10)"""
+	kfold = KFold(n_splits=cv, random_state=0)
+	acc_cv = cross_val_score(estimator, X_test, y_test, cv=cv, scoring='accuracy').mean()
+	recall_cv = cross_val_score(estimator, X_test,y_test, cv=cv, scoring = 'recall').mean()
+	f1_cv = cross_val_score(estimator, X_test,y_test, cv=cv, scoring = 'f1').mean()
+	rocauc_cv = cross_val_score(estimator, X_test,y_test, cv=cv, scoring = 'roc_auc').mean()
+	precision_cv = cross_val_score(estimator, X_test,y_test, cv=cv, scoring = 'precision').mean()
+	scores_cv = {'accuracy_cv':acc_cv,'recall_cv':recall_cv,'f1_cv':f1_cv,'rocauc_cv':rocauc_cv,'precision_cv':precision_cv}
+	print('Estimator metrics for cv={} is \n {}'.format(kfold,scores_cv))
+	return scores_cv
+
+def print_model_selection_metrics(X_train, y_train, X_test, y_test, modsel=None):
+	""" print_model_selection_metrics
+	Args: X_train, y_train, X_test, y_test, modsel is int, modsel==0 Train/Test modsel>0 is the number fo folds
+	Example: print_model_selection_metrics(X_train, y_train, X_test, y_test, 0) Train/Test split model selection 
+	print_model_selection_metrics(X_train, y_train, X_test, y_test, 5) K=5 Fold model seelction 
+	"""
+	models = []; names = []; scores_acc_list = [];scores_auc_list = [];scores_recall_list=[];scores_matthews_list=[];scores_f1score_list=[];scores_precision_list=[]
+	models.append(('KNN', KNeighborsClassifier()))
+	models.append(('SVC', SVC()))
+	models.append(('LR', LogisticRegression()))
+	models.append(('DT', DecisionTreeClassifier()))
+	models.append(('GNB', GaussianNB()))
+	models.append(('RF', RandomForestClassifier()))
+	models.append(('GB', GradientBoostingClassifier()))
+	if modsel == 0:
+		print("Model selection accuracy based for Train/Test split)")
+		for name, model in models:
+			model.fit(X_train, y_train)
+			y_pred = model.predict(X_test)
+			scores_acc_list.append(accuracy_score(y_test, y_pred))
+			scores_matthews_list.append(matthews_corrcoef(y_test, y_pred))
+			scores_f1score_list.append(f1_score(y_test, y_pred))
+			names.append(name)
+		pdb.set_trace()
+		tr_split = pd.DataFrame({'Names': names, 'Score_acc': scores_acc_list, 'Score_matthews':scores_matthews_list,'Score_f1score':scores_f1score_list})
+		data_to_plot = tr_split
+		print(tr_split)
+	elif type(modsel) is int and modsel >0:
+		print("Model selection accuracy based for k={}-Fold Cross Validation".format(modsel))
+		for name, model in models:
+			kfold = KFold(n_splits=modsel, random_state=0)
+			#score_acc = 
+			scores_acc_list.append(cross_val_score(model, X_test, y_test, cv=modsel, scoring='accuracy').mean())
+			# note if many Folds the y pred may have only one class and auc retund error
+			scores_auc_list.append(cross_val_score(model, X_test,y_test, cv=modsel, scoring = 'roc_auc').mean())
+			scores_recall_list.append(cross_val_score(model, X_test,y_test, cv=modsel, scoring = 'recall').mean())
+			scores_f1score_list.append(cross_val_score(model, X_test,y_test, cv=modsel, scoring = 'f1').mean())
+			scores_precision_list.append(cross_val_score(model, X_test,y_test, cv=modsel, scoring = 'precision').mean())
+			names.append(name)
+		kf_cross_val = pd.DataFrame({'Name': names, 'Score_acc': scores_acc_list, 'Score_auc':scores_auc_list,'Score_recall':scores_recall_list, 'Score_f1':scores_f1score_list, 'Score_precision':scores_precision_list})
+		data_to_plot = kf_cross_val
+		print(kf_cross_val)
+	elif type(modsel) is dict:
+		for name, model in models[1:2]:
+			# only for SVC we can use gamma parameter
+			print("name {} model {}".format(name, model))
+			grid_clf_acc = GridSearchCV(model, param_grid = modsel)
+			grid_clf_acc.fit(X_train, y_train)
+			#optimize for acc
+			y_decision_fn_scores_acc = grid_clf_acc.decision_function(X_test)
+			print('Grid best parameter model:{} (max. accuracy):{}'.format(name, grid_clf_acc.best_params_))
+			print('Grid best score model:{} (accuracy):{}'.format(name, grid_clf_acc.best_score_)) 
+			#optimize for auc
+			grid_clf_auc = GridSearchCV(model, param_grid = modsel, scoring='roc_auc')
+			grid_clf_auc.fit(X_train, y_train)
+			y_decision_fn_scores_auc = grid_clf_auc.decision_function(X_test)
+			print('Test set AUC: ', roc_auc_score(y_test,y_decision_fn_scores_auc))
+			print('Grid best parameter model:{} (max. auc):{}'.format(name, grid_clf_auc.best_params_))
+			print('Grid best score model:{} (auc):{}'.format(name,grid_clf_auc.best_score_))
+			#the gamma parameter can be equal but also different depending on the metric used
+	# print("Plot the accuracy scores nicely")
+	# metric_to_plot = 'Score_matthews'
+	# axis = sns.barplot(x = 'Name', y = 'Score', data = data_to_plot[metric_to_plot])
+	# axis.set(xlabel='Classifier', ylabel=metric_to_plot)
+	# for p in axis.patches:
+	# 	height = p.get_height()
+	# 	axis.text(p.get_x() + p.get_width()/2, height + 0.005,'{:1.4f}'.format(height), ha="center")
+	# plt.show()
+
 def compare_against_dummy_estimators(estimator1, X_train, y_train, X_test, y_test):
 	""" compare_against_dummy_estimators: When doing supervised learning, a simple sanity check consists of comparing one's
 	estimator against simple rules of thumb. DummyClassifier implements such strategies(stratified
@@ -598,7 +727,6 @@ def compare_against_dummy_estimators(estimator1, X_train, y_train, X_test, y_tes
 	estimator_dummy.fit(X_train, y_train)
 	print("Score of Dummy constant estimator (always 0)={}".format(estimator_dummy.score(X_test, y_test)))
 	
-
 def run_model_evaluation(y_true, y_pred):
 	""" """
 	print("Accuracy score={}".format(accuracy_score(y_true, y_pred))) 
@@ -611,79 +739,302 @@ def run_model_evaluation(y_true, y_pred):
 	#matthews_corrcoef a balance measure useful even if the classes are of very different sizes.
 	print("The matthews_corrcoef(+1 is perfect prediction , 0 average random prediction and -1 inverse prediction)={}. \n ".format(matthews_corrcoef(y_true, y_pred))) 
 
-def run_fitmodel(model, X_train, y_train, X_test, y_test, threshold=None):
-	""" fit the model (LR, random forest others) and plot the confusion matrix and RUC 
-	Args:model:string,X_train, X_test, y_train, y_test , threshold for binarize prediction
-	Outputs: predictions (y_test_pred)"""
+def run_kneighbors(X_train, y_train, X_test, y_test, kneighbors=None):
+	""" kneighbors_classifier : KNN is non-parametric, instance-based and used in a supervised learning setting. Minimal training but expensive testing.
+	Args:  X_train, y_train, X_test, y_test, kneighbors
+	Output: knn estimator"""
+
+	#Randomly dividing the training set into k groups (k and k_hyper are nothinmg to do with each other), or folds, of approximately equal size.
+	#The first fold is treated as a validation set, and the method is fit on the remaining k−1 folds.
+	#The misclassification rate is computed on the observations in the held-out fold. 
+	#This procedure is repeated k times; each time, a different group of observations is treated as a validation set. 
+	#This process results in k estimates of the test error which are then averaged out
+	#performing a 10-fold cross validation on our dataset using a generated list of odd K’s ranging from 1 to 50.
+	# creating odd list of K for KNN
+	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
+	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
+	X_all = np.concatenate((X_train, X_test), axis=0)
+	y_all = np.concatenate((y_train, y_test), axis=0)
+	myList = list(range(1,50)) #odd number (49) to avoid tie of points
+	# subsetting just the odd ones
+	neighbors = filter(lambda x: x % 2 != 0, myList)
+	# perform 10-fold cross validation
+	cv_scores = [] # list with x validation scores
+	for k in neighbors:
+		knn = KNeighborsClassifier(n_neighbors=k)
+		scores = cross_val_score(knn, X_train, y_train, cv=10, scoring='accuracy')
+		cv_scores.append(scores.mean())
+	MSE = [1 - x for x in cv_scores]
+	# determining best k
+	optimal_k = neighbors[MSE.index(min(MSE))]
+	print('The optimal for k-NN algorithm cv=10 is k-neighbors={}'.format(optimal_k))
+	# instantiate learning model
+	knn = KNeighborsClassifier(n_neighbors=optimal_k).fit(X_train, y_train)
+	y_train_pred = knn.predict_proba(X_train)[:,1]
+	y_test_pred = knn.predict_proba(X_test)[:,1]
+	y_pred = [int(a) for a in knn.predict(X_test)]
+	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
+	print("Baseline classifier using %s-NN: %s of %s values correct." % (optimal_k, num_correct, len(y_test)))
+	# predict the response
+	y_pred = knn.predict(X_test)
+	# plot learning curve
+	plot_learning_curve(knn, 'accuracy kNN', X_all, y_all, n_jobs=1)
+	print('Accuracy of kNN classifier on training set {:.2f}'.format(knn.score(X_train, y_train)))
+	print('Accuracy of kNN classifier on test set {:.2f}'.format(knn.score(X_test, y_test)))
+	#plot auc
+	fig,ax = plt.subplots(1,3)
+	fig.set_size_inches(15,5)
+	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'kNN Confusion matrix (TRAIN) k='+str(optimal_k), 0.5)
+	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'kNN Confusion matrix (TEST) k='+str(optimal_k), 0.5)
+	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
+	plt.tight_layout()
+	plt.show()
+	# evaluate accuracy
+	print("KNN classifier with optimal k={}, accuracy={}".format(optimal_k, accuracy_score(y_test, y_pred)))
+	fig, ax = plt.subplots(1, 1, figsize=(6,9))
+	# plot misclassification error vs k
+	ax.plot(neighbors, MSE)
+	ax.set_xlabel('Number of Neighbors K')
+	ax.set_ylabel('Misclassification Error')
+	ax.set_title('KNN classifier')
+	plt.show()
+	return knn
+
+def run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable):
+	""" run_random_decision_tree : Bagging algotihm 
+	Args:
+	Output"""
+	import pygraphviz as pgv
+	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
+	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
+	X_all = np.concatenate((X_train, X_test), axis=0)
+	y_all = np.concatenate((y_train, y_test), axis=0)
+	dectree = DecisionTreeClassifier(max_depth=3).fit(X_train, y_train)
+	y_train_pred = dectree.predict_proba(X_train)[:,1]
+	y_test_pred = dectree.predict_proba(X_test)[:,1]
+	y_pred = [int(a) for a in dectree.predict(X_test)]
+	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
+	print("Baseline classifier using DecisionTree: %s of %s values correct." % (num_correct, len(y_test)))
+	# plot learning curve
+	plot_learning_curve(dectree, 'dectree', X_all, y_all, n_jobs=1)
+	print('Accuracy of DecisionTreeClassifier classifier on training set {:.2f}'.format(dectree.score(X_train, y_train)))
+	print('Accuracy of DecisionTreeClassifier classifier on test set {:.2f}'.format(dectree.score(X_test, y_test)))
+	dotgraph = plot_decision_tree(dectree, X_features, target_variable)
+	G=pgv.AGraph()
+	G.layout()
+	G.draw('adspy_temp.dot')
+	#print('Features importances: {}'.format(dectree.feature_importances_))
+	# indices with feature importance > 0
+	idxbools= dectree.feature_importances_ > 0;idxbools = idxbools.tolist()
+	idxbools = np.where(idxbools)[0]
+	impfeatures = []; importances = []
+	for i in idxbools:
+		print('Feature:{}, importance={}'.format(X_features[i], dectree.feature_importances_[i]))
+		impfeatures.append(X_features[i])
+		importances.append(dectree.feature_importances_[i])
+
+	plt.figure(figsize=(5,5))
+	plot_feature_importances(dectree,importances, impfeatures)
+	plt.title('Decision tree features importances')
+	plt.show()
+	#plot auc
+	fig,ax = plt.subplots(1,3)
+	fig.set_size_inches(15,5)
+	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'DecisionTreeClassifier Confusion matrix (TRAIN)', 0.5)
+	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'DecisionTreeClassifier Confusion matrix (TEST)', 0.5)
+	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
+	plt.tight_layout()
+	plt.show()
+	return dectree
+
+def run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features, threshold=None):
+	""" run_extreme_gradientboosting: XGBoost algorithm """
+	# vanilla XGBooster classifie
+	import xgboost as xgb
+	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
+	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
+	X_all = np.concatenate((X_train, X_test), axis=0)
+	y_all = np.concatenate((y_train, y_test), axis=0)
+	XGBmodel = XGBClassifier().fit(X_train, y_train)
+	y_train_pred = XGBmodel.predict_proba(X_train)[:,1]
+	y_test_pred = XGBmodel.predict_proba(X_test)[:,1]
+	y_pred = [int(a) for a in XGBmodel.predict(X_test)]
+	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
+	print("Baseline classifier using eXtremeGradientBossting: %s of %s values correct." % (num_correct, len(y_test)))
+	# plot learning curve
+	plot_learning_curve(XGBmodel, 'XGBmodel', X_all, y_all, n_jobs=1)
+	print('Accuracy of XGBmodel classifier on training set {:.2f}'.format(XGBmodel.score(X_train, y_train)))
+	print('Accuracy of XGBmodel classifier on test set {:.2f}'.format(XGBmodel.score(X_test, y_test)))
+	#plot confusion matrix and AUC
+	fig,ax = plt.subplots(1,3)
+	fig.set_size_inches(15,5)
+	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'XGBmodel CM (TRAIN)', 0.5)
+	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'XGBmodel CM (TEST)', 0.5)
+	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
+	plt.tight_layout()
+	plt.show()
+	
+	dtrain = xgb.DMatrix(X_train, label=y_train)
+	dtest = xgb.DMatrix(X_test, label=y_test)
+	num_round = 5
+	evallist  = [(dtest,'eval'), (dtrain,'train')]
+	param = {'objective':'binary:logistic', 'silent':1, 'eval_metric': ['error', 'logloss']}
+	bst = xgb.train( param, dtrain, num_round, evallist)
+	y_train_pred = bst.predict(dtrain)
+	y_test_pred = bst.predict(dtest)
+	return XGBmodel
+	#y_pred = [int(a) for a in bst.predict(X_test)]
+	#num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
+	# same but using predcit rather than predict_proba almost identical results, but better CM (2,1) above
+	# print(" Baseline classifier using eXtremeGradientBossting: %s of %s values correct." % (num_correct, len(y_test)))
+	# # plot learning curve
+	# plot_learning_curve(XGBmodel, '**XGBmodel', X_all, y_all, n_jobs=1)
+	# print(' Accuracy of XGBmodel classifier on training set {:.2f}'.format(XGBmodel.score(X_train, y_train)))
+	# print(' Accuracy of XGBmodel classifier on test set {:.2f}'.format(XGBmodel.score(X_test, y_test)))
+	# #plot confusion matrix and AUC
+	# fig,ax = plt.subplots(1,3)
+	# fig.set_size_inches(15,5)
+	# plot_cm(ax[0],  y_train, y_train_pred, [0,1], ' XGBmodel CM  (TRAIN)', 0.5)
+	# plot_cm(ax[1],  y_test, y_test_pred,   [0,1], ' XGBmodel CM  (TEST)', 0.5)
+	# plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
+	# plt.tight_layout()
+	# plt.show()
+	
+def run_gradientboosting(X_train, y_train, X_test, y_test, X_features, threshold=None):
+	""" run_gradientboosting: tree based ensemble method use lots of shallow trees (weak learners) 
+	built in a nonrandom way, to create a model that makes fewer and fewer mistakes as more trees are added.
+	Args:X_train, y_train, X_test, y_test, X_features
+	Output:
+	"""
+	# default setting are 0.1, 3 (larger learnign rate more complex trees more overfitting)
+	X_all = np.concatenate((X_train, X_test), axis=0)
+	y_all = np.concatenate((y_train, y_test), axis=0)
+	learn_r = 1; max_depth=6;
+	clf = GradientBoostingClassifier(learning_rate =learn_r, max_depth=max_depth, random_state=0).fit(X_train, y_train)
+	y_train_pred = clf.predict_proba(X_train)[:,1]
+	y_test_pred = clf.predict_proba(X_test)[:,1]
+	y_pred = [int(a) for a in clf.predict(X_test)]
+	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
+	print("Baseline classifier using GradientBoostingClassifier: %s of %s values correct." % (num_correct, len(y_test)))
+	# plot learning curve
+	plot_learning_curve(clf, 'GradientBoostingClassifier', X_all, y_all, n_jobs=1) #cv =3 by default
+	print('GradientBoostingClassifier learningrate={} max depth= {}'.format(learn_r,max_depth))
+	print('Accuracy of GradientBoostingClassifier on training set {:.2f}'.format(clf.score(X_train, y_train)))
+	print('Accuracy of GradientBoostingClassifier on test set {:.2f}'.format(clf.score(X_test, y_test)))
+	#plot confusion matrix and AUC
+	fig,ax = plt.subplots(1,3)
+	fig.set_size_inches(15,5)
+	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'GradientBoostingClassifier CM (TRAIN) learning_rate=' +str(learn_r), 0.5)
+	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'GradientBoostingClassifier CM (TEST) learning_rate=' +str(learn_r), 0.5)
+	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
+	plt.tight_layout()
+	plt.show()
+	return clf
+	# fig, subaxes = plt.subplots(1,1, figsize=(6,6))
+	# titleplot='GBDT, default settings'
+	# pdb.set_trace()
+	# #plot_class_regions_for_classifier_subplot(clf, X_train, y_train, X_test, y_test,titleplot,subaxes)
+	# plt.show()
+
+def run_naive_Bayes(X_train, y_train, X_test, y_test, thresh=None):
+	""" run_naive_Bayes
+	Args: X_train, y_train, X_test, y_test
+	output:estimator"""
+	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
+	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
+	X_all = np.concatenate((X_train, X_test), axis=0)
+	y_all = np.concatenate((y_train, y_test), axis=0)
+	#kfolds = StratifiedKFold(modsel)
+	#cv = kfolds.split(X_all,y_all)
+	#cv = ShuffleSplit(n_splits=100, test_size=0.2, random_state=0)
+	nbayes = GaussianNB().fit(X_train,y_train)
+	y_train_pred = nbayes.predict_proba(X_train)[:,1]
+	y_test_pred = nbayes.predict_proba(X_test)[:,1]
+	y_pred = [int(a) for a in nbayes.predict(X_test)]
+	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
+	print("Baseline classifier using Naive Bayes: %s of %s values correct." % (num_correct, len(y_test)))
+	# plot learning curve
+	#http://scikit-learn.org/stable/auto_examples/model_selection/plot_learning_curve.html#sphx-glr-auto-examples-model-selection-plot-learning-curve-py
+	plot_learning_curve(nbayes, 'Naive Bayes classifier', X_all, y_all, n_jobs=4)	
+	print('Accuracy of GaussianNB classifier on training set {:.2f}'.format(nbayes.score(X_train, y_train)))
+	print('Accuracy of GaussianNB classifier on test set {:.2f}'.format(nbayes.score(X_test, y_test)))
+	#plot_class_regions_for_classifier(nbayes,X_train, y_train, X_test, y_test, 'Gaussian naive classifier')
+	#plot confusion matrix and AUC
+	fig,ax = plt.subplots(1,3)
+	fig.set_size_inches(15,5)
+	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'GaussianNB Confusion matrix (TRAIN)', 0.5)
+	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'GaussianNB Confusion matrix (TEST)', 0.5)
+	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
+	plt.tight_layout()
+	plt.show()
+	return nbayes
+
+def run_randomforest(X_train, y_train, X_test, y_test, X_features, threshold=None):
+	""" run_randomforest: """
+	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
+	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
+	X_all = np.concatenate((X_train, X_test), axis=0)
+	y_all = np.concatenate((y_train, y_test), axis=0)
+	rf = RandomForestClassifier(n_estimators=500, max_features =60,min_samples_leaf=1).fit(X_train,y_train)
+	y_train_pred = rf.predict_proba(X_train)[:,1]
+	y_test_pred = rf.predict_proba(X_test)[:,1]
+	y_pred = [int(a) for a in rf.predict(X_test)]
+	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
+	print("Baseline classifier using RandomForestClassifier: %s of %s values correct." % (num_correct, len(y_test)))
+	# plot learning curve
+	plot_learning_curve(rf, 'RandomForestClassifier', X_all, y_all, n_jobs=1)	
+	print('Accuracy of RandomForestClassifier classifier on training set {:.2f}'.format(rf.score(X_train, y_train)))
+	print('Accuracy of RandomForestClassifier classifier on test set {:.2f}'.format(rf.score(X_test, y_test)))
+	#plot confusion matrix and AUC
+	fig,ax = plt.subplots(1,3)
+	fig.set_size_inches(15,5)
+	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'RandomForestClassifier Confusion matrix (TRAIN)', 0.5)
+	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'RandomForestClassifier Confusion matrix (TEST)', 0.5)
+	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
+	plt.tight_layout()
+	plt.show()
+	return rf
+
+def run_logreg(X_train, y_train, X_test, y_test, threshold=None):
+	"""run_logreg: logistic regression classifier
+	Args:  X_train, y_train, X_test, y_test, threshold=[0,1] for predict_proba
+	Output: logreg estimator"""
+	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
+	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
+	X_all = np.concatenate((X_train, X_test), axis=0)
+	y_all = np.concatenate((y_train, y_test), axis=0)
 	if threshold is None:
 		threshold = 0.5
-	if model == 'LogisticRegression':
-		# Create logistic regression object
-		regr = linear_model.LogisticRegression()
-		# Train the model using the training sets
-		regr.fit(X_train, y_train)
-		# model prediction
-		y_train_pred = regr.predict_proba(X_train)[:,1]
-		y_test_pred = regr.predict_proba(X_test)[:,1]
-		
-		fig,ax = plt.subplots(1,3)
-		fig.set_size_inches(15,5)
-		plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'LogisticRegression Confusion matrix (TRAIN)', threshold)
-		plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'LogisticRegression Confusion matrix (TEST)', threshold)
-		plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, threshold)
-		plt.tight_layout()
-		plt.show()
-	if model == 'RandomForestClassifier':
-		rf = RandomForestClassifier(n_estimators=500, min_samples_leaf=5)
-		rf.fit(X_train,y_train)
-		y_train_pred = rf.predict_proba(X_train)[:,1]
-		y_test_pred = rf.predict_proba(X_test)[:,1]
-		fig,ax = plt.subplots(1,3)
-		fig.set_size_inches(15,5)
-		plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'RandomForestClassifier Confusion matrix (TRAIN)', threshold)
-		plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'RandomForestClassifier Confusion matrix (TEST)', threshold)
-		plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, threshold)
-		plt.tight_layout()
-		plt.show()
-	if model == 'XGBooster':
-		# gradient boosted decision trees  for speed and performance
-		#https://machinelearningmastery.com/develop-first-xgboost-model-python-scikit-learn/
-		# 2 versions with DMatrix and vanilla classifier
-		dtrain = xgb.DMatrix(X_train, label=y_train)
-		dtest = xgb.DMatrix(X_test, label=y_test)
-		num_round = 5
-		evallist  = [(dtest,'eval'), (dtrain,'train')]
-		param = {'objective':'binary:logistic', 'silent':1, 'eval_metric': ['error', 'logloss']}
-		bst = xgb.train( param, dtrain, num_round, evallist)
-		y_train_pred = bst.predict(dtrain)
-		y_test_pred = bst.predict(dtest)
-		fig,ax = plt.subplots(1,3)
-		fig.set_size_inches(15,5)
-		plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'XGBooster Confusion matrix (TRAIN)', threshold)
-		plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'XGBooster Confusion matrix (TEST)', threshold)
-		plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, threshold)
-		plt.tight_layout()
-		# vanilla XGBooster classifie
-		XGBmodel = XGBClassifier()
-		XGBmodel.fit(X_train, y_train)
-		# make predictions for test data
-		y_pred = XGBmodel.predict(X_test)
-		y_test_pred = [round(value) for value in y_pred]
-		# evaluate predictions
-		accuracy = accuracy_score(y_test, y_test_pred)
-		print("Accuracy XGBooster classifier: %.2f%%" % (accuracy * 100.0))
-		plt.show()
-	# return ground truth and predictions	
-	return y_test_pred
+	# Create logistic regression object
+	logreg = LogisticRegression().fit(X_train, y_train)
+	# Train the model using the training sets
+	# model prediction
+	y_train_pred = logreg.predict_proba(X_train)[:,1]
+	y_test_pred = logreg.predict_proba(X_test)[:,1]
+	print("Y test predict proba:{}".format(y_test_pred))
+	y_pred = [int(a) for a in logreg.predict(X_test)]
+	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
+	print("Baseline classifier using LogReg: %s of %s values correct." % (num_correct, len(y_test)))
+	# plot learning curve
+	plot_learning_curve(logreg, 'LogReg', X_all, y_all, n_jobs=1)	
+	print('Accuracy of LogReg classifier on training set {:.2f}'.format(logreg.score(X_train, y_train)))
+	print('Accuracy of LogReg classifier on test set {:.2f}'.format(logreg.score(X_test, y_test)))
+	#plot confusion matrix and AUC
+	fig,ax = plt.subplots(1,3)
+	fig.set_size_inches(15,5)
+	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'LogisticRegression Confusion matrix (TRAIN)', threshold)
+	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'LogisticRegression Confusion matrix (TEST)', threshold)
+	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, threshold)
+	plt.tight_layout()
+	plt.show()
+	return logreg
 
 def plot_scatter_target_cond(df, preffix_longit_xandy, target_variable=None):	
 	"""scatter_plot_pair_variables_target: scatter dataframe features and coloured based on target variable values
 	Args:df: Pandas dataframe, preffix_longitx:preffix of longitudinal variable to plot in X axiseg dx_visita, 
 	preffix_longit_y:preffix of longitudinal variable to plot in Y axis eg audi_visita, target_variable: target feature contained in dataframe 
 	Example: scatter_plot_target_cond(df, 'conversion')"""
-	
 	# scatter_plot_target_cond: average and standard deviation of longitudinal status
-	
 	#selcols(prefix,year ini,year end), if we dont have longitudinal set to 1,1
 	df['longit_x_avg'] = df[selcols(preffix_longit_xandy[0],1,1)].mean(axis=1)
 	df['longit_y_avg'] = df[selcols(preffix_longit_xandy[1],1,1)].mean(axis=1)
@@ -803,8 +1154,8 @@ def run_Keras_DN(dataset, X_train, y_train, X_test, y_test):
 		model.fit(X_train, y_train, epochs=20, batch_size=50)
 
 		predictions = model.predict_classes(X_test)
-		print('Accuracy:', metrics.accuracy_score(y_true=y_test, y_pred=predictions))
-		print(metrics.classification_report(y_true=y_test, y_pred=predictions))
+		print('Accuracy:', accuracy_score(y_true=y_test, y_pred=predictions))
+		print(classification_report(y_true=y_test, y_pred=predictions))
 	else:
 		####  run_keras_dn(dataset, X_train, X_test, y_train, y_test):
 		input_dim = X_train.shape[1]
@@ -865,11 +1216,9 @@ def run_TDA_with_Kepler(samples, activations):
 	# Visualize it
 	mapper.visualize(complex, path_html="output.html", show_title=False, 
                  show_meta=False, bg_color_css="#FFF", graph_gravity=0.4)
-
 	from IPython.display import IFrame
 	IFrame('output.html', width='100%', height=700)
 	pdb.set_trace()
-
 
 def run_tSNE_analysis(activations, y_test):
 	tsne = TSNE(n_components=2, perplexity=25, verbose=0, n_iter=500, random_state=1337)
@@ -884,7 +1233,6 @@ def run_tSNE_analysis(activations, y_test):
 
 def linear_svm_classifier(X_train, y_train, X_test, y_test, features=None):
 	""" linear_svm_classifier: is the linear classifier with the maximum margin"""
-
 	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
 	# SVM model, cost and gamma parameters for RBF kernel. out of the box
@@ -912,34 +1260,13 @@ def linear_svm_classifier(X_train, y_train, X_test, y_test, features=None):
 	print("Linear SVM accuracy of the given test data and labels={} ", grid.score(X_test, y_test))
 	return svm, grid
 
-def run_naive_Bayes(X_train, y_train, X_test, y_test):
-	""" run_naive_Bayes"""
-
-	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
-	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
-	X_all = np.concatenate((X_train, X_test), axis=0)
-	y_all = np.concatenate((y_train, y_test), axis=0)
-	kfolds = StratifiedKFold(5)
-	cv = kfolds.split(X_all,y_all)
-	cv = ShuffleSplit(n_splits=100, test_size=0.2, random_state=0)
-	estimator = GaussianNB()
-	estimator.fit(X_train,y_train)
-	# test
-	y_pred = [int(a) for a in estimator.predict(X_test)]
-	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
-	print("Baseline classifier using Naive Bayes: %s of %s values correct." % (num_correct, len(y_test)))
-	# plot learning curve
-	#http://scikit-learn.org/stable/auto_examples/model_selection/plot_learning_curve.html#sphx-glr-auto-examples-model-selection-plot-learning-curve-py
-	plot_learning_curve(estimator, 'Naive Bayes classifier', X_all, y_all, cv=cv, n_jobs=4)	
-	return estimator
-
 def SGD_classifier(X_train, y_train, X_test, y_test, features=None):
 	"""SGD_classifier: Stochastic Gradient Descent classifier. Performs Log Regression and/or SVM (loss parameter) with SGD training 
 	Args:X_train,y_train,X_test,y_test
 	Output: SGD fitted estimator"""
 	#find an opimum value of 'alpha' by either looping over different values of alpha and evaluating the performance over a validation set
 	#use gridsearchcv
-	from sklearn.linear_model import SGDClassifier
+	
 	tuned_parameters = {'alpha': [10 ** a for a in range(-6, -2)]}
 	#class_weight='balanced' addresses the skewness of the dataset in terms of labels
 	# loss='hinge' LSVM,  loss='log' gives logistic regression, a probabilistic classifier
@@ -964,58 +1291,6 @@ def calculate_top_features_contributing_class(clf, features, numbertop=None):
 	if features is not None:
 		print("\tand the top {} features labels contributing to the class labels are:{} \n".format(numbertop, operator.itemgetter(*toplist)(features)))
 
-def kneighbors_classifier(X_train, y_train, X_test, y_test):
-	""" kneighbors_classifier : KNN is non-parametric, instance-based and used in a supervised learning setting. Minimal training but expensive testing.
-	KNN is used as a benchmark for more complex classifiers such as (ANN) (SVM).
-	KNN classifier is also a non parametric ( it makes no explicit assumptions about the functional form of h:X->y) 
-	this is protection against for example assume data are Gaussian and they are not.
-	and instance-based (algorithm doesnt explicitely learn a model) so it chooses to memorize the training instances 
-	which are subsequently used as “knowledge” for the prediction phase, that is, only when a query to our database is made
-	(i.e. when we ask it to predict a label given an input), will the algorithm use the training instances to spit out an answer
-	https://kevinzakka.github.io/2016/07/13/k-nearest-neighbor/
-	CONS: Note the rigid dichotomy between KNN and the more sophisticated Neural Network which has a lengthy training phase albeit a very fast testing phase.
-	Furthermore, KNN can suffer from skewed class distributions. For example, if a certain class is very frequent in the training set,
-	it will tend to dominate the majority voting of the new example (large number = more common). 
-	Finally, the accuracy of KNN can be severely degraded with high-dimension data because there is little difference between the nearest and farthest neighbor.
-	Args:  
-	Output: knn estimator"""
-
-	#Randomly dividing the training set into k groups (k and k_hyper are nothinmg to do with each other), or folds, of approximately equal size.
-	# The first fold is treated as a validation set, and the method is fit on the remaining k−1 folds.
-	#The misclassification rate is then computed on the observations in the held-out fold. 
-	#This procedure is repeated k times; each time, a different group of observations is treated as a validation set. 
-	#This process results in k estimates of the test error which are then averaged out
-	#performing a 10-fold cross validation on our dataset using a generated list of odd K’s ranging from 1 to 50.
-	# creating odd list of K for KNN
-	myList = list(range(1,50)) #odd to avoid tie of points
-	# subsetting just the odd ones
-	neighbors = filter(lambda x: x % 2 != 0, myList)
-	# empty list that will hold cv scores
-	# perform 10-fold cross validation
-	cv_scores = [] # list with x validation scores
-	for k in neighbors:
-		knn = KNeighborsClassifier(n_neighbors=k)
-		scores = cross_val_score(knn, X_train, y_train, cv=10, scoring='accuracy')
-		cv_scores.append(scores.mean())
-	MSE = [1 - x for x in cv_scores]
-	# determining best k
-	optimal_k = neighbors[MSE.index(min(MSE))]
-	# instantiate learning model
-	knn = KNeighborsClassifier(n_neighbors=optimal_k)
-	knn.fit(X_train, y_train)
-	# predict the response
-	y_pred = knn.predict(X_test)
-	# evaluate accuracy
-	print("KNN classifier with optimal k={}, accuracy={}".format(optimal_k, accuracy_score(y_test, y_pred)))
-	fig, ax = plt.subplots(1, 1, figsize=(6,9))
-	# plot misclassification error vs k
-	ax.plot(neighbors, MSE)
-	ax.set_xlabel('Number of Neighbors K')
-	ax.set_ylabel('Misclassification Error')
-	ax.set_title('KNN classifier')
-	plt.show()
-	return knn
-
 def regression_Lasso(X_train, y_train, X_test, y_test):
 	""" logistic regression, answer two points: what is the baseline prediction of disease progression and 
 	which independent variables are important facors for predicting disease progression.
@@ -1023,8 +1298,7 @@ def regression_Lasso(X_train, y_train, X_test, y_test):
 	Args:(X_train,y_train,X_test,y_test, features, target_label
 	Output: GridSearchCV Lasso estimator """
 	# Lasso normal linear regression with L1 regularization (minimize the number of features or predictors int he model)
-	from sklearn.linear_model import Lasso
-	from sklearn import linear_model
+
 
 	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
@@ -1051,8 +1325,6 @@ def regression_Lasso(X_train, y_train, X_test, y_test):
 	print("Scores:{}".format(scores))
 	return estimator
 	
-
-
 def run_load_csv(csv_path = None):
 	""" load csv database, print summary of data"""
 	if csv_path is None:
@@ -1076,8 +1348,6 @@ def run_load_csv(csv_path = None):
 def run_statistical_tests(dataset, feature_label, target_label):
 	#chi_square_of_df_cols(dataset, feature_label[0], feature_label[1])
 	anova_test(dataset, feature_label, target_label)
-
-
 
 def plot_histogram_pair_variables(dataset, feature_label=None):
 	"""" histogram_plot_pair_variables: plot 2 hisotgram one for each variables
@@ -1137,7 +1407,6 @@ def print_summary_network(Gmetrics, nodes=None, corrtarget=None):
 	"""print_summary_network: print summary of the graph metrics (clustering, centrality )
 	Args: Gmetrics: dictionar keys() are the metrics and values the values, nodes: list of node labels, corrtarget:corrleation value with the target of each node
 	Output: None """
-	
 	nbitems = 6 # top nbitems nodes
 	ignored_list = ['communicability','degree', 'density','is_connected','degree_assortativity_coefficient','degree_histogram','estrada_index','number_connected_components','transitivity']
 	ignored =set(ignored_list)
@@ -1162,7 +1431,6 @@ def print_summary_network(Gmetrics, nodes=None, corrtarget=None):
 	print("number_connected_components ={}, Normalized ncc/totalnodes={}".format(Gmetrics['number_connected_components'], Gmetrics['number_connected_components']/float(len(nodes))))
 	print("transitivity ={} ".format(Gmetrics['transitivity']))
 		
-
 def calculate_network_metrics(G):
 	""" calculate_network_metrics: study the netwok properties
 	Args:G networkx graph object
