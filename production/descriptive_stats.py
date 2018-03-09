@@ -61,40 +61,41 @@ from adspy_shared_utilities import plot_class_regions_for_classifier, plot_decis
 def main():
 	plt.close('all')
 	# get the data in csv format
-	dataset = run_load_csv()
+	dataframe = run_load_csv()
+	dataframe_orig = dataframe
 	# 3. Data preparation: 
 	# 	3.1. Variable Selection 
 	#	3.2. Transformation (scaling, discretize continuous variables, expand categorical variables)
 	#	3.3. Detect Multicollinearity
-
-	# (3.1) Variable Selection : cosmetic name changing and select input and output 
+	# (3.1) Feature Selection : cosmetic name changing and select input and output 
 	# cleanup_column_names(df,rename_dict={},do_inplace=True) cometic cleanup lowercase, remove blanks
-	cleanup_column_names(dataset, {}, True)
-	dataset_orig = dataset
-	run_print_dataset(dataset)
-	features_list = dataset.columns.values.tolist()
+	cleanup_column_names(dataframe, {}, True)
+	# remove features about the target
+	leakage_data(dataframe)
+	run_print_dataset(dataframe)
+	features_list = dataframe.columns.values.tolist()
 	print(features_list)
 	# Select subset of explanatory variables from prior information MUST include the target_variable
-
-	features_static = ['sexo', 'nivel_educativo', 'apoe',  'conversion', 'tiempo']
-	features_year1 = [s for s in dataset_orig.keys().tolist()  if "visita1" in s]; features_year1.remove('fecha_visita1')
-	features_year2 = [s for s in dataset_orig.keys().tolist()  if "visita2" in s]; features_year2.remove('fecha_visita2')
-	features_year3 = [s for s in dataset_orig.keys().tolist()  if "visita3" in s]; features_year3.remove('fecha_visita3'); features_year3.remove('act_prax_visita3'), features_year3.remove('act_comp_visita3')
-	features_year4 = [s for s in dataset_orig.keys().tolist()  if "visita4" in s]; features_year4.remove('fecha_visita4'); features_year4.remove('act_prax_visita4'), features_year4.remove('act_comp_visita4')
-	features_year5 = [s for s in dataset_orig.keys().tolist()  if "visita5" in s]; features_year5.remove('fecha_visita5'); features_year5.remove('act_prax_visita5'), features_year5.remove('act_comp_visita5')
+	features_static = ['sexo', 'lat_manual', 'nivel_educativo', 'apoe', 'edad']
+	features_year1 = [s for s in dataframe.keys().tolist()  if "visita1" in s]; 
+	#features_year2 = [s for s in dataset.keys().tolist()  if "visita2" in s]; features_year2.remove('fecha_visita2')
+	#features_year3 = [s for s in dataset.keys().tolist()  if "visita3" in s]; features_year3.remove('fecha_visita3'); features_year3.remove('act_prax_visita3'), features_year3.remove('act_comp_visita3')
+	#features_year4 = [s for s in dataset.keys().tolist()  if "visita4" in s]; features_year4.remove('fecha_visita4'); features_year4.remove('act_prax_visita4'), features_year4.remove('act_comp_visita4')
+	#features_year5 = [s for s in dataset.keys().tolist()  if "visita5" in s]; features_year5.remove('fecha_visita5'); features_year5.remove('act_prax_visita5'), features_year5.remove('act_comp_visita5')
 	explanatory_features = features_static + features_year1
 	#explanatory_features = None # If None explanatory_features assigned to features_list
 	target_variable = 'conversion' # if none assigned to 'conversion'. target_variable = ['visita_1_EQ5DMOV']
 	print("Calling to run_variable_selection(dataset, explanatory_features= {}, target_variable={})".format(explanatory_features, target_variable))
-	dataset, explanatory_features = run_variable_selection(dataset, explanatory_features, target_variable)
+	#dataset, explanatory_features = run_variable_selection(dataset, explanatory_features, target_variable)
 	# dataset with all features including the target and removed NaN
-	print ("Features containing NAN values:\n {}".format(dataset.isnull().any()))
-	print( "Number of NaN cells in original dataframe:{} / {}, total rows:{}".format(pd.isnull(dataset.values).sum(axis=1).sum(), dataset.size, dataset.shape[0]))
+	dataframe = dataframe[explanatory_features]
+	print ("Features containing NAN values:\n {}".format(dataframe.isnull().any()))
+	print( "Number of NaN cells in original dataframe:{} / {}, total rows:{}".format(pd.isnull(dataframe.values).sum(axis=1).sum(), dataframe.size, dataframe.shape[0]))
 	#ss = dataset.isnull().sum(axis=1)
 	#print(" Number of cells with NaNs per Row:\n{}".format(ss[ss==0]))
 
-	dataset.dropna(axis=0, how='any', inplace=True)
-	print( "Number of NaN cells in the imputed dataframe: {} / {}, total rows:{}".format(pd.isnull(dataset.values).sum(axis=1).sum(), dataset.size, dataset.shape[0]))
+	dataframe.dropna(axis=0, how='any', inplace=True)
+	print( "Number of NaN cells in the imputed dataframe: {} / {}, total rows:{}".format(pd.isnull(dataframe.values).sum(axis=1).sum(), dataframe.size, dataframe.shape[0]))
 	# (3.2) Transformation (scaling, discretize continuous variables, expand categorical variables)
 	# to imput missing values uncomment these 2 lines
 	#dataset, Xy_imputed = run_imputations(dataset, type_imput='zero')
@@ -102,33 +103,36 @@ def main():
 	# If necessay, run_binarization_features and run_encoding_categorical_features
 	# remove duplicated feature names, NOTE conver to set rearrange the order of the features
 	#explanatory_features = list(set(explanatory_features))
-	unique_explanatory = []
-	[unique_explanatory.append(item) for item in explanatory_features if item not in unique_explanatory]
-	explanatory_features = []
-	explanatory_features = unique_explanatory
+	#unique_explanatory = []
+	#[unique_explanatory.append(item) for item in explanatory_features if item not in unique_explanatory]
+	#explanatory_features = []
+	#explanatory_features = unique_explanatory
 
-	if explanatory_features.index(target_variable) > 0:
+	#if explanatory_features.index(target_variable) > 0:
 		# this is already checked in run_variable_selection
-		print("target variable:{} in position:{}".format(target_variable,explanatory_features.index(target_variable)))
+	#	print("target variable:{} in position:{}".format(target_variable,explanatory_features.index(target_variable)))
 	#dataset=dataset.T.drop_duplicates().T
-	Xy = dataset[explanatory_features].values
-	Xy_scaled, scaler = run_transformations(Xy) # standarize to minmaxscale or others make input normal
-	print("Xy scaled dimensions:{} \n {}".format(Xy_scaled.shape, Xy_scaled))
+	X = dataframe[explanatory_features].values
+	X_scaled, scaler = run_transformations(X) # standarize to minmaxscale or others make input normal
+	print("X scaled dimensions:{} \n {}".format(X_scaled.shape, X_scaled))
 	# (3.3) detect multicollinearity: Plot correlation and graphs of variables
 	#convert ndarray to pandas DataFrame
-	Xy_df_scaled = pd.DataFrame(Xy_scaled, columns=unique_explanatory)
-	X_df_scaled = Xy_df_scaled.drop('conversion',1)
-	# corr_X_df = run_correlation_matrix(X_df_scaled, explanatory_features[0:30]) # correlation matrix of features
-	corr_Xy_df = run_correlation_matrix(Xy_df_scaled, explanatory_features) # correlation matrix of features and target
+	X_df_scaled = pd.DataFrame(X_scaled, columns=explanatory_features)
+	Xy_df_scaled=X_df_scaled
+	Xy_df_scaled['conversion'] = dataframe_orig['conversion']
+	corr_X_df = run_correlation_matrix(X_df_scaled, explanatory_features) #[0:30] correlation matrix of features
+	explanatory_and_target = explanatory_features
+	corr_Xy_df = run_correlation_matrix(Xy_df_scaled, explanatory_and_target.append('conversion')) # correlation matrix of features and target
 	#corr_matrix = corr_df.as_matrix()
 	corr_with_target = corr_Xy_df[target_variable]
+	print("Correlations with the  target:\n{}".format(corr_with_target.sort_values()))
 	#corr_with_target = calculate_correlation_with_target(Xdf_imputed_scaled, target_values) # correlation array of features with the target
 	threshold = np.mean(np.abs(corr_Xy_df.as_matrix())) + 1*np.std(np.abs(corr_Xy_df.as_matrix()))
-	# graph = build_graph_correlation_matrix(corr_Xy_df, threshold, corr_with_target)
-	# graph_metrics = calculate_network_metrics(graph)
+	graph = build_graph_correlation_matrix(corr_Xy_df, threshold, corr_with_target)
+	graph_metrics = calculate_network_metrics(graph)
 	# # print sumary network metrics
-	# print_summary_network(graph_metrics, nodes=corr_Xy_df.keys().tolist(), corrtarget=corr_with_target)
-	
+	print_summary_network(graph_metrics, nodes=corr_Xy_df.keys().tolist(), corrtarget=corr_with_target)
+	pdb.set_trace()
 	# #(4) Descriptive analytics: plot scatter and histograms
 	# longit_xy_scatter = ['scd_visita', 'fcsrtlibdem_visita'] #it works for longitudinal
 	# plot_scatter_target_cond(Xy_df_scaled,longit_xy_scatter, target_variable)
@@ -169,40 +173,33 @@ def main():
 	X_train, X_test, y_train, y_test = run_split_dataset_in_train_test(X, y, test_size=0.2)
 
 	#####
-	#https://github.com/mapattacker/datascience/blob/master/supervised.rst
+	sgd_estimator = run_sgd_classifier(X_train, y_train, X_test, y_test,'log',10)
+	lasso_estimator = run_logreg_Lasso(X_train, y_train, X_test, y_test,10)
 	knn = run_kneighbors(X_train, y_train, X_test, y_test)
-	metrics_estimator = compute_metrics_estimator(knn,X_test,y_test)
-	metrics_estimator_with_cv = compute_metrics_estimator_with_cv(knn,X_test,y_test,5)
+	calculate_top_features_contributing_class(knn, X_features, 10)
 	pdb.set_trace()
-	lr_estimator = run_logreg(X_train, y_train, X_test, y_test, 0.5)
 	naive_bayes_estimator = run_naive_Bayes(X_train, y_train, X_test, y_test, 0)
+	#Evaluate a score comparing y_pred=estimator().fit(X_train)predict(X_test) from y_test
+	metrics_estimator = compute_metrics_estimator(knn,X_test,y_test)
+	#Evaluate a score by cross-validation
+	metrics_estimator_with_cv = compute_metrics_estimator_with_cv(knn,X_test,y_test,5)
+	lr_estimator = run_logreg(X_train, y_train, X_test, y_test, 0.5)
 	dectree_estimator =run_random_decision_tree(X_train, y_train, X_test, y_test, X_features,target_variable)
 	rf_estimator =run_randomforest(X_train, y_train, X_test, y_test, X_features)
 	gbm_estimator = run_gradientboosting(X_train, y_train, X_test, y_test, X_features)
 	xgbm_estimator = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
-	compare_against_dummy_estimators(xgbm_estimator, X_train, y_train, X_test, y_test)
+	#compare estimators against dummy estimators
+	dummies_score = build_dummy_scores(X_train, y_train, X_test, y_test)
+	listofestimators = [knn, naive_bayes_estimator,lr_estimator,dectree_estimator,rf_estimator]
+	estimatorlabels = ['knn', 'nb', 'lr', 'dt', 'rf','gbm','xgbm']
+	compare_against_dummy_estimators(listofestimators, estimatorlabels, X_test, y_test, dummies_score)
+	pdb.set_trace()
 	
 	# QUICK Model selection accuracy 0 for Train test, >0 for the number of folds
-
 	grid_values = {'gamma': [0.001, 0.01, 0.1, 1, 10]}
 	#print_model_selection_metrics(X_train, y_train, X_test, y_test,0) -train/test; print_model_selection_metrics(X_train, y_train, X_test, y_test,10) KFold
-	#print_model_selection_metrics(X_train, y_train, X_test, y_test,grid_values) 
 	print_model_selection_metrics(X_train, y_train, X_test, y_test, grid_values)
-	compare_against_dummy_estimators(naive_bayes_estimator, X_train, y_train, X_test, y_test)
 	#####
-
-
-
-
-
-	#############
-	
-
-
-
-
-
-
 
 	# (7) Modelling. 
 
@@ -210,13 +207,9 @@ def main():
 	# 7.1.1 Regression with Lasso normalization. NOT good method for binary classification
 	# 7.1.2  (vanilla) Logistic Regression, SVM
 	# 7.1.3 Logistic Regression, SVM with SGD training setting the SGD loss parameter to 'log' for Logistic Regression or 'hinge' for SVM SGD
-	model = ['LogisticRegression','RandomForestClassifier', 'XGBooster']
-	thres_bin = 0.5
 	
 	# (7.1.1)
-	lasso_estimator = regression_Lasso(X_train, y_train, X_test, y_test)
-	print("Regression Lasso best score={}".format(lasso_estimator.best_score_))
-	calculate_top_features_contributing_class(lasso_estimator, X_features, 10)
+
 	# (7.1.2)a vanilla logistic regression
 	
 	#run_model_evaluation(y_test,y_pred)
@@ -231,7 +224,7 @@ def main():
 	
 	# (7.2) NON Linear Classifiers RandomForest and XGBooster http://xgboost.readthedocs.io/en/latest/tutorials/index.html
 	## (7.2.1) RandomForestClassifier
-	y_pred = run_fitmodel(model[1], X_train, y_train, X_test, y_test)
+
 	#run_model_evaluation(y_test,y_pred)
 	#how to evaluate random forest??? 
 	# (7.2.2) XGBoost is an implementation of gradient boosted decision trees designed for speed and performance
@@ -239,7 +232,6 @@ def main():
 	run_model_evaluation(y_test,y_pred)
 	# (7.2.3) Kneighbors classifier
 	#knn = run_kneighbors_classifier(X_train, y_train, X_test, y_test)
-	compare_against_dummy_estimators(knn, X_train, y_train, X_test, y_test)
 
 
 
@@ -270,7 +262,8 @@ def run_print_dataset(dataset):
 	#	print(dataset.ix[:,colix].value_counts())
 	
 def run_variable_selection(dataframe, explanatory_features=None,target_variable=None):
-	"""run_variable_selection: select features: explanatory and target. check if target var is in explanatory if not EXIT
+	"""run_variable_selection: select features: explanatory and target. check if target var is in
+	explanatory if not EXIT
 	Args: dataset, explanatory_features, target_variable : list of explanatory variables if None assigned all the features dataset.keys()
 	target_variable: target feature, if None is assigned inside the function 
 	Output: dataframe containing the selected explanatory and target variables
@@ -302,6 +295,21 @@ def run_variable_selection(dataframe, explanatory_features=None,target_variable=
 	print("Target variable:       '{}' -> '{}'".format('conversion', 'target'))
 	print(" explanatory features:  {}".format(dataframe.keys()))
 	return dataframe, explanatory_features 
+
+
+def leakage_data(dataset):
+	"""leakage_data: remove attributes about the target """
+	#tiempo (time to convert), tpo1.1..5 (time from year 1 to conversion), dx visita1
+	dataset.drop('tiempo', axis=1,inplace=True)
+	dataset.drop('tpo1.2', axis=1,inplace=True)
+	dataset.drop('tpo1.3', axis=1,inplace=True)
+	dataset.drop('tpo1.4', axis=1,inplace=True)
+	dataset.drop('tpo1.5', axis=1,inplace=True)
+	dataset.drop('dx_visita1', axis=1,inplace=True)
+	#Dummy features to remove: id, fecha nacimiento, fecha_visita
+	dataset.drop('fecha_visita1', axis=1,inplace=True)
+	dataset.drop('fecha_nacimiento', axis=1,inplace=True)
+	dataset.drop('id', axis=1,inplace=True)
 
 def cleanup_column_names(df,rename_dict={},do_inplace=True):
     """cleanup_column_names: renames columns of a pandas dataframe. It converts column names to snake case if rename_dict is not passed. 
@@ -607,8 +615,10 @@ def run_PCA_for_visualization(Xy_df, target_label, explained_variance=None):
 
 def compute_metrics_estimator(estimator,X_test,y_test):
 	""" compute_metrics_estimator compute metrics between a pair of arrays y_pred and y_test
+	Evaluate a score comparing y_pred=estimator().fit(X_train)predict(X_test) from y_test
 	Args:estimator(object),X_test,y_test
-	Output: dictionary label:value"""
+	Output: dictionary label:value
+	Example: compute_metrics_estimator(estimator,X_test,y_test) the estimator has been previously fit"""
 	print("Computing metrics for estimator {}".format(estimator))
 	y_pred = estimator.predict(X_test)
 	scores = {'accuracy_score':accuracy_score(y_test, y_pred), 'matthews_corrcoef':matthews_corrcoef(y_test, y_pred), \
@@ -617,20 +627,20 @@ def compute_metrics_estimator(estimator,X_test,y_test):
 	'roc_auc_score':roc_auc_score(y_pred,y_test),'log_loss':log_loss(y_pred,y_test),\
 	'confusion_matrix':confusion_matrix(y_pred,y_test).T}
 	print('Estimator metrics:{}'.format(scores))
-	pdb.set_trace()
 	return scores
 
 def compute_metrics_estimator_with_cv(estimator,X_test,y_test,cv):
-	""" compute_metrics_estimator_with_cv : sklearn.model_selection.cross_val_score for X_test y_test 
-	Args:estimator(object),X_test,y_test,cv the number of splits (int)
-	Output:
+	""" compute_metrics_estimator_with_cv : evaluate a score with sklearn.model_selection.cross_val_score for X_test y_test 
+	Args:estimator(object) to implement the fit,X_test (data to fit),y_test (target variable in case of supervised learning)
+	,cv the number of splits (int) used StratifiedKFold 
+	Output: scores_cv (dict)
 	Example: compute_metrics_estimator_with_cv(estimator,X_test,y_test,10)"""
 	kfold = KFold(n_splits=cv, random_state=0)
-	acc_cv = cross_val_score(estimator, X_test, y_test, cv=cv, scoring='accuracy').mean()
-	recall_cv = cross_val_score(estimator, X_test,y_test, cv=cv, scoring = 'recall').mean()
-	f1_cv = cross_val_score(estimator, X_test,y_test, cv=cv, scoring = 'f1').mean()
-	rocauc_cv = cross_val_score(estimator, X_test,y_test, cv=cv, scoring = 'roc_auc').mean()
-	precision_cv = cross_val_score(estimator, X_test,y_test, cv=cv, scoring = 'precision').mean()
+	acc_cv = cross_val_score(estimator, X_test, y_test, cv=cv, scoring='accuracy', verbose=1).mean()
+	recall_cv = cross_val_score(estimator, X_test,y_test, cv=cv, scoring = 'recall', verbose=0).mean()
+	f1_cv = cross_val_score(estimator, X_test,y_test, cv=cv, scoring = 'f1', verbose=0).mean()
+	rocauc_cv = cross_val_score(estimator, X_test,y_test, cv=cv, scoring = 'roc_auc', verbose=0).mean()
+	precision_cv = cross_val_score(estimator, X_test,y_test, cv=cv, scoring = 'precision', verbose=0).mean()
 	scores_cv = {'accuracy_cv':acc_cv,'recall_cv':recall_cv,'f1_cv':f1_cv,'rocauc_cv':rocauc_cv,'precision_cv':precision_cv}
 	print('Estimator metrics for cv={} is \n {}'.format(kfold,scores_cv))
 	return scores_cv
@@ -704,28 +714,58 @@ def print_model_selection_metrics(X_train, y_train, X_test, y_test, modsel=None)
 	# 	axis.text(p.get_x() + p.get_width()/2, height + 0.005,'{:1.4f}'.format(height), ha="center")
 	# plt.show()
 
-def compare_against_dummy_estimators(estimator1, X_train, y_train, X_test, y_test):
-	""" compare_against_dummy_estimators: When doing supervised learning, a simple sanity check consists of comparing one's
-	estimator against simple rules of thumb. DummyClassifier implements such strategies(stratified
+def compare_against_dummy_estimators(estimators, estimatorlabels, X_test, y_test, dummies_score):
+	""" compare_against_dummy_estimators: compare test score of estimators against dummy estimators
+	Args: estimators, estimatorlabels, X_test, y_test, dummies_score
+	Output: 
+	Example: compare_against_dummy_estimators([knn], ['knn'], X_test, y_test, {'uniform':0,9})
+	"""
+	scores_to_compare = []
+	for estobj in estimators:
+		scores_to_compare.append(estobj.score(X_test, y_test))
+	scores_to_compare = scores_to_compare + dummies_score.values()
+	estimatorlabels = estimatorlabels + dummies_score.keys()
+	fig, ax = plt.subplots()
+	len(estimators)
+	x = np.arange(len(estimators) + len(dummies_score.keys()))
+	barlist = plt.bar(x,scores_to_compare)
+	for i in range(0,len(estimators)):
+		barlist[i].set_color('r') 
+	#plt.xticks(x, ('knn', 'dummy-uniform', 'dummy-cte0', 'dummy-cte1'))
+	plt.xticks(x, estimatorlabels)
+	plt.ylabel('score')
+	plt.ylabel('X,y test score vs dummy estimators')
+	plt.show()
+	pdb.set_trace()
+
+def build_dummy_scores(X_train, y_train, X_test, y_test):
+	""" build_dummy_scores: When doing supervised learning, a simple sanity check consists of 
+	comparing one's estimator against simple rules of thumb. DummyClassifier implements such strategies(stratified
 	most_frequent, prior, uniform, constant). Used for imbalanced datasets
-	Args: fitted estimator1 eg clf = SVC(kernel='linear',..).fit(X_train, y_train)
-	X_train, X_test, y_train, y_test
-	Outputs: """
-	print("Estimator {}\n".format(estimator1))
-	print("Score ={} \n".format(estimator1.score(X_test, y_test)))
-	dummy_strategy = 'uniform'# 'most_frequent'  'constant'. constant=1
-	estimator_dummy = DummyClassifier(strategy=dummy_strategy, random_state=0)
-	estimator_dummy.fit(X_train, y_train)
-	# see if estimator_1 does much better than the dummy, if it doesnt we can change for example the kernel
-	#if estimator_1 is SVC and see of the score compreed to the dummy is better
-	print("Score of Dummy estimator={}".format(estimator_dummy.score(X_test, y_test)))
-	# comapre scores estimator_1 vs estimator_dummy
-	estimator_dummy = DummyClassifier(strategy='constant', random_state=0, constant=1)
-	estimator_dummy.fit(X_train, y_train)
-	print("Score of Dummy constant estimator (always 1)={}".format(estimator_dummy.score(X_test, y_test)))
-	estimator_dummy = DummyClassifier(strategy='constant', random_state=0, constant=0)
-	estimator_dummy.fit(X_train, y_train)
-	print("Score of Dummy constant estimator (always 0)={}".format(estimator_dummy.score(X_test, y_test)))
+	Args: X_train, X_test, y_train, y_test
+	Outputs: dict of dummy estimators"""
+
+	dummy_strategy = ['uniform', 'constant']
+	dummies =[]; dummy_scores =[]
+	for strat in dummy_strategy:
+		if strat is 'constant':
+			for const in range(0,2):
+				estimator_dummy = DummyClassifier(strategy='constant', random_state=0, constant=const)
+				estimator_dummy = estimator_dummy.fit(X_train, y_train)
+				dummies.append(estimator_dummy)
+				dscore = estimator_dummy.score(X_test, y_test)
+				dummy_scores.append(dscore)
+				print("Score of Dummy {}={} estimator={}".format(strat, const,dscore ))
+		else:
+			estimator_dummy = DummyClassifier(strategy=strat, random_state=0)
+			estimator_dummy = estimator_dummy.fit(X_train, y_train)
+			dummies.append(estimator_dummy)
+			dscore = estimator_dummy.score(X_test, y_test)
+			dummy_scores.append(dscore)
+			print("Score of Dummy {} estimator={}".format(strat, dscore))
+	dict_dummy_scores = {'uniform':dummy_scores[0] , 'constant0':dummy_scores[1],'constant1':dummy_scores[2]}
+	return dict_dummy_scores
+
 	
 def run_model_evaluation(y_true, y_pred):
 	""" """
@@ -738,6 +778,50 @@ def run_model_evaluation(y_true, y_pred):
 	print(classification_report(y_true, y_pred, target_names=target_names))
 	#matthews_corrcoef a balance measure useful even if the classes are of very different sizes.
 	print("The matthews_corrcoef(+1 is perfect prediction , 0 average random prediction and -1 inverse prediction)={}. \n ".format(matthews_corrcoef(y_true, y_pred))) 
+
+def run_sgd_classifier(X_train, y_train, X_test, y_test, loss,cv):
+	"""SGD_classifier: Stochastic Gradient Descent classifier. Performs Log Regression and/or SVM (loss parameter) with SGD training 
+	Args:X_train,y_train,X_test,y_test, loss = 'hinge' linear Support Vector Machine,loss="log": logistic regression
+	Output: SGD fitted estimator
+	Example: run_SGD_classifier(X_train, y_train, X_test, y_test, 'hinge|'log')"""
+	#find an opimum value of 'alpha' by either looping over different values of alpha and evaluating the performance over a validation set
+	#use gridsearchcv
+	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
+	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
+	X_all = np.concatenate((X_train, X_test), axis=0)
+	y_all = np.concatenate((y_train, y_test), axis=0)
+	tuned_parameters = {'alpha': [10 ** a for a in range(-6, -2)]}
+	#class_weight='balanced' addresses the skewness of the dataset in terms of labels
+	# loss='hinge' LSVM,  loss='log' gives logistic regression, a probabilistic classifier
+	# ‘l1’ and ‘elasticnet’ might bring sparsity to the model (feature selection) not achievable with ‘l2’.
+	clf = GridSearchCV(SGDClassifier(loss=loss, penalty='elasticnet',l1_ratio=0.15, n_iter=5, shuffle=True, verbose=False, n_jobs=10, \
+		average=False, class_weight='balanced',random_state=0),tuned_parameters, cv=cv, scoring='f1_macro').fit(X_train, y_train)
+	if loss is 'log':
+		y_train_pred = clf.predict_proba(X_train)[:,1]
+		y_test_pred = clf.predict_proba(X_test)[:,1]
+	else:
+		y_train_pred = clf.predict(X_train)
+		y_test_pred = clf.predict(X_test)
+	# predict the response
+	y_pred = [int(a) for a in clf.predict(X_test)]
+	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
+	print("SGDClassifier. The best alpha is:{}".format(clf.best_params_)) 
+	# plot learning curve
+	title='accuracy sgd'+loss
+	plot_learning_curve(clf, title, X_all, y_all, n_jobs=1)
+	print('Accuracy of sgd {} alpha={} classifier on training set {:.2f}'.format(clf.best_params_,loss, clf.score(X_train, y_train)))
+	print('Accuracy of sgd {} alpha={} classifier on test set {:.2f}'.format(clf.best_params_,loss, clf.score(X_test, y_test)))
+	#plot auc
+	fig,ax = plt.subplots(1,3)
+	fig.set_size_inches(15,5)
+	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'sgd Confusion matrix (TRAIN) '+loss, 0.5)
+	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'sgd Confusion matrix (TEST) '+loss, 0.5)
+	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
+	plt.tight_layout()
+	plt.show()
+	pdb.set_trace()
+
+	return clf
 
 def run_kneighbors(X_train, y_train, X_test, y_test, kneighbors=None):
 	""" kneighbors_classifier : KNN is non-parametric, instance-based and used in a supervised learning setting. Minimal training but expensive testing.
@@ -995,6 +1079,55 @@ def run_randomforest(X_train, y_train, X_test, y_test, X_features, threshold=Non
 	plt.show()
 	return rf
 
+def run_logreg_Lasso(X_train, y_train, X_test, y_test,cv=None):
+	"""run_logreg_Lasso: Lasso normal linear regression with L1 regularization (minimize the number of features or predictors int he model)
+
+	Args:(X_train,y_train,X_test,y_test, cv >0 (scores 0.1~0.2)  for cv=0 horrible results
+	Output:  Lasso estimator(suboptimal method for binary classification
+	Example:run_logreg_Lasso(X_train, y_train, X_test, y_test,10) """	
+	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
+	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
+	X_all = np.concatenate((X_train, X_test), axis=0)
+	y_all = np.concatenate((y_train, y_test), axis=0)
+	# define the model and the hyperparameter alpha (controls the stricteness of the regularization)
+	alphas = np.logspace(-6, -0.5, 10)
+	# GridSearchCV does exhaustive search over specified parameter values for an estimator
+	# fit of an estimator on a parameter grid and chooses the parameters to maximize the cross-validation score	
+	# take train set and learn a group of Lasso models by varying the value of the alpha hyperparameter.
+	#Best possible score is 1.0, lower values are worse. Unlike most other scores
+	#The score method of a LassoCV instance returns the R-Squared score, which can be negative, means performing poorly
+	#Estimator score method is a default evaluation criterion for the problem they are designed to solve
+	#By default, the GridSearchCV uses a 3-fold cross-validation
+	lasso = Lasso(random_state=0).fit(X_train, y_train)
+	lasso_cv = GridSearchCV(lasso, dict(alpha=alphas)).fit(X_train, y_train)
+	if cv > 0:
+		lasso = lasso_cv
+	#lasso is a linear estimator doesnt have .predict_prroba method only prdict
+	y_train_pred = lasso.predict(X_train)
+	y_test_pred = lasso.predict(X_test)
+	#binarize 0,1 the predictions
+	y_pred = [int(a) for a in lasso.predict(X_test)]
+	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
+	print("Baseline classifier cv=%s using LogReg_Lasso: %s of %s values correct." % (cv, num_correct, len(y_test)))
+	if cv > 0:
+		print("Lasso estimator cv={} results:{}".format(cv, sorted(lasso_cv.cv_results_.keys())))
+		print("Mean cross-validated cv={} score of the best estimator:{}".format(cv, lasso_cv.best_score_))
+		print("Estimator cv={} was chosen by the search(highest score):{} ".format(cv, lasso_cv.best_estimator_))
+	# plot learning curve
+	plot_learning_curve(lasso, 'lasso', X_all, y_all, n_jobs=1)
+	print('A constant model that always predicts the expected value of y, disregarding the input features, would get a R^2 score of 0.0.')
+	print('Coefficient of determination R^2 of the prediction of LogReg_Lasso on training set {:.2f}'.format(lasso.score(X_train, y_train)))
+	print('Coefficient of determination R^2 of the prediction of LogReg_Lasso on test set {:.2f}'.format(lasso.score(X_test, y_test)))
+	#plot confusion matrix and AUC
+	fig,ax = plt.subplots(1,3)
+	fig.set_size_inches(15,5)
+	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'LogReg_Lasso Confusion matrix (TRAIN)', 0.5)
+	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'LogReg_Lasso Confusion matrix (TEST)', 0.5)
+	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
+	plt.tight_layout()
+	plt.show()
+	return lasso
+
 def run_logreg(X_train, y_train, X_test, y_test, threshold=None):
 	"""run_logreg: logistic regression classifier
 	Args:  X_train, y_train, X_test, y_test, threshold=[0,1] for predict_proba
@@ -1064,7 +1197,6 @@ def plot_scatter_target_cond(df, preffix_longit_xandy, target_variable=None):
 
 def plot_cm(ax, y_true, y_pred, classes, title, th=0.5, cmap=plt.cm.Blues):
     y_pred_labels = (y_pred>th).astype(int)
-    
     cm = confusion_matrix(y_true, y_pred_labels)
     
     im = ax.imshow(cm, interpolation='nearest', cmap=cmap)
@@ -1260,27 +1392,8 @@ def linear_svm_classifier(X_train, y_train, X_test, y_test, features=None):
 	print("Linear SVM accuracy of the given test data and labels={} ", grid.score(X_test, y_test))
 	return svm, grid
 
-def SGD_classifier(X_train, y_train, X_test, y_test, features=None):
-	"""SGD_classifier: Stochastic Gradient Descent classifier. Performs Log Regression and/or SVM (loss parameter) with SGD training 
-	Args:X_train,y_train,X_test,y_test
-	Output: SGD fitted estimator"""
-	#find an opimum value of 'alpha' by either looping over different values of alpha and evaluating the performance over a validation set
-	#use gridsearchcv
-	
-	tuned_parameters = {'alpha': [10 ** a for a in range(-6, -2)]}
-	#class_weight='balanced' addresses the skewness of the dataset in terms of labels
-	# loss='hinge' LSVM,  loss='log' gives logistic regression, a probabilistic classifier
-	# ‘l1’ and ‘elasticnet’ might bring sparsity to the model (feature selection) not achievable with ‘l2’.
-	clf = GridSearchCV(SGDClassifier(loss='log', penalty='elasticnet',l1_ratio=0.15, n_iter=5, shuffle=True, verbose=False, n_jobs=10, average=False, class_weight='balanced')
-                  , tuned_parameters, cv=10, scoring='f1_macro')
-	#now clf is the best classifier found given the search space
-	clf.fit(X_train, y_train)
-	print("LVSM GridSearchCV SGDClassifier. The best alpha is:{}".format(clf.best_params_)) 
-	print("The classifier accuracy of the given test data and labels={}".format(clf.score(X_train,y_train)))
-	return clf
-
 def calculate_top_features_contributing_class(clf, features, numbertop=None):
-	""" calculate_top_features_contributing_class: print the n features tcontributing the most to class labels for a fitted estimator.
+	""" calculate_top_features_contributing_class: print the n features contributing the most to class labels for a fitted estimator.
 	Args: estimator, features lits and number of features"""
 	if numbertop is None:
 		numbertop = 10
@@ -1290,46 +1403,12 @@ def calculate_top_features_contributing_class(clf, features, numbertop=None):
 	print("the top {} features indices contributing to the class labels are:{}".format(numbertop, toplist))
 	if features is not None:
 		print("\tand the top {} features labels contributing to the class labels are:{} \n".format(numbertop, operator.itemgetter(*toplist)(features)))
-
-def regression_Lasso(X_train, y_train, X_test, y_test):
-	""" logistic regression, answer two points: what is the baseline prediction of disease progression and 
-	which independent variables are important facors for predicting disease progression.
-	VERY SUBOPTIMAL method for binary classification (scores 0.1~0.2)
-	Args:(X_train,y_train,X_test,y_test, features, target_label
-	Output: GridSearchCV Lasso estimator """
-	# Lasso normal linear regression with L1 regularization (minimize the number of features or predictors int he model)
-
-
-	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
-	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
-	# define the model and the hyperparameter alpha (controls the stricteness of the regularization)
-	lasso = Lasso(random_state=0)
-	alphas = np.logspace(-6, -0.5, 10)
-	# estimator with our model, in this case a grid search of model of Lasso type
-	# GridSearchCV does exhaustive search over specified parameter values for an estimator
-	# fit of an estimator on a parameter grid and chooses the parameters to maximize the cross-validation score
-	estimator = GridSearchCV(lasso, dict(alpha=alphas))
-	# take train set and learn a group of Lasso models by varying the value of the alpha hyperparameter.
-	#Best possible score is 1.0, lower values are worse. Unlike most other scores
-	#The score method of a LassoCV instance returns the R-Squared score, which can be negative, means performing poorly
-	#Estimator score method is a default evaluation criterion for the problem they are designed to solve
-	#By default, the GridSearchCV uses a 3-fold cross-validation
-	estimator.fit(X_train, y_train)
-	print("Lasso estimator cv results:{}".format(sorted(estimator.cv_results_.keys())))
-	print("Mean cross-validated score of the best estimator:{}".format(estimator.best_score_))
-	print("Estimator was chosen by the search(highest score):{} ".format(estimator.best_estimator_))
-	print("Calling to estimator.predict with the best estimator parameters...")
-	y_pred = estimator.predict(X_test)
-	
-	scores = estimator.score(X_test,y_test)
-	print("Scores:{}".format(scores))
-	return estimator
 	
 def run_load_csv(csv_path = None):
 	""" load csv database, print summary of data"""
 	if csv_path is None:
 		csv_path = "/Users/jaime/vallecas/data/scc/sccplus-24012018.csv"
-		csv_path = "/Users/jaime/vallecas/data/scc/SCDPlus_IM_27022018.csv"
+		csv_path = "/Users/jaime/vallecas/data/scc/SCDPlus_IM_09032018.csv"
 	dataset = pd.read_csv(csv_path) #, sep=';')
 	#summary of data
 	print("Number f Rows=", dataset.shape[0])
@@ -1385,6 +1464,13 @@ def build_graph_correlation_matrix(corr_df, threshold=None, corr_target=None):
 	if threshold is None:
 		threshold = mean(corr_matrix)
 	A = np.abs(A_df) > threshold
+	# delete isolated nodes
+	connected_nodes = []
+	for nod in range(0,len(corr_target)):
+		if sum(A[nod,:])>1:
+			connected_nodes.append(nod)	
+	row_idx = np.array([connected_nodes])
+	A = A[np.ix_(row_idx.ravel(),row_idx.ravel())]
 	fig, ax = plt.subplots()
 	
 	labels = {}
@@ -1395,10 +1481,17 @@ def build_graph_correlation_matrix(corr_df, threshold=None, corr_target=None):
 			labels[idx] = val+ ' ' + `'{0:.2g}'.format(corr_target[idx])`
 
 	G = nx.from_numpy_matrix(A)
+	#G.remove_nodes_from(nx.isolates(G))
 	pos=nx.spring_layout(G)
 	nx.draw_networkx_nodes(G, pos)
 	nx.draw_networkx_edges(G, pos)
-	nx.draw_networkx_labels(G, pos, labels, font_size=9)
+	labels = dict((key,value) for key, value in labels.iteritems() if key in connected_nodes)
+	pdb.set_trace()
+	labels_connected = {}; counter = 0
+	for item in labels: 
+		labels_connected[counter] = labels[item]
+		counter+=1
+	nx.draw_networkx_labels(G, pos, labels_connected, font_size=9)
 	# plt.title('Binary Graph from correlation matrix{}'.format(node_names))
 	plt.title('Binary Graph, threshold={0:.3g}'.format(threshold))
 	return G

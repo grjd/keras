@@ -64,7 +64,7 @@ def plot_learning_curve(estimator, title, X, y, ylim=None, cv=None,
     test_scores_std = np.std(test_scores, axis=1)
     plt.grid()
 
-    plt.corefill_between(train_sizes, train_ss_mean - train_scores_std,
+    plt.fill_between(train_sizes, train_scores_mean - train_scores_std,
                      train_scores_mean + train_scores_std, alpha=0.1,
                      color="r")
     plt.fill_between(train_sizes, test_scores_mean - test_scores_std,
