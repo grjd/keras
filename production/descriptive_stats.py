@@ -25,6 +25,7 @@ import re # regex
 from patsy import dmatrices
 import itertools
 import warnings
+from copy import deepcopy
 
 from sklearn.linear_model import SGDClassifier, LogisticRegression, Lasso
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, StratifiedKFold, ShuffleSplit, KFold
@@ -74,9 +75,14 @@ def main():
 	leakage_data(dataframe)
 	run_print_dataset(dataframe)
 	features_list = dataframe.columns.values.tolist()
-	print(features_list)
+	dict_features  = split_features_in_groups()
+	print("Dictionary of static(all years) features ".format(dict_features))
 	# Select subset of explanatory variables from prior information MUST include the target_variable
-	features_static = ['sexo', 'lat_manual', 'nivel_educativo', 'apoe', 'edad']
+
+	features_static =  dict_features['vanilla'] + dict_features['sleep'] + dict_features['anthropometric'] + \
+	dict_features['family_history'] + dict_features['sensory'] +  dict_features['intellectual'] + dict_features['demographics'] +\
+	dict_features['professional'] +  dict_features['cardiovascular'] + dict_features['ictus'] + dict_features['diet']\
+	
 	features_year1 = [s for s in dataframe.keys().tolist()  if "visita1" in s]; 
 	#features_year2 = [s for s in dataset.keys().tolist()  if "visita2" in s]; features_year2.remove('fecha_visita2')
 	#features_year3 = [s for s in dataset.keys().tolist()  if "visita3" in s]; features_year3.remove('fecha_visita3'); features_year3.remove('act_prax_visita3'), features_year3.remove('act_comp_visita3')
@@ -88,7 +94,10 @@ def main():
 	print("Calling to run_variable_selection(dataset, explanatory_features= {}, target_variable={})".format(explanatory_features, target_variable))
 	#dataset, explanatory_features = run_variable_selection(dataset, explanatory_features, target_variable)
 	# dataset with all features including the target and removed NaN
-	dataframe = dataframe[explanatory_features]
+	#dataframe.dropna(axis=0, how='any', inplace=True)
+	explanatory_and_target_features = deepcopy(explanatory_features)
+	explanatory_and_target_features.append(target_variable)
+	dataframe = dataframe[explanatory_and_target_features]
 	print ("Features containing NAN values:\n {}".format(dataframe.isnull().any()))
 	print( "Number of NaN cells in original dataframe:{} / {}, total rows:{}".format(pd.isnull(dataframe.values).sum(axis=1).sum(), dataframe.size, dataframe.shape[0]))
 	#ss = dataset.isnull().sum(axis=1)
@@ -112,17 +121,18 @@ def main():
 		# this is already checked in run_variable_selection
 	#	print("target variable:{} in position:{}".format(target_variable,explanatory_features.index(target_variable)))
 	#dataset=dataset.T.drop_duplicates().T
-	X = dataframe[explanatory_features].values
+	#explanatory_features =explanatory_features[:-1]
+	Xy = dataframe[explanatory_and_target_features].values
+	X = Xy[:,:-1]
 	X_scaled, scaler = run_transformations(X) # standarize to minmaxscale or others make input normal
 	print("X scaled dimensions:{} \n {}".format(X_scaled.shape, X_scaled))
 	# (3.3) detect multicollinearity: Plot correlation and graphs of variables
 	#convert ndarray to pandas DataFrame
 	X_df_scaled = pd.DataFrame(X_scaled, columns=explanatory_features)
-	Xy_df_scaled=X_df_scaled
-	Xy_df_scaled['conversion'] = dataframe_orig['conversion']
-	corr_X_df = run_correlation_matrix(X_df_scaled, explanatory_features) #[0:30] correlation matrix of features
-	explanatory_and_target = explanatory_features
-	corr_Xy_df = run_correlation_matrix(Xy_df_scaled, explanatory_and_target.append('conversion')) # correlation matrix of features and target
+	Xy_df_scaled = X_df_scaled
+	Xy_df_scaled['conversion'] = Xy[:,-1]
+	#corr_X_df = run_correlation_matrix(X_df_scaled, explanatory_features) #[0:30] correlation matrix of features
+	corr_Xy_df = run_correlation_matrix(Xy_df_scaled, explanatory_and_target_features) # correlation matrix of features and target
 	#corr_matrix = corr_df.as_matrix()
 	corr_with_target = corr_Xy_df[target_variable]
 	print("Correlations with the  target:\n{}".format(corr_with_target.sort_values()))
@@ -132,7 +142,6 @@ def main():
 	graph_metrics = calculate_network_metrics(graph)
 	# # print sumary network metrics
 	print_summary_network(graph_metrics, nodes=corr_Xy_df.keys().tolist(), corrtarget=corr_with_target)
-	pdb.set_trace()
 	# #(4) Descriptive analytics: plot scatter and histograms
 	# longit_xy_scatter = ['scd_visita', 'fcsrtlibdem_visita'] #it works for longitudinal
 	# plot_scatter_target_cond(Xy_df_scaled,longit_xy_scatter, target_variable)
@@ -161,9 +170,10 @@ def main():
 	# print("The variance ratio by the {} principal compments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
 	
 	# (6) Feature Engineering
-	formula= build_formula()
+	#expla_features = sorted(X_df_scaled.kyes().tolist()); set(expla_features) == set(explanatory_features) d
+	formula= build_formula(explanatory_features)
 	# build design matrix(patsy.dmatrix) and rank the features in the formula y ~ X 
-	X_prep = run_feature_ranking(Xy_df_scaled, scaler, formula)
+	X_prep = run_feature_ranking(Xy_df_scaled, formula)
 	#Split dataset into train and test
 	y = Xy_df_scaled[target_variable].values
 	X_features = explanatory_features
@@ -171,34 +181,40 @@ def main():
 		X_features.remove(target_variable)
 	X = Xy_df_scaled[X_features].values
 	X_train, X_test, y_train, y_test = run_split_dataset_in_train_test(X, y, test_size=0.2)
-
 	#####
-	sgd_estimator = run_sgd_classifier(X_train, y_train, X_test, y_test,'log',10)
-	lasso_estimator = run_logreg_Lasso(X_train, y_train, X_test, y_test,10)
-	knn = run_kneighbors(X_train, y_train, X_test, y_test)
-	calculate_top_features_contributing_class(knn, X_features, 10)
+	deepnetwork_res = run_Keras_DN(X_train, y_train, X_test, y_test)
 	pdb.set_trace()
-	naive_bayes_estimator = run_naive_Bayes(X_train, y_train, X_test, y_test, 0)
-	#Evaluate a score comparing y_pred=estimator().fit(X_train)predict(X_test) from y_test
-	metrics_estimator = compute_metrics_estimator(knn,X_test,y_test)
-	#Evaluate a score by cross-validation
-	metrics_estimator_with_cv = compute_metrics_estimator_with_cv(knn,X_test,y_test,5)
+	knn = run_kneighbors(X_train, y_train, X_test, y_test)
+	svm_estimator = run_svm(X_train, y_train, X_test, y_test, X_features)
+	lasso_estimator = run_logreg_Lasso(X_train, y_train, X_test, y_test,10)
+	sgd_estimator = run_sgd_classifier(X_train, y_train, X_test, y_test,'hinge',10) #loss = log|hinge
 	lr_estimator = run_logreg(X_train, y_train, X_test, y_test, 0.5)
+	naive_bayes_estimator = run_naive_Bayes(X_train, y_train, X_test, y_test, 0)
+	
 	dectree_estimator =run_random_decision_tree(X_train, y_train, X_test, y_test, X_features,target_variable)
 	rf_estimator =run_randomforest(X_train, y_train, X_test, y_test, X_features)
 	gbm_estimator = run_gradientboosting(X_train, y_train, X_test, y_test, X_features)
 	xgbm_estimator = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
+	#
+	calculate_top_features_contributing_class(sgd_estimator, X_features, 10)
 	#compare estimators against dummy estimators
 	dummies_score = build_dummy_scores(X_train, y_train, X_test, y_test)
-	listofestimators = [knn, naive_bayes_estimator,lr_estimator,dectree_estimator,rf_estimator]
+	listofestimators = [knn, naive_bayes_estimator,lr_estimator,dectree_estimator,rf_estimator,gbm_estimator,xgbm_estimator]
 	estimatorlabels = ['knn', 'nb', 'lr', 'dt', 'rf','gbm','xgbm']
 	compare_against_dummy_estimators(listofestimators, estimatorlabels, X_test, y_test, dummies_score)
-	pdb.set_trace()
+	#Evaluate a score comparing y_pred=estimator().fit(X_train)predict(X_test) from y_test
+	metrics_estimator = compute_metrics_estimator(knn,X_test,y_test)
+	#Evaluate a score by cross-validation
+	metrics_estimator_with_cv = compute_metrics_estimator_with_cv(knn,X_test,y_test,5)
 	
 	# QUICK Model selection accuracy 0 for Train test, >0 for the number of folds
 	grid_values = {'gamma': [0.001, 0.01, 0.1, 1, 10]}
 	#print_model_selection_metrics(X_train, y_train, X_test, y_test,0) -train/test; print_model_selection_metrics(X_train, y_train, X_test, y_test,10) KFold
 	print_model_selection_metrics(X_train, y_train, X_test, y_test, grid_values)
+	
+	# Deep network
+	deepnetwork_res = run_Keras_DN(X_train, y_train, X_test, y_test)
+
 	#####
 
 	# (7) Modelling. 
@@ -211,16 +227,9 @@ def main():
 	# (7.1.1)
 
 	# (7.1.2)a vanilla logistic regression
-	
-	#run_model_evaluation(y_test,y_pred)
-	
 	# (7.1.2)b LinearSVM
-	lsvm_estimator_vanilla, lsvm_estimator_grid = linear_svm_classifier(X_train, y_train, X_test, y_test, X_features)
 	#calculate_top_features_contributing_class(lsvm_estimator_vanilla, X_features, 10) error
 	# (7.1.3) SGD classifier better for binary classification and can go both Log Reg and SVM
-	sgd_estimator = SGD_classifier(X_train, y_train, X_test, y_test, X_features)
-	calculate_top_features_contributing_class(sgd_estimator, X_features, 10)
-	
 	
 	# (7.2) NON Linear Classifiers RandomForest and XGBooster http://xgboost.readthedocs.io/en/latest/tutorials/index.html
 	## (7.2.1) RandomForestClassifier
@@ -228,17 +237,10 @@ def main():
 	#run_model_evaluation(y_test,y_pred)
 	#how to evaluate random forest??? 
 	# (7.2.2) XGBoost is an implementation of gradient boosted decision trees designed for speed and performance
-	y_pred = run_fitmodel(model[2], X_train, y_train, X_test, y_test)
-	run_model_evaluation(y_test,y_pred)
 	# (7.2.3) Kneighbors classifier
 	#knn = run_kneighbors_classifier(X_train, y_train, X_test, y_test)
 
-
-
 	######
-	# kneighbors
-	#run_naive_Bayes()
-	#run_Keras_DN(dataset, X_train, y_train, X_test, y_test)
 
 	#########
 	# algebraic topology
@@ -419,33 +421,6 @@ def plot_histograma_bygroup_categorical(df, target_variable=None):
 	p = d.plot(kind='bar', ax=ax[3])
 	plt.show()
 
-def build_formula():
-	""" build formula to be used for  run_feature_slection. 'C' for categorical features
-	Args: None
-	Outputs: formula"""
-	#formula = 'conversion ~ '; formula += 'C(sexo) + C(nivel_educativo) + C(apoe)'; 
-	formula = 'conversion ~ '; formula += 'sexo + nivel_educativo + apoe'; 
-	formula += ' + ' + ' + '.join(selcols('scd_visita',1,1)); formula += ' + ' + ' + '.join(selcols('gds_visita',1,1)); formula += ' + ' + ' + '.join(selcols('eqm10_visita',1,1));formula += ' + ' + ' + '.join(selcols('eqm09_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('hta_visita',1,1)); formula += ' + ' + ' + '.join(selcols('sue_con_visita',1,1));formula += ' + ' + ' + '.join(selcols('sue_rec_visita',1,1))
-	formula += ' + ' + ' + '.join(selcols('lipid_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('sdvive_visita',1,1));formula += ' + ' + ' + '.join(selcols('sdhijos_visita',1,1));formula += ' + ' + ' + '.join(selcols('valsatvid_visita',1,1))
-	formula += ' + ' + ' + '.join(selcols('ejfre_visita',1,1));formula += ' + ' + ' + '.join(selcols('a13_visita',1,1));formula += ' + ' + ' + '.join(selcols('a10_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('rsoled_visita',1,1));formula += ' + ' + ' + '.join(selcols('relaocio_visita',1,1));formula += ' + ' + ' + '.join(selcols('preocupacion_visita',1,1))
-	formula += ' + ' + ' + '.join(selcols('act_depre_visita',1,1));formula += ' + ' + ' + '.join(selcols('act_ansi_visita',1,1));formula += ' + ' + ' + '.join(selcols('act_orie_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('card_visita',1,1));formula += ' + ' + ' + '.join(selcols('sp_visita',1,1));formula += ' + ' + ' + '.join(selcols('tabac_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('imc_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('fcsrtrl1_visita',1,1));formula += ' + ' + ' + '.join(selcols('fcsrtrl3_visita',1,1));formula += ' + ' + ' + '.join(selcols('fcsrtlibdem_visita',1,1));
-	return formula
-
-
-def selcols(prefix, a=1, b=5):
-	""" selcols: return list of str of longitudinal variables
-	Args:prefix name of the variable
-	a: initial index year, b last year
-	Output: list of feature names
-	Example: selcols('scd_visita',1,3) returns [scd_visita,scd_visita2,scd_visita3] """
-	return [prefix+str(i) for i in np.arange(a,b+1)]
-
 def run_imputations(dataset, type_imput=None):
 	""" run_imputations: datasets with missign values are incompatible with scikit-learn 
 	estimators which assume that all values in an array are numerical, and that all have and hold meaning.
@@ -518,27 +493,120 @@ def run_split_dataset_in_train_test(X,y,test_size=None):
 	X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=test_size, random_state=42)
 	return X_train, X_test, y_train, y_test
 
-def run_feature_ranking(df, scaler, formula=None):
+def split_features_in_groups():
+	""" split_features_in_groups
+	Output: dictionaty 'group name':list of features"""
+	dict_features = {}
+	vanilla = ['sexo', 'lat_manual', 'nivel_educativo', 'apoe', 'edad']
+	sleep = ['hsnoct' , 'sue_dia' , 'sue_noc' , 'sue_con' , 'sue_man' , 'sue_suf' , 'sue_pro' , 'sue_ron' , 'sue_mov' , 'sue_rui' , 'sue_hor', 'sue_rec']
+	family_history = ['dempad' , 'edempad' , 'demmad' , 'edemmad']
+	anthropometric = ['pabd' , 'peso' , 'talla' , 'imc']
+	sensory = ['audi', 'visu']
+	intellectual = ['a01' , 'a02' , 'a03' , 'a04' , 'a05' , 'a06' , 'a07' , 'a08' , 'a09' , 'a10' , 'a11' , 'a12' , 'a13' , 'a14'] 
+	demographics = ['sdhijos' , 'numhij' , 'sdvive' , 'sdeconom' , 'sdresid' , 'sdestciv']
+	professional = ['sdtrabaja' , 'sdocupac', 'sdatrb']
+	demographics = ['sdhijos' , 'numhij' , 'sdvive' , 'sdeconom' , 'sdresid' , 'sdestciv']
+	cardiovascular = ['hta', 'hta_ini', 'glu', 'lipid', 'tabac', 'tabac_ini', 'tabac_fin', 'tabac_cant', 'sp', 'cor', 'cor_ini', 'arri', 'arri_ini', 'card', 'card_ini']
+	ictus = ['tir', 'ictus', 'ictus_num', 'ictus_ini', 'ictus_secu', 'tce', 'tce_num', 'tce_ini', 'tce_con', 'tce_secu']
+	diet = ['alfrut', 'alcar', 'alpesblan', 'alpeszul', 'alaves', 'alaceit', 'alpast', 'alpan', 'alverd', 'alleg', 'alemb', 'allact', 'alhuev', 'aldulc']
+	dict_features = {'vanilla':vanilla, 'sleep':sleep,'anthropometric':anthropometric, 'family_history':family_history, \
+	'sensory':sensory,'intellectual':intellectual,'demographics':demographics,'professional':professional, \
+	'cardiovascular':cardiovascular, 'ictus':ictus, 'diet':diet}
+	return dict_features
+
+def build_formula(features):
+	""" build formula to be used for  run_feature_slection. 'C' for categorical features
+	Args: None
+	Outputs: formula"""
+	#formula = 'conversion ~ '; formula += 'C(sexo) + C(nivel_educativo) + C(apoe)'; 
+	formula = 'conversion ~ '; formula += 'sexo + lat_manual + nivel_educativo + apoe '; 
+	#sleep
+	formula += '+ hsnoct + sue_dia + sue_noc + sue_con + sue_man + sue_suf + sue_pro +sue_ron+ sue_mov+sue_rui + sue_hor + sue_rec'
+	#family history
+	formula += '+ dempad + edempad + demmad + edemmad'
+	#Anthropometric measures
+	formula += '+ pabd + peso + talla + imc'
+	#sensory disturbances
+	formula += '+ audi + visu'
+	#intellectual activities
+	formula += '+ a01 + a02 + a03 + a04 + a05 + a06 + a07 + a08 + a09 + a10 + a11 + a12 + a13 + a14' 
+	#demographics
+	formula += '+ sdhijos + numhij+ sdvive + sdeconom + sdresid + sdestciv'
+	#professional life
+	formula += '+ sdtrabaja + sdocupac + sdatrb'
+	#cardiovascular risk
+	formula += '+ hta + hta_ini + glu + lipid + tabac + tabac_ini + tabac_fin + tabac_cant + sp + cor + cor_ini + arri + arri_ini + card + card_ini'
+	#brain conditions that may affect cog performance
+	formula += '+ tir + ictus + ictus_num + ictus_ini + ictus_secu + tce + tce_num + tce_ini + tce_con + tce_secu'
+	#diet
+	formula += '+ alfrut + alcar + alpesblan + alpeszul +alaves + alaceit + alpast + alpan + alverd + alleg + alemb + allact + alhuev + aldulc'
+	#scd
+	formula += ' + ' + ' + '.join(selcols('scd_visita',1,1)); formula += ' + ' + ' + '.join(selcols('peorotros_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('tpoevol_visita',1,1)); #formula += ' + ' + ' + '.join(selcols('edadinicio_visita',1,1)); 
+	formula += ' + ' + ' + '.join(selcols('preocupacion_visita',1,1));formula += ' + ' + ' + '.join(selcols('eqm06_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('eqm07_visita',1,1));formula += ' + ' + ' + '.join(selcols('eqm09_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('eqm10_visita',1,1));
+	#cognitive complaints
+	formula += ' + ' + ' + '.join(selcols('eqm81_visita',1,1));formula += ' + ' + ' + '.join(selcols('eqm86_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('eqm82_visita',1,1));formula += ' + ' + ' + '.join(selcols('eqm83_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('eqm84_visita',1,1));formula += ' + ' + ' + '.join(selcols('eqm85_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('act_aten_visita',1,1));formula += ' + ' + ' + '.join(selcols('act_orie_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('act_mrec_visita',1,1));formula += ' + ' + ' + '.join(selcols('act_memt_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('act_visu_visita',1,1));formula += ' + ' + ' + '.join(selcols('act_expr_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('act_comp_visita',1,1));formula += ' + ' + ' + '.join(selcols('act_ejec_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('act_prax_visita',1,1));
+	#cognitive performance
+	formula += ' + ' + ' + '.join(selcols('mmse_visita',1,1));formula += ' + ' + ' + '.join(selcols('reloj_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('faq_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('fcsrtrl1_visita',1,1));formula += ' + ' + ' + '.join(selcols('fcsrtrl2_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('fcsrtrl3_visita',1,1));formula += ' + ' + ' + '.join(selcols('fcsrtlibdem_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('p_visita',1,1));formula += ' + ' + ' + '.join(selcols('animales_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('cn_visita',1,1));formula += ' + ' + ' + '.join(selcols('cdrsum_visita',1,1));
+	#psychioatric symptomes
+	formula += ' + ' + ' + '.join(selcols('gds_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('stai_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('act_depre_visita',1,1))
+	formula += ' + ' + ' + '.join(selcols('act_ansi_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('act_apat_visita',1,1));
+	#social engagement
+	formula += ' + ' + ' + '.join(selcols('relafami_visita',1,1));formula += ' + ' + ' + '.join(selcols('relaamigo_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('relaocio_visita',1,1));formula += ' + ' + ' + '.join(selcols('rsoled_visita',1,1));
+	#physical exercise
+	formula += ' + ' + ' + '.join(selcols('ejfre_visita',1,1));formula += ' + ' + ' + '.join(selcols('ejminut_visita',1,1));
+	#quality of life
+	formula += ' + ' + ' + '.join(selcols('valcvida_visita',1,1));formula += ' + ' + ' + '.join(selcols('valsatvid_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('valfelc_visita',1,1));formula += ' + ' + ' + '.join(selcols('eq5dmov_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('eq5dcp_visita',1,1));formula += ' + ' + ' + '.join(selcols('eq5dact_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('eq5ddol_visita',1,1));formula += ' + ' + ' + '.join(selcols('eq5dans_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('eq5dsalud_visita',1,1));formula += ' + ' + ' + '.join(selcols('eq5deva_visita',1,1));
+	
+	return formula
+
+
+def selcols(prefix, a=1, b=5):
+	""" selcols: return list of str of longitudinal variables
+	Args:prefix name of the variable
+	a: initial index year, b last year
+	Output: list of feature names
+	Example: selcols('scd_visita',1,3) returns [scd_visita,scd_visita2,scd_visita3] """
+	return [prefix+str(i) for i in np.arange(a,b+1)]
+
+def run_feature_ranking(df, formula, scaler=None):
 	""" run_feature_ranking(X) : builds the design matrix for feature ranking (selection)
 	Args: panas dataframe scaled and normalized
 	Outputs: design matrix for given formula"""
 	# Construct a single design matrix given a formula_ y ~ X
-	if formula is None:
-		formula = 'conversion ~ '
-		# original features
-		#formula += 'C(sexo) + C(nivel_educativo) +  C(apoe) '
-		formula += 'sexo + nivel_educativo + apoe '
-		formula += '+' + '+'.join(selcols('scd_visita',1,1))
 	print("The formula is:", formula)
 	# patsy dmatrices, construct a single design matrix given a formula_like and data.
 	y, X = dmatrices(formula, data=df, return_type='dataframe')
+	#convert dataframe into Series
 	y = y.iloc[:, 0]
 	# feature scaling
-	if scaler is None:
-		scaler = preprocessing.MinMaxScaler()
-		scaler.fit(X)
+	#if scaler is None:
+	#	scaler = preprocessing.MinMaxScaler()
+	#	scaler.fit(X)
 	""" select top features and find top indices from the formula  """
-	nboffeats = 12
+	nboffeats = 20
 	warnings.simplefilter(action='ignore', category=(UserWarning,RuntimeWarning))
 	# sklearn.feature_selection.SelectKBest, select k features according to the highest scores
 	# SelectKBest(score_func=<function f_classif>, k=10)
@@ -553,15 +621,16 @@ def run_feature_ranking(df, scaler, formula=None):
 	top_indices = np.nan_to_num(selector.scores_).argsort()[-nboffeats:][::-1]
 	print("Selector scores:",selector.scores_[top_indices])
 	print("Top features:\n", X.columns[top_indices])
+	
 	# Pipeline of transforms with a final estimator.Sequentially apply a list of transforms and a final estimator.
 	# sklearn.pipeline.Pipeline
-	preprocess = Pipeline([('anova', selector), ('scale', scaler)])
-	print("Estimator parameters:", preprocess.get_params())
+	#preprocess = Pipeline([('anova', selector), ('scale', scaler)])
+	#print("Estimator parameters:", preprocess.get_params())
 	# Fit the model and transform with the final estimator. X =data to predict on
-	preprocess.fit(X,y)
+	#preprocess.fit(X,y)
 	# transform: return the transformed sample: array-like, shape = [n_samples, n_transformed_features]
-	X_prep = preprocess.transform(X)
-	return X_prep
+	#X_prep = preprocess.transform(X)
+	#return X_prep
 	# model selection
 	#X_train, X_test, y_train, y_test = train_test_split(X_prep, y, test_size=0.3, random_state=42)
 	#return X_prep, X_train, X_test, y_train, y_test
@@ -794,6 +863,7 @@ def run_sgd_classifier(X_train, y_train, X_test, y_test, loss,cv):
 	#class_weight='balanced' addresses the skewness of the dataset in terms of labels
 	# loss='hinge' LSVM,  loss='log' gives logistic regression, a probabilistic classifier
 	# ‘l1’ and ‘elasticnet’ might bring sparsity to the model (feature selection) not achievable with ‘l2’.
+	pdb.set_trace()
 	clf = GridSearchCV(SGDClassifier(loss=loss, penalty='elasticnet',l1_ratio=0.15, n_iter=5, shuffle=True, verbose=False, n_jobs=10, \
 		average=False, class_weight='balanced',random_state=0),tuned_parameters, cv=cv, scoring='f1_macro').fit(X_train, y_train)
 	if loss is 'log':
@@ -814,8 +884,8 @@ def run_sgd_classifier(X_train, y_train, X_test, y_test, loss,cv):
 	#plot auc
 	fig,ax = plt.subplots(1,3)
 	fig.set_size_inches(15,5)
-	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'sgd Confusion matrix (TRAIN) '+loss, 0.5)
-	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'sgd Confusion matrix (TEST) '+loss, 0.5)
+	plot_cm(ax[0], y_train, y_train_pred, [0,1], 'sgd Confusion matrix (TRAIN) '+loss, 0.5)
+	plot_cm(ax[1], y_test, y_test_pred,   [0,1], 'sgd Confusion matrix (TEST) '+loss, 0.5)
 	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
 	plt.tight_layout()
 	plt.show()
@@ -1019,6 +1089,45 @@ def run_gradientboosting(X_train, y_train, X_test, y_test, X_features, threshold
 	# pdb.set_trace()
 	# #plot_class_regions_for_classifier_subplot(clf, X_train, y_train, X_test, y_test,titleplot,subaxes)
 	# plt.show()
+def run_svm(X_train, y_train, X_test, y_test, X_features, threshold=None):
+	""" run_svm: is the linear classifier with the maximum margin"""
+	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
+	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
+	X_all = np.concatenate((X_train, X_test), axis=0)
+	y_all = np.concatenate((y_train, y_test), axis=0)
+	# SVM model, cost and gamma parameters for RBF kernel. out of the box
+	svm = SVC(cache_size=1000, kernel='rbf').fit(X_train, y_train)
+
+	y_train_pred = svm.predict(X_train)
+	y_test_pred = svm.predict(X_test)
+	y_pred = [int(a) for a in svm.predict(X_test)]
+	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
+	print("Baseline classifier using SVM: %s of %s values correct." % (num_correct, len(y_test)))
+	
+	# plot learning curves
+	kfolds = StratifiedKFold(5)
+	#Generate indices to split data into training and test set.
+	cv = kfolds.split(X_all,y_all)
+	title ='Learning Curves vanilla linearSVM'
+	plot_learning_curve(svm, title, X_all, y_all, ylim=(0.7, 1.01), cv=cv, n_jobs=4)
+	print('Accuracy of SVM classifier on training set {:.2f}'.format(svm.score(X_train, y_train)))
+	print('Accuracy of SVM classifier on test set {:.2f}'.format(svm.score(X_test, y_test)))
+	#plot confusion matrix and AUC
+	fig,ax = plt.subplots(1,3)
+	fig.set_size_inches(15,5)
+	plot_cm(ax[0], y_train, y_train_pred, [0,1], 'SVM Confusion matrix (TRAIN)', 0.5)
+	plot_cm(ax[1], y_test, y_test_pred, [0,1], 'SVM Confusion matrix (TEST)', 0.5)
+	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
+	plt.tight_layout()
+	plt.show()
+	####
+	print("Exhaustive search for SVM parameters to improve the out-of-the-box performance of vanilla SVM.")
+	parameters = {'C':10. ** np.arange(5,10), 'gamma':2. ** np.arange(-5, -1)}
+	grid = GridSearchCV(svm, parameters, cv=5, verbose=3, n_jobs=2).fit(X_train, y_train)
+	print(grid.best_estimator_)
+	print("LVSM GridSearchCV. The best alpha is:{}".format(grid.best_params_)) 
+	print("Linear SVM accuracy of the given test data and labels={} ", grid.score(X_test, y_test))
+	return svm
 
 def run_naive_Bayes(X_train, y_train, X_test, y_test, thresh=None):
 	""" run_naive_Bayes
@@ -1102,7 +1211,7 @@ def run_logreg_Lasso(X_train, y_train, X_test, y_test,cv=None):
 	lasso_cv = GridSearchCV(lasso, dict(alpha=alphas)).fit(X_train, y_train)
 	if cv > 0:
 		lasso = lasso_cv
-	#lasso is a linear estimator doesnt have .predict_prroba method only prdict
+	#lasso is a linear estimator doesnt have .predict_proba method only predict
 	y_train_pred = lasso.predict(X_train)
 	y_test_pred = lasso.predict(X_test)
 	#binarize 0,1 the predictions
@@ -1260,78 +1369,56 @@ class BatchLogger(Callback):
         d =  pd.Series(self.log_values[metric_name])
         return d.rolling(window,center=False).mean()
 
-def run_Keras_DN(dataset, X_train, y_train, X_test, y_test):
-	""" deep network classifier using keras
+def run_Keras_DN(X_train, y_train, X_test, y_test):
+	""" run_Keras_DN: deep network classifier using keras
+	Args: X_train, y_train, X_test, y_test
+	Output:
 	Remember to activate the virtual environment source ~/git...code/tensorflow/bin/activate"""
 
-	if dataset is not None: 
-		features = ['Visita_1_MMSE', 'years_school', 'SCD_v1', 'Visita_1_P', 'Visita_1_STAI', 'Visita_1_GDS','Visita_1_CN']
-		df = dataset.fillna(method='ffill')
-		X_all = df[features]
-		y_all = df['Conversion']
-		# split data into training and test sets
-		print("Data set set dimensions: X_all=", X_all.shape, " y_all=", y_all.shape)
-		cutfortraining = int(X_all.shape[0]*0.8)
-		X_train = X_all.values[:cutfortraining, :]
-		y_train = y_all.values[:cutfortraining]
-		print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
-		X_test = X_all.values[cutfortraining:,:]
-		y_test = y_all.values[cutfortraining:]
-		print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
-
-		model = Sequential()
-		model.add(Dense(15, input_dim=len(features), activation='relu'))
-		model.add(Dense(1, activation='sigmoid'))
-		model.compile(loss='binary_crossentropy', optimizer='rmsprop', metrics=['accuracy'])
-		model.fit(X_train, y_train, epochs=20, batch_size=50)
-
-		predictions = model.predict_classes(X_test)
-		print('Accuracy:', accuracy_score(y_true=y_test, y_pred=predictions))
-		print(classification_report(y_true=y_test, y_pred=predictions))
-	else:
-		####  run_keras_dn(dataset, X_train, X_test, y_train, y_test):
-		input_dim = X_train.shape[1]
-		model = Sequential()
-		model.add(Dense(16, input_shape=(input_dim,), activation='relu'))
-		model.add(Dense(1,  activation='sigmoid'))
-		model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-		bl = BatchLogger()
-		history = model.fit(
-	              np.array(X_train), np.array(y_train),
-	              batch_size=25, epochs=15, verbose=1, callbacks=[bl],
-	              validation_data=(np.array(X_test), np.array(y_test)))
-		score = model.evaluate(np.array(X_test), np.array(y_test), verbose=0)
-		print('Test log loss:', score[0])
-		print('Test accuracy:', score[1])
-		plt.figure(figsize=(15,5))
-		plt.subplot(1, 2, 1)
-		plt.title('loss, per batch')
-		plt.legend(['train', 'test'])
-		plt.plot(bl.get_values('loss',1), 'b-', label='train');
-		plt.plot(bl.get_values('val_loss',1), 'r-', label='test');
-		plt.subplot(1, 2, 2)
-		plt.title('accuracy, per batch')
-		plt.plot(bl.get_values('acc',1), 'b-', label='train');
-		plt.plot(bl.get_values('val_acc',1), 'r-', label='test');
-		plt.show()
-		#
-		y_train_pred = model.predict_on_batch(np.array(X_train))[:,0]
-		y_test_pred = model.predict_on_batch(np.array(X_test))[:,0]
-		fig,ax = plt.subplots(1,3)
-		fig.set_size_inches(15,5)
-		plot_cm(ax[0], y_train, y_train_pred, [0,1], 'DN Confusion matrix (TRAIN)')
-		plot_cm(ax[1], y_test, y_test_pred, [0,1], 'DN Confusion matrix (TEST)')
-		plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred)   
-		plt.tight_layout()
-		plt.show()
-		# we build a new model with the activations of the old model
-		# this model is truncated before the last layer
-		model2 = Sequential()
-		model2.add(Dense(16, input_shape=(input_dim,), activation='relu', weights=model.layers[0].get_weights()))
-		activations = model2.predict_on_batch(np.array(X_test))
-		ax[0].legend('conversion')
-		ax[1].legend('no conversion')
-		return model, model2, activations
+	####  run_keras_dn(dataset, X_train, X_test, y_train, y_test):
+	input_dim = X_train.shape[1]
+	model = Sequential()
+	model.add(Dense(16, input_shape=(input_dim,), activation='relu'))
+	model.add(Dense(1,  activation='sigmoid'))
+	model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
+	bl = BatchLogger()
+	history = model.fit(np.array(X_train), np.array(y_train),batch_size=25, epochs=15, \
+		verbose=1, callbacks=[bl],validation_data=(np.array(X_test), np.array(y_test)))
+	score = model.evaluate(np.array(X_test), np.array(y_test), verbose=0)
+	print('Test log loss:', score[0])
+	print('Test accuracy:', score[1])
+	
+	plt.figure(figsize=(15,5))
+	plt.subplot(1, 2, 1)
+	plt.title('loss, per batch')
+	plt.legend(['train', 'test'])
+	plt.plot(bl.get_values('loss',1), 'b-', label='train');
+	plt.plot(bl.get_values('val_loss',1), 'r-', label='test');
+	plt.subplot(1, 2, 2)
+	plt.title('accuracy, per batch')
+	plt.plot(bl.get_values('acc',1), 'b-', label='train');
+	plt.plot(bl.get_values('val_acc',1), 'r-', label='test');
+	plt.show()
+	#
+	
+	y_train_pred = model.predict_on_batch(np.array(X_train))[:,0]
+	y_test_pred = model.predict_on_batch(np.array(X_test))[:,0]
+	fig,ax = plt.subplots(1,3)
+	fig.set_size_inches(15,5)
+	plot_cm(ax[0], y_train, y_train_pred, [0,1], 'DN Confusion matrix (TRAIN)')
+	plot_cm(ax[1], y_test, y_test_pred, [0,1], 'DN Confusion matrix (TEST)')
+	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred)   
+	plt.tight_layout()
+	plt.show()
+	
+	# we build a new model with the activations of the old model
+	# this model is truncated before the last layer
+	model2 = Sequential()
+	model2.add(Dense(16, input_shape=(input_dim,), activation='relu', weights=model.layers[0].get_weights()))
+	activations = model2.predict_on_batch(np.array(X_test))
+	ax[0].legend('conversion')
+	ax[1].legend('no conversion')
+	return model, model2, activations
 
 def run_TDA_with_Kepler(samples, activations):
 	""" """
@@ -1362,35 +1449,6 @@ def run_tSNE_analysis(activations, y_test):
 	plt.tight_layout()
 	plt.show()
 	return samples
-
-def linear_svm_classifier(X_train, y_train, X_test, y_test, features=None):
-	""" linear_svm_classifier: is the linear classifier with the maximum margin"""
-	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
-	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
-	# SVM model, cost and gamma parameters for RBF kernel. out of the box
-	svm = SVC(cache_size=1000, kernel='rbf')
-	svm.fit(X_train, y_train)
-	# test
-	y_pred = [int(a) for a in svm.predict(X_test)]
-	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
-	print("Vanilla classifier using linear SVM: %s of %s values correct." % (num_correct, len(y_test)))
-	# plot learning curves
-	kfolds = StratifiedKFold(5)
-	X_all = np.concatenate((X_train, X_test), axis=0)
-	y_all = np.concatenate((y_train, y_test), axis=0)
-	#Generate indices to split data into training and test set.
-	cv = kfolds.split(X_all,y_all)
-	title ='Learning Curves vanilla linearSVM'
-	plot_learning_curve(svm, title, X_all, y_all, ylim=(0.7, 1.01), cv=cv, n_jobs=4)
-
-	print("Exhaustive search for SVM parameters to improve the out-of-the-box performance of vanilla SVM.")
-	parameters = {'C':10. ** np.arange(5,10), 'gamma':2. ** np.arange(-5, -1)}
-	grid = GridSearchCV(svm, parameters, cv=5, verbose=3, n_jobs=2)
-	grid.fit(X_train, y_train)
-	print(grid.best_estimator_)
-	print("LVSM GridSearchCV. The best alpha is:{}".format(grid.best_params_)) 
-	print("Linear SVM accuracy of the given test data and labels={} ", grid.score(X_test, y_test))
-	return svm, grid
 
 def calculate_top_features_contributing_class(clf, features, numbertop=None):
 	""" calculate_top_features_contributing_class: print the n features contributing the most to class labels for a fitted estimator.
@@ -1453,9 +1511,9 @@ def plot_histogram_pair_variables(dataset, feature_label=None):
 	plt.show()
 
 def build_graph_correlation_matrix(corr_df, threshold=None, corr_target=None):
-	""" build_graph_correlation_matrix: requires package pip install pygraphviz
+	""" build_graph_correlation_matrix: requires package pip install pygraphviz. Plot only connected compoennts, omit isolated nodes
 	Args:A is the dataframe correlation matrix
-	Output:None
+	Output:G
 	"""
 	import string
 	# extract corr matrix fro the dataframe
@@ -1476,9 +1534,11 @@ def build_graph_correlation_matrix(corr_df, threshold=None, corr_target=None):
 	labels = {}
 	for idx,val in enumerate(node_names):
 		labels[idx] = val
+		if labels[idx].endswith('_visita1'):
+			labels[idx] = labels[idx][:len(labels[idx])-len('_visita1')]
 		# plot label and correlation with the target 
 		if corr_target is not None:
-			labels[idx] = val+ ' ' + `'{0:.2g}'.format(corr_target[idx])`
+			labels[idx] = labels[idx]+ '\n' + `'{0:.2g}'.format(corr_target[idx])`
 
 	G = nx.from_numpy_matrix(A)
 	#G.remove_nodes_from(nx.isolates(G))
@@ -1486,15 +1546,15 @@ def build_graph_correlation_matrix(corr_df, threshold=None, corr_target=None):
 	nx.draw_networkx_nodes(G, pos)
 	nx.draw_networkx_edges(G, pos)
 	labels = dict((key,value) for key, value in labels.iteritems() if key in connected_nodes)
-	pdb.set_trace()
 	labels_connected = {}; counter = 0
 	for item in labels: 
 		labels_connected[counter] = labels[item]
 		counter+=1
-	nx.draw_networkx_labels(G, pos, labels_connected, font_size=9)
+	nx.draw_networkx_labels(G, pos, labels_connected, font_size=7)
 	# plt.title('Binary Graph from correlation matrix{}'.format(node_names))
 	plt.title('Binary Graph, threshold={0:.3g}'.format(threshold))
 	return G
+	pdb.set_trace()
 
 def print_summary_network(Gmetrics, nodes=None, corrtarget=None):
 	"""print_summary_network: print summary of the graph metrics (clustering, centrality )
