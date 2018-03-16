@@ -56,6 +56,11 @@ def plot_learning_curve(estimator, title, X, y, ylim=None, cv=None,
         plt.ylim(*ylim)
     plt.xlabel("Training examples")
     plt.ylabel("Score")
+    # cross-validated training and test scores for different training set sizes.
+    #A cross-validation generator splits the whole dataset k times in training 
+    #and test data. Subsets of the training set with varying sizes will be used
+    #to train the estimator and a score for each training subset size and the 
+    #test set will be computed. Afterwards, the scores will be averaged over all k runs for each training subset size.
     train_sizes, train_scores, test_scores = learning_curve(
         estimator, X, y, cv=cv, n_jobs=n_jobs, train_sizes=train_sizes)
     train_scores_mean = np.mean(train_scores, axis=1)

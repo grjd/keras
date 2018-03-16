@@ -27,7 +27,9 @@ import itertools
 import warnings
 from copy import deepcopy
 
+from scipy.cluster.hierarchy import dendrogram, linkage, cophenet
 from sklearn.linear_model import SGDClassifier, LogisticRegression, Lasso
+from sklearn.neural_network import MLPClassifier
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, StratifiedKFold, ShuffleSplit, KFold
 from sklearn.metrics import r2_score, roc_curve, auc, roc_auc_score, log_loss, accuracy_score, confusion_matrix, classification_report, precision_score, matthews_corrcoef, recall_score, f1_score, cohen_kappa_score
 from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif, chi2
@@ -37,22 +39,25 @@ from sklearn import preprocessing, metrics
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.pipeline import Pipeline
-from sklearn.manifold import TSNE
 from sklearn.datasets.mldata import fetch_mldata
+from scipy.spatial.distance import squareform, pdist
+# We'll hack a bit with the t-SNE code in sklearn 0.15.2.
+from sklearn.decomposition import TruncatedSVD
+from sklearn.metrics.pairwise import pairwise_distances
+from sklearn.manifold import TSNE
+from sklearn.manifold.t_sne import (_joint_probabilities,_kl_divergence)
 from sklearn.svm import SVC
 from sklearn.dummy import DummyClassifier
-from plot_learning_curve import plot_learning_curve
 from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier
 from xgboost import XGBClassifier
-	
 from keras import regularizers
 from keras.datasets import mnist
 from keras.models import Model, Sequential
 from keras.layers import Input
 from keras.wrappers.scikit_learn import KerasClassifier
 from keras.optimizers import SGD, RMSprop, Adam
-from keras.utils import np_utils
+from keras.utils import np_utils, plot_model
 from keras.layers.core import Dense, Activation, Dropout
 from keras.callbacks import Callback
 
@@ -182,8 +187,13 @@ def main():
 	X = Xy_df_scaled[X_features].values
 	X_train, X_test, y_train, y_test = run_split_dataset_in_train_test(X, y, test_size=0.2)
 	#####
-	deepnetwork_res = run_Keras_DN(X_train, y_train, X_test, y_test)
+	run_hierarchical_clustering(np.concatenate((X_train, X_test), axis=0))
 	pdb.set_trace()
+	svd_reduced = run_truncatedSVD(X_train, y_train, X_test, y_test)
+	tSNE_reduced  = run_tSNE_manifold_learning(X_train, y_train, X_test, y_test)
+	deepnetwork_res = run_keras_deep_learning(X_train, y_train, X_test, y_test)
+	mlp_estimator = run_multi_layer_perceptron(X_train, y_train, X_test, y_test)
+
 	knn = run_kneighbors(X_train, y_train, X_test, y_test)
 	svm_estimator = run_svm(X_train, y_train, X_test, y_test, X_features)
 	lasso_estimator = run_logreg_Lasso(X_train, y_train, X_test, y_test,10)
@@ -212,9 +222,6 @@ def main():
 	#print_model_selection_metrics(X_train, y_train, X_test, y_test,0) -train/test; print_model_selection_metrics(X_train, y_train, X_test, y_test,10) KFold
 	print_model_selection_metrics(X_train, y_train, X_test, y_test, grid_values)
 	
-	# Deep network
-	deepnetwork_res = run_Keras_DN(X_train, y_train, X_test, y_test)
-
 	#####
 
 	# (7) Modelling. 
@@ -244,11 +251,8 @@ def main():
 
 	#########
 	# algebraic topology
-	#activations.shape = X_test.shape[0], number of weights
-	samples = run_tSNE_analysis(activations, y_test)
-	run_TDA_with_Kepler(samples, activations)
 	pdb.set_trace()
-
+	run_TDA_with_Kepler(samples, activations)
 	
 def run_print_dataset(dataset):
 	""" run_print_dataset: print information about the dataset, type of features etc
@@ -500,7 +504,7 @@ def split_features_in_groups():
 	vanilla = ['sexo', 'lat_manual', 'nivel_educativo', 'apoe', 'edad']
 	sleep = ['hsnoct' , 'sue_dia' , 'sue_noc' , 'sue_con' , 'sue_man' , 'sue_suf' , 'sue_pro' , 'sue_ron' , 'sue_mov' , 'sue_rui' , 'sue_hor', 'sue_rec']
 	family_history = ['dempad' , 'edempad' , 'demmad' , 'edemmad']
-	anthropometric = ['pabd' , 'peso' , 'talla' , 'imc']
+	anthropometric = ['imc'] #['pabd' , 'peso' , 'talla' , 'imc']
 	sensory = ['audi', 'visu']
 	intellectual = ['a01' , 'a02' , 'a03' , 'a04' , 'a05' , 'a06' , 'a07' , 'a08' , 'a09' , 'a10' , 'a11' , 'a12' , 'a13' , 'a14'] 
 	demographics = ['sdhijos' , 'numhij' , 'sdvive' , 'sdeconom' , 'sdresid' , 'sdestciv']
@@ -525,7 +529,8 @@ def build_formula(features):
 	#family history
 	formula += '+ dempad + edempad + demmad + edemmad'
 	#Anthropometric measures
-	formula += '+ pabd + peso + talla + imc'
+	#formula += '+ pabd + peso + talla + imc'
+	formula += '+ imc'
 	#sensory disturbances
 	formula += '+ audi + visu'
 	#intellectual activities
@@ -634,6 +639,77 @@ def run_feature_ranking(df, formula, scaler=None):
 	# model selection
 	#X_train, X_test, y_train, y_test = train_test_split(X_prep, y, test_size=0.3, random_state=42)
 	#return X_prep, X_train, X_test, y_train, y_test
+
+def plot_dendogram(Z):
+	"""  plot_dendogram: 
+	Args: Z linkage matrix
+	output:
+	https://joernhees.de/blog/2015/08/26/scipy-hierarchical-clustering-and-dendrogram-tutorial/
+	"""
+	# calculate full dendrogram
+	plt.figure(figsize=(25, 10))
+	plt.title('Hierarchical Clustering Dendrogram')
+	plt.xlabel('sample index')
+	plt.ylabel('distance')
+
+	dendrogram(
+		Z,
+		truncate_mode='lastp',  # show only the last p merged clusters
+		p=20,  # show only the last p merged clusters
+		leaf_rotation=90.,  # rotates the x axis labels
+		leaf_font_size=8.,  # font size for the x axis labels
+		show_contracted=True,  # to get a distribution impression in truncated branches
+	)
+	plt.show()
+	# a huge jump in distance is typically what we're interested in if we want to argue for a certain number of clusters
+
+	pdb.set_trace()
+
+def run_hierarchical_clustering(X):
+	""" run_hierarchical_clustering: 
+	Args:
+	Output:
+
+	"""
+	# generate the linkage matrix using Ward variance minimization algorithm.
+	#no matter the method and metric specified, linkage() function will use that method and metric
+	#to calculate the distances of the clusters (starting with your n individual samples
+	#as singleton clusters)) and in each iteration will merge the two clusters which have
+	#the smallest distance according the selected method and metric
+	#[idx1, idx2, dist, sample_count] 
+	#Plotting a Dendrogram. X=X.T clustering of features, X clustering of subjects
+	X = X.T
+	Z = linkage(X, 'ward')
+	# Cophenetic Correlation Coefficient compares (correlates) the actual 
+	#pairwise distances of all your samples to those implied by the hierarchical clustering
+	c, coph_dists = cophenet(Z, pdist(X))
+	print("Cophenetic Correlation Coefficient ={:.3f} The closer the value is to 1, \
+		the better the clustering preserves the original distances".format(c))
+	plot_dendogram(Z)
+
+
+def run_truncatedSVD(X_train, y_train, X_test, y_test):
+	""" run_truncatedSVD: dimensionality reduction for sparse matrices (Single Value decompotitoion)
+	truncated because the dimension can be chosen (k)
+	Args:X_train, y_train, X_test, y_test
+	Output: reduced data points"""
+	import matplotlib.patches as mpatches
+	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
+	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
+	datadimension = X_train.shape[1]
+	X_all = np.concatenate((X_train, X_test), axis=0)
+	y_all = np.concatenate((y_train, y_test), axis=0)
+	svd = TruncatedSVD(n_components=2)
+	X_reduced = svd.fit_transform(X_all)
+	# scatter plot of original and reduced data
+	fig = plt.figure(figsize=(9, 8))
+	plt.scatter(X_reduced[:, 0], X_reduced[:, 1], c=y_all, s=50, edgecolor='k')
+	plt.title("truncated SVD reduction (2D) of N="+ str(datadimension) +" dimensions")
+	plt.axis('off')
+	yellow_patch = mpatches.Patch(color='gold', label='converters')
+	brown_patch = mpatches.Patch(color='indigo', label='Non converters')
+	plt.legend(handles=[yellow_patch, brown_patch])
+	return X_reduced
 
 def run_PCA_for_visualization(Xy_df, target_label, explained_variance=None):
 	""" run_PCA_for_visualization Linear dimensionality reduction using Singular Value Decomposition 
@@ -805,7 +881,6 @@ def compare_against_dummy_estimators(estimators, estimatorlabels, X_test, y_test
 	plt.ylabel('score')
 	plt.ylabel('X,y test score vs dummy estimators')
 	plt.show()
-	pdb.set_trace()
 
 def build_dummy_scores(X_train, y_train, X_test, y_test):
 	""" build_dummy_scores: When doing supervised learning, a simple sanity check consists of 
@@ -863,7 +938,6 @@ def run_sgd_classifier(X_train, y_train, X_test, y_test, loss,cv):
 	#class_weight='balanced' addresses the skewness of the dataset in terms of labels
 	# loss='hinge' LSVM,  loss='log' gives logistic regression, a probabilistic classifier
 	# ‘l1’ and ‘elasticnet’ might bring sparsity to the model (feature selection) not achievable with ‘l2’.
-	pdb.set_trace()
 	clf = GridSearchCV(SGDClassifier(loss=loss, penalty='elasticnet',l1_ratio=0.15, n_iter=5, shuffle=True, verbose=False, n_jobs=10, \
 		average=False, class_weight='balanced',random_state=0),tuned_parameters, cv=cv, scoring='f1_macro').fit(X_train, y_train)
 	if loss is 'log':
@@ -877,7 +951,7 @@ def run_sgd_classifier(X_train, y_train, X_test, y_test, loss,cv):
 	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
 	print("SGDClassifier. The best alpha is:{}".format(clf.best_params_)) 
 	# plot learning curve
-	title='accuracy sgd'+loss
+	title='SGD learning curve'+loss
 	plot_learning_curve(clf, title, X_all, y_all, n_jobs=1)
 	print('Accuracy of sgd {} alpha={} classifier on training set {:.2f}'.format(clf.best_params_,loss, clf.score(X_train, y_train)))
 	print('Accuracy of sgd {} alpha={} classifier on test set {:.2f}'.format(clf.best_params_,loss, clf.score(X_test, y_test)))
@@ -889,8 +963,6 @@ def run_sgd_classifier(X_train, y_train, X_test, y_test, loss,cv):
 	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
 	plt.tight_layout()
 	plt.show()
-	pdb.set_trace()
-
 	return clf
 
 def run_kneighbors(X_train, y_train, X_test, y_test, kneighbors=None):
@@ -932,7 +1004,7 @@ def run_kneighbors(X_train, y_train, X_test, y_test, kneighbors=None):
 	# predict the response
 	y_pred = knn.predict(X_test)
 	# plot learning curve
-	plot_learning_curve(knn, 'accuracy kNN', X_all, y_all, n_jobs=1)
+	plot_learning_curve(knn, 'kNN learning curve', X_all, y_all, n_jobs=1)
 	print('Accuracy of kNN classifier on training set {:.2f}'.format(knn.score(X_train, y_train)))
 	print('Accuracy of kNN classifier on test set {:.2f}'.format(knn.score(X_test, y_test)))
 	#plot auc
@@ -970,7 +1042,7 @@ def run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, targe
 	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
 	print("Baseline classifier using DecisionTree: %s of %s values correct." % (num_correct, len(y_test)))
 	# plot learning curve
-	plot_learning_curve(dectree, 'dectree', X_all, y_all, n_jobs=1)
+	plot_learning_curve(dectree, 'dectree learning curve', X_all, y_all, n_jobs=1)
 	print('Accuracy of DecisionTreeClassifier classifier on training set {:.2f}'.format(dectree.score(X_train, y_train)))
 	print('Accuracy of DecisionTreeClassifier classifier on test set {:.2f}'.format(dectree.score(X_test, y_test)))
 	dotgraph = plot_decision_tree(dectree, X_features, target_variable)
@@ -1016,7 +1088,7 @@ def run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features, t
 	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
 	print("Baseline classifier using eXtremeGradientBossting: %s of %s values correct." % (num_correct, len(y_test)))
 	# plot learning curve
-	plot_learning_curve(XGBmodel, 'XGBmodel', X_all, y_all, n_jobs=1)
+	plot_learning_curve(XGBmodel, 'XGBmodel learning curve', X_all, y_all, n_jobs=1)
 	print('Accuracy of XGBmodel classifier on training set {:.2f}'.format(XGBmodel.score(X_train, y_train)))
 	print('Accuracy of XGBmodel classifier on test set {:.2f}'.format(XGBmodel.score(X_test, y_test)))
 	#plot confusion matrix and AUC
@@ -1071,7 +1143,7 @@ def run_gradientboosting(X_train, y_train, X_test, y_test, X_features, threshold
 	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
 	print("Baseline classifier using GradientBoostingClassifier: %s of %s values correct." % (num_correct, len(y_test)))
 	# plot learning curve
-	plot_learning_curve(clf, 'GradientBoostingClassifier', X_all, y_all, n_jobs=1) #cv =3 by default
+	plot_learning_curve(clf, 'GradientBoostingClassifier learning curve', X_all, y_all, n_jobs=1) #cv =3 by default
 	print('GradientBoostingClassifier learningrate={} max depth= {}'.format(learn_r,max_depth))
 	print('Accuracy of GradientBoostingClassifier on training set {:.2f}'.format(clf.score(X_train, y_train)))
 	print('Accuracy of GradientBoostingClassifier on test set {:.2f}'.format(clf.score(X_test, y_test)))
@@ -1108,7 +1180,7 @@ def run_svm(X_train, y_train, X_test, y_test, X_features, threshold=None):
 	kfolds = StratifiedKFold(5)
 	#Generate indices to split data into training and test set.
 	cv = kfolds.split(X_all,y_all)
-	title ='Learning Curves vanilla linearSVM'
+	title ='linearSVM Learning Curve'
 	plot_learning_curve(svm, title, X_all, y_all, ylim=(0.7, 1.01), cv=cv, n_jobs=4)
 	print('Accuracy of SVM classifier on training set {:.2f}'.format(svm.score(X_train, y_train)))
 	print('Accuracy of SVM classifier on test set {:.2f}'.format(svm.score(X_test, y_test)))
@@ -1148,7 +1220,7 @@ def run_naive_Bayes(X_train, y_train, X_test, y_test, thresh=None):
 	print("Baseline classifier using Naive Bayes: %s of %s values correct." % (num_correct, len(y_test)))
 	# plot learning curve
 	#http://scikit-learn.org/stable/auto_examples/model_selection/plot_learning_curve.html#sphx-glr-auto-examples-model-selection-plot-learning-curve-py
-	plot_learning_curve(nbayes, 'Naive Bayes classifier', X_all, y_all, n_jobs=4)	
+	plot_learning_curve(nbayes, 'Naive Bayes classifier learning curve', X_all, y_all, n_jobs=4)	
 	print('Accuracy of GaussianNB classifier on training set {:.2f}'.format(nbayes.score(X_train, y_train)))
 	print('Accuracy of GaussianNB classifier on test set {:.2f}'.format(nbayes.score(X_test, y_test)))
 	#plot_class_regions_for_classifier(nbayes,X_train, y_train, X_test, y_test, 'Gaussian naive classifier')
@@ -1175,7 +1247,7 @@ def run_randomforest(X_train, y_train, X_test, y_test, X_features, threshold=Non
 	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
 	print("Baseline classifier using RandomForestClassifier: %s of %s values correct." % (num_correct, len(y_test)))
 	# plot learning curve
-	plot_learning_curve(rf, 'RandomForestClassifier', X_all, y_all, n_jobs=1)	
+	plot_learning_curve(rf, 'RandomForestClassifier learning curve', X_all, y_all, n_jobs=1)	
 	print('Accuracy of RandomForestClassifier classifier on training set {:.2f}'.format(rf.score(X_train, y_train)))
 	print('Accuracy of RandomForestClassifier classifier on test set {:.2f}'.format(rf.score(X_test, y_test)))
 	#plot confusion matrix and AUC
@@ -1253,7 +1325,7 @@ def run_logreg(X_train, y_train, X_test, y_test, threshold=None):
 	# model prediction
 	y_train_pred = logreg.predict_proba(X_train)[:,1]
 	y_test_pred = logreg.predict_proba(X_test)[:,1]
-	print("Y test predict proba:{}".format(y_test_pred))
+	#print("Y test predict proba:{}".format(y_test_pred))
 	y_pred = [int(a) for a in logreg.predict(X_test)]
 	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
 	print("Baseline classifier using LogReg: %s of %s values correct." % (num_correct, len(y_test)))
@@ -1270,6 +1342,39 @@ def run_logreg(X_train, y_train, X_test, y_test, threshold=None):
 	plt.tight_layout()
 	plt.show()
 	return logreg
+
+def run_multi_layer_perceptron(X_train, y_train, X_test, y_test):
+	""" run_multi_layer_perceptron
+	Args:
+	Output: """
+	#create MLP with 1 hidden layer ans 1== logistic regression,10 and 100 units 
+	# solver is the algorithm to learn the weights of the network
+	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
+	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
+	fig, subaxes = plt.subplots(1,3, figsize=(5,15))	
+	X_all = np.concatenate((X_train, X_test), axis=0)
+	y_all = np.concatenate((y_train, y_test), axis=0)
+	for units, axis in zip([1,10,100],subaxes):
+		mlp = MLPClassifier(hidden_layer_sizes = [units], solver = 'lbfgs', random_state = 0).fit(X_train, y_train)
+		#title = 'MultiLayerPerceptron layer with {} units'.format(units)
+		print('Accuracy MLP 1 hidden layer units = {}, score= {:.2f} on training'.format(units, mlp.score(X_train, y_train)))
+		print('Accuracy MLP 1 hidden layer units = {}, score= {:.2f} on test'.format(units, mlp.score(X_test, y_test)))
+	#fig, subaxes = plt.subplots(1,3, figsize=(5,15))	
+	#plot_class_regions_for_classifier_subplot(mlp, X_train, y_train, X_test, y_test, title, axis)
+	#plt.tight_layout()
+	#create MLP with 2 hidden layers with 100 units each
+	unitsperlayer = [10,10, 10,10]
+	mlp_layers = MLPClassifier(hidden_layer_sizes = unitsperlayer, alpha = 5.0, solver = 'lbfgs', random_state = 0).fit(X_train, y_train)
+	print('Accuracy MLP hidden layer size = {} on training set {:.2f}'.format(unitsperlayer, mlp_layers.score(X_train, y_train)))
+	print('Accuracy MLP hidden layer size = {} on test set {:.2f}'.format(unitsperlayer, mlp_layers.score(X_test, y_test)))
+	y_train_pred = mlp_layers.predict_proba(X_train)[:,1]
+	y_test_pred = mlp_layers.predict_proba(X_test)[:,1]
+	y_pred = [int(a) for a in mlp_layers.predict(X_test)]
+	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
+	print("Baseline classifier using MLP: %s of %s values correct." % (num_correct, len(y_test)))
+	# plot learning curve
+	plot_learning_curve(mlp_layers, 'MLP learning curve', X_all, y_all, n_jobs=1)
+	return mlp_layers #return mlp
 
 def plot_scatter_target_cond(df, preffix_longit_xandy, target_variable=None):	
 	"""scatter_plot_pair_variables_target: scatter dataframe features and coloured based on target variable values
@@ -1369,56 +1474,241 @@ class BatchLogger(Callback):
         d =  pd.Series(self.log_values[metric_name])
         return d.rolling(window,center=False).mean()
 
-def run_Keras_DN(X_train, y_train, X_test, y_test):
-	""" run_Keras_DN: deep network classifier using keras
+def build_model_with_keras(X_train):
+	""" build_model_with_keras
+	Args:
+	Outoput:compiled keras model""" 
+	activation = 'relu'; optimizer = 'rmsprop'; loss = 'binary_crossentropy'; metrics=['accuracy'];
+	model = Sequential() 
+	model.add(Dense(8, activation=activation,  kernel_initializer='uniform', kernel_regularizer=regularizers.l2(0.001), input_shape=(X_train.shape[1],)))
+	model.add(Dropout(0.5))
+	model.add(Dense(8,  kernel_initializer='uniform', kernel_regularizer=regularizers.l2(0.001), activation=activation))
+	model.add(Dropout(0.5))
+	model.add(Dense(1,  kernel_initializer='uniform', activation='sigmoid'))
+	model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
+	print ("Model created! activation:{}, optimizer:{}, loss:{}, metrics:{}".format(activation,optimizer,loss,metrics))
+	return model
+
+def run_keras_deep_learning(X_train, y_train, X_test, y_test):
+	""" run_keras_deep_learning: deep network classifier using keras
 	Args: X_train, y_train, X_test, y_test
 	Output:
 	Remember to activate the virtual environment source ~/git...code/tensorflow/bin/activate"""
-
+ 	from keras import callbacks
 	####  run_keras_dn(dataset, X_train, X_test, y_train, y_test):
+	input_samples = X_train.shape[0]
 	input_dim = X_train.shape[1]
-	model = Sequential()
-	model.add(Dense(16, input_shape=(input_dim,), activation='relu'))
-	model.add(Dense(1,  activation='sigmoid'))
-	model.compile(optimizer='adam', loss='binary_crossentropy', metrics=['accuracy'])
-	bl = BatchLogger()
-	history = model.fit(np.array(X_train), np.array(y_train),batch_size=25, epochs=15, \
-		verbose=1, callbacks=[bl],validation_data=(np.array(X_test), np.array(y_test)))
-	score = model.evaluate(np.array(X_test), np.array(y_test), verbose=0)
-	print('Test log loss:', score[0])
-	print('Test accuracy:', score[1])
-	
+	# set apart the 10 % of the training set for validation
+	x_val = X_train[:int(input_samples*0.1)]
+	partial_x_train = X_train[int(input_samples*0.1):]
+	y_val = y_train[:int(input_samples*0.1)]
+	partial_y_train = y_train[int(input_samples*0.1):]
+	# Deep network model run_keras_deep_learning
+	model = build_model_with_keras(X_train)
+	# Evaluating model (no K-fold xvalidation) 
+	#bl = BatchLogger() oibluy for GPU, training way too long in cpu, only for .fit with validation_split
+	callbacks = [callbacks.TensorBoard(log_dir='logs_tensorboard',histogram_freq=1, embeddings_freq=1,)]  
+	num_epochs = 200
+	#history = model.fit(X_train, y_train, epochs=num_epochs, batch_size=16, \
+	#	verbose=2, validation_split=0.2, callbacks=callbacks)
+	history = model.fit(partial_x_train, partial_y_train, epochs=num_epochs, batch_size=16, \
+		verbose=2, validation_data=(x_val, y_val))
+	model_loss, model_acc = model.evaluate(X_test, y_test)
+	print("Deep Network Loss={}, accuracy={}".format(model_loss, model_acc))
+	#compare accuraccy with  a purely random classifier 
+	y_test_copy = np.copy(y_test)
+	np.random.shuffle(y_test_copy)
+	hits_array = np.array(y_test) == np.array(y_test_copy)
+	chance_acc = float(np.sum(hits_array)) / len(y_test)
+	print("\nModel accuracy ={:.3f} Dummy model accuracy={:.3f}".format(model_acc,chance_acc))
+	#print("Model predictions ={}".format(model.predict(X_test).ravel()))
+	plot_model(model, show_shapes=True, to_file='dn_model_nocv.png')
+	#plot training and validation loss/accuracy
 	plt.figure(figsize=(15,5))
-	plt.subplot(1, 2, 1)
-	plt.title('loss, per batch')
-	plt.legend(['train', 'test'])
-	plt.plot(bl.get_values('loss',1), 'b-', label='train');
-	plt.plot(bl.get_values('val_loss',1), 'r-', label='test');
+	msgtitle ='Deep Network (no k-fold)'
+	plt.suptitle(msgtitle)
 	plt.subplot(1, 2, 2)
-	plt.title('accuracy, per batch')
-	plt.plot(bl.get_values('acc',1), 'b-', label='train');
-	plt.plot(bl.get_values('val_acc',1), 'r-', label='test');
+	loss = history.history['loss']
+	val_loss = history.history['val_loss']
+	epochs = range(1, len(loss) + 1)
+	plt.plot(epochs, loss, 'bo', label='Training loss')
+	plt.plot(epochs, val_loss, 'b', label='Validation loss')
+	plt.title('Training and validation loss')
+	plt.xlabel('Epochs')
+	plt.ylabel('Loss')
+	plt.legend()	
+	plt.subplot(1, 2, 1)
+	acc = history.history['acc']
+	val_acc = history.history['val_acc']
+	plt.plot(epochs, acc, 'bo', label='Training acc')
+	plt.plot(epochs, val_acc, 'b', label='Validation acc')
+	plt.title('Training and validation accuracy')
+	plt.xlabel('Epochs')
+	plt.ylabel('Accuracy')
+	plt.legend()
 	plt.show()
-	#
+	# K-fold cross-validation
+	k = 4
+	num_val_samples = X_train.shape[0] // 4
+	all_scores = [];acc_history = [];loss_history= []
+	for i in range(k):
+		print("Processing fold #",i)
+		val_data = X_train[i * num_val_samples: (i + 1) * num_val_samples]
+		val_targets = y_train[i * num_val_samples: (i + 1) * num_val_samples]
+		partial_train_data = np.concatenate([X_train[:i * num_val_samples],X_train[(i + 1) * num_val_samples:]],axis=0)
+		partial_train_targets = np.concatenate([y_train[:i * num_val_samples],y_train[(i + 1) * num_val_samples:]],axis=0)  
+		#build model, returns a compiled model
+		model = build_model_with_keras(X_train)
+		plot_model(model, show_shapes=True, to_file='dn_model_cv.png')
+		#evaluate the network (trains the model)
+		history = model.fit(partial_train_data,partial_train_targets, validation_data=(val_data, val_targets), epochs=num_epochs, batch_size=16, verbose=1)
+ 		#evaluates model in validation data
+		eval_loss, eval_acc = model.evaluate(val_data, val_targets, verbose=0)
+		all_scores.append(eval_acc)
+		#keep a record of how well the model does at each epoch, save the per-epoch validation score log.
+		#history.history.keys()
+		accu = history.history['val_acc'] #one value for each epoch (epocs,1)
+		lo = history.history['val_loss']
+		acc_history.append(accu)
+		loss_history.append(lo)
 	
-	y_train_pred = model.predict_on_batch(np.array(X_train))[:,0]
-	y_test_pred = model.predict_on_batch(np.array(X_test))[:,0]
-	fig,ax = plt.subplots(1,3)
-	fig.set_size_inches(15,5)
-	plot_cm(ax[0], y_train, y_train_pred, [0,1], 'DN Confusion matrix (TRAIN)')
-	plot_cm(ax[1], y_test, y_test_pred, [0,1], 'DN Confusion matrix (TEST)')
-	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred)   
+	print("all_scores validation, mean={} std=({})".format(np.mean(all_scores),np.std(all_scores)))	
+	average_accuracy_history = [np.mean([x[i] for x in acc_history]) for i in range(num_epochs)]
+	average_loss_history = [np.mean([x[i] for x in loss_history]) for i in range(num_epochs)]
+	#plot k-fold cross validation loss/accuracy
+	plt.figure(figsize=(15,5))
+	msgtitle = str(k) + '-fold cross validation Deep Network'
+	plt.suptitle(msgtitle)
+	plt.subplot(1, 2, 1)
+	plt.plot(range(1, len(average_accuracy_history) + 1), average_accuracy_history)
+	plt.xlabel('Epochs')
+	plt.ylabel('Validation Acc')
+	plt.show()
+	plt.subplot(1, 2, 2)
+	plt.plot(range(1, len(average_loss_history) + 1), average_loss_history)
+	plt.xlabel('Epochs')
+	plt.ylabel('Validation Loss')
+	plt.show()
+	#Once you’re finished tuning other parameters of the model (in addition to the number of epochs, whne starts overfiting,beyond that we dont need more epochs
+	#you could also adjust the size of the hidden layers), you can train a final production model
+	#on all of the training data, with the best parameters, and then look at its performance on the test data.
+	# Training the final model
+	print("Training the final model with the best parameters")
+	model = build_model_with_keras(X_train)
+	model.fit(X_train, y_train, epochs=20, batch_size=16, verbose=0)
+	model_loss, model_acc = model.evaluate(X_test, y_test)
+	#compare accuraccy with  a purely random classifier 
+	y_test_copy = np.copy(y_test)
+	np.random.shuffle(y_test_copy)
+	hits_array = np.array(y_test) == np.array(y_test_copy)
+	chance_acc = float(np.sum(hits_array)) / len(y_test)
+	print("\n**** Final Model accuracy ={:.3f} Dummy model accuracy={:.3f}".format(model_acc,chance_acc))
+	return model
+
+def _joint_probabilities_constant_sigma(D, sigma):
+	P = np.exp(-D**2/2 * sigma**2)
+	P /= np.sum(P, axis=1)
+	return P
+
+def run_tSNE_manifold_learning(X_train, y_train, X_test, y_test):
+	""" run_tSNE_manifold_learning: manifold learning to visualize high dimensional data space
+	Args:X_train, y_train, X_test, y_test
+	Outputs: """
+	# Pairwise distances between all data points
+	import sklearn
+	import matplotlib.patches as mpatches
+	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
+	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
+	X_all = np.concatenate((X_train, X_test), axis=0)
+	y_all = np.concatenate((y_train, y_test), axis=0)
+	D = pairwise_distances(X_all, squared=True)
+	# Similarity with constant sigma.
+	sigma = .002
+	P_constant = _joint_probabilities_constant_sigma(D, sigma)
+	# Similarity with variable sigma.
+	P_binary = _joint_probabilities(D, 30., False)
+	# The output of this function needs to be reshaped to a square matrix.
+	P_binary_s = squareform(P_binary)
+	#display the distance matrix of the data points D, and the similarity matrix
+	#with both a constant P_constant and variable sigma P_constant_s.
+	plt.figure(figsize=(12, 4))
+	pal = sns.light_palette("blue", as_cmap=True)
+	plt.subplot(131)
+	#plot only every 10th element
+	#plt.imshow(D[::10, ::10], interpolation='none', cmap=pal)
+	plt.imshow(D, interpolation='none', cmap=pal)
+	plt.axis('on')
+	plt.title("Distance matrix", fontdict={'fontsize': 14})
+	plt.subplot(132)
+	plt.imshow(P_constant, interpolation='none', cmap=pal)
+	plt.axis('off')
+	plt.title("$p_{j|i}$ (constant $\sigma$=" + str(sigma) +")", fontdict={'fontsize': 14})
+
+	plt.subplot(133)
+	plt.imshow(P_binary_s, interpolation='none', cmap=pal)
+	plt.axis('off')
+	plt.title("$p_{j|i}$ (variable $\sigma$)", fontdict={'fontsize': 14})
+	plt.savefig('images/similarity-generated.png', dpi=120)
+	#Calculate the map pint matrix Q using KL and gradient descent to minimize the score
+	# This list will contain the positions of the map points at every iteration
+	positions = []
+	def _gradient_descent(objective, p0, it, n_iter, n_iter_check=1,n_iter_without_progress=30,
+		momentum=0.5, learning_rate=1000.0, min_gain=0.01,
+		min_grad_norm=1e-7, min_error_diff=1e-7, verbose=0,
+		args=[],kwargs=None):
+		# The documentation of this function can be found in scikit-learn's code.
+		p = p0.copy().ravel()
+		update = np.zeros_like(p)
+		gains = np.ones_like(p)
+		error = np.finfo(np.float).max
+		best_error = np.finfo(np.float).max
+		best_iter = 0
+
+		for i in range(it, n_iter):
+			# We save the current position.
+			positions.append(p.copy())
+			new_error, grad = objective(p, *args)
+			error_diff = np.abs(new_error - error)
+			error = new_error
+			grad_norm = np.linalg.norm(grad)
+			if error < best_error:
+				best_error = error
+				best_iter = i
+			elif i - best_iter > n_iter_without_progress:
+				break
+			if min_grad_norm >= grad_norm:
+				break
+			if min_error_diff >= error_diff:
+				break
+			inc = update * grad >= 0.0
+			dec = np.invert(inc)
+			gains[inc] += 0.05
+			gains[dec] *= 0.95
+			np.clip(gains, min_gain, np.inf)
+			grad *= gains
+			update = momentum * update - learning_rate * grad
+			p += update
+		return p, error, i
+		
+	sklearn.manifold.t_sne._gradient_descent = _gradient_descent
+	X_proj =TSNE(random_state=0).fit_transform(X_all)
+	plt.figure(figsize=(9,9))
+	
+	for i in range(X_proj.shape[0]):
+		if y_all[i] < 1:
+			plt.scatter(X_proj[i,0],X_proj[i,1], color='b', alpha=0.5, label='conversion: NO')
+		else:
+			plt.scatter(X_proj[i,0],X_proj[i,1], color='r', alpha=0.5, label='conversion: YES')
 	plt.tight_layout()
+	plt.title('tSNE map point')
+	red_patch = mpatches.Patch(color='r', label='converters')
+	blue_patch = mpatches.Patch(color='b', label='Non converters')
+	plt.legend(handles=[red_patch, blue_patch])
+	plt.axis('off')
 	plt.show()
-	
-	# we build a new model with the activations of the old model
-	# this model is truncated before the last layer
-	model2 = Sequential()
-	model2.add(Dense(16, input_shape=(input_dim,), activation='relu', weights=model.layers[0].get_weights()))
-	activations = model2.predict_on_batch(np.array(X_test))
-	ax[0].legend('conversion')
-	ax[1].legend('no conversion')
-	return model, model2, activations
+	X_iter = np.dstack(position.reshape(-1, 2) for position in positions)
+	# create an animation using MoviePy.
+
 
 def run_TDA_with_Kepler(samples, activations):
 	""" """
@@ -1438,17 +1728,6 @@ def run_TDA_with_Kepler(samples, activations):
 	from IPython.display import IFrame
 	IFrame('output.html', width='100%', height=700)
 	pdb.set_trace()
-
-def run_tSNE_analysis(activations, y_test):
-	tsne = TSNE(n_components=2, perplexity=25, verbose=0, n_iter=500, random_state=1337)
-	samples = tsne.fit_transform(activations)
-	fig,ax = plt.subplots(1,2)
-	fig.set_size_inches(15,5)
-	ax[0].scatter(*samples[y_test==0].T,color='b', alpha=0.5, label='conversion: NO')
-	ax[1].scatter(*samples[y_test==1].T,color='r', alpha=0.5, label='conversion: YES')
-	plt.tight_layout()
-	plt.show()
-	return samples
 
 def calculate_top_features_contributing_class(clf, features, numbertop=None):
 	""" calculate_top_features_contributing_class: print the n features contributing the most to class labels for a fitted estimator.
