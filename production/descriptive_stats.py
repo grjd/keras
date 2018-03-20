@@ -27,7 +27,9 @@ import itertools
 import warnings
 from copy import deepcopy
 
+from scipy import stats
 from scipy.cluster.hierarchy import dendrogram, linkage, cophenet
+from scipy.spatial.distance import squareform, pdist
 from sklearn.linear_model import SGDClassifier, LogisticRegression, Lasso
 from sklearn.neural_network import MLPClassifier
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, StratifiedKFold, ShuffleSplit, KFold
@@ -40,7 +42,7 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.datasets.mldata import fetch_mldata
-from scipy.spatial.distance import squareform, pdist
+
 # We'll hack a bit with the t-SNE code in sklearn 0.15.2.
 from sklearn.decomposition import TruncatedSVD
 from sklearn.metrics.pairwise import pairwise_distances
@@ -86,9 +88,12 @@ def main():
 
 	features_static =  dict_features['vanilla'] + dict_features['sleep'] + dict_features['anthropometric'] + \
 	dict_features['family_history'] + dict_features['sensory'] +  dict_features['intellectual'] + dict_features['demographics'] +\
-	dict_features['professional'] +  dict_features['cardiovascular'] + dict_features['ictus'] + dict_features['diet']\
-	
-	features_year1 = [s for s in dataframe.keys().tolist()  if "visita1" in s]; 
+	dict_features['professional'] +  dict_features['cardiovascular'] + dict_features['ictus'] + dict_features['diet']
+	all_features = dataframe.keys().tolist()
+	#Remove cognitive performance features for data leakage
+	features_to_remove = ['mmse_visita1','reloj_visita1','faq_visita1','fcsrtrl1_visita1','fcsrtrl2_visita1','fcsrtrl3_visita1','fcsrtlibdem_visita1','p_visita1','animales_visita1','cn_visita1','cdrsum_visita1']
+	selected_features = [x for x in all_features if x not in features_to_remove]
+	features_year1 = [s for s in selected_features  if "visita1" in s ];
 	#features_year2 = [s for s in dataset.keys().tolist()  if "visita2" in s]; features_year2.remove('fecha_visita2')
 	#features_year3 = [s for s in dataset.keys().tolist()  if "visita3" in s]; features_year3.remove('fecha_visita3'); features_year3.remove('act_prax_visita3'), features_year3.remove('act_comp_visita3')
 	#features_year4 = [s for s in dataset.keys().tolist()  if "visita4" in s]; features_year4.remove('fecha_visita4'); features_year4.remove('act_prax_visita4'), features_year4.remove('act_comp_visita4')
@@ -176,6 +181,7 @@ def main():
 	
 	# (6) Feature Engineering
 	#expla_features = sorted(X_df_scaled.kyes().tolist()); set(expla_features) == set(explanatory_features) d
+	
 	formula= build_formula(explanatory_features)
 	# build design matrix(patsy.dmatrix) and rank the features in the formula y ~ X 
 	X_prep = run_feature_ranking(Xy_df_scaled, formula)
@@ -187,12 +193,15 @@ def main():
 	X = Xy_df_scaled[X_features].values
 	X_train, X_test, y_train, y_test = run_split_dataset_in_train_test(X, y, test_size=0.2)
 	#####
-	run_hierarchical_clustering(np.concatenate((X_train, X_test), axis=0))
+	xgbm_estimator = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
 	pdb.set_trace()
+	
 	svd_reduced = run_truncatedSVD(X_train, y_train, X_test, y_test)
 	tSNE_reduced  = run_tSNE_manifold_learning(X_train, y_train, X_test, y_test)
 	deepnetwork_res = run_keras_deep_learning(X_train, y_train, X_test, y_test)
 	mlp_estimator = run_multi_layer_perceptron(X_train, y_train, X_test, y_test)
+	pdb.set_trace()
+	run_hierarchical_clustering(np.concatenate((X_train, X_test), axis=0))
 
 	knn = run_kneighbors(X_train, y_train, X_test, y_test)
 	svm_estimator = run_svm(X_train, y_train, X_test, y_test, X_features)
@@ -509,7 +518,6 @@ def split_features_in_groups():
 	intellectual = ['a01' , 'a02' , 'a03' , 'a04' , 'a05' , 'a06' , 'a07' , 'a08' , 'a09' , 'a10' , 'a11' , 'a12' , 'a13' , 'a14'] 
 	demographics = ['sdhijos' , 'numhij' , 'sdvive' , 'sdeconom' , 'sdresid' , 'sdestciv']
 	professional = ['sdtrabaja' , 'sdocupac', 'sdatrb']
-	demographics = ['sdhijos' , 'numhij' , 'sdvive' , 'sdeconom' , 'sdresid' , 'sdestciv']
 	cardiovascular = ['hta', 'hta_ini', 'glu', 'lipid', 'tabac', 'tabac_ini', 'tabac_fin', 'tabac_cant', 'sp', 'cor', 'cor_ini', 'arri', 'arri_ini', 'card', 'card_ini']
 	ictus = ['tir', 'ictus', 'ictus_num', 'ictus_ini', 'ictus_secu', 'tce', 'tce_num', 'tce_ini', 'tce_con', 'tce_secu']
 	diet = ['alfrut', 'alcar', 'alpesblan', 'alpeszul', 'alaves', 'alaceit', 'alpast', 'alpan', 'alverd', 'alleg', 'alemb', 'allact', 'alhuev', 'aldulc']
@@ -561,12 +569,12 @@ def build_formula(features):
 	formula += ' + ' + ' + '.join(selcols('act_comp_visita',1,1));formula += ' + ' + ' + '.join(selcols('act_ejec_visita',1,1));
 	formula += ' + ' + ' + '.join(selcols('act_prax_visita',1,1));
 	#cognitive performance
-	formula += ' + ' + ' + '.join(selcols('mmse_visita',1,1));formula += ' + ' + ' + '.join(selcols('reloj_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('faq_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('fcsrtrl1_visita',1,1));formula += ' + ' + ' + '.join(selcols('fcsrtrl2_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('fcsrtrl3_visita',1,1));formula += ' + ' + ' + '.join(selcols('fcsrtlibdem_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('p_visita',1,1));formula += ' + ' + ' + '.join(selcols('animales_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('cn_visita',1,1));formula += ' + ' + ' + '.join(selcols('cdrsum_visita',1,1));
+	# formula += ' + ' + ' + '.join(selcols('mmse_visita',1,1));formula += ' + ' + ' + '.join(selcols('reloj_visita',1,1));
+	# formula += ' + ' + ' + '.join(selcols('faq_visita',1,1));
+	# formula += ' + ' + ' + '.join(selcols('fcsrtrl1_visita',1,1));formula += ' + ' + ' + '.join(selcols('fcsrtrl2_visita',1,1));
+	# formula += ' + ' + ' + '.join(selcols('fcsrtrl3_visita',1,1));formula += ' + ' + ' + '.join(selcols('fcsrtlibdem_visita',1,1));
+	# formula += ' + ' + ' + '.join(selcols('p_visita',1,1));formula += ' + ' + ' + '.join(selcols('animales_visita',1,1));
+	# formula += ' + ' + ' + '.join(selcols('cn_visita',1,1));formula += ' + ' + ' + '.join(selcols('cdrsum_visita',1,1));
 	#psychioatric symptomes
 	formula += ' + ' + ' + '.join(selcols('gds_visita',1,1));
 	formula += ' + ' + ' + '.join(selcols('stai_visita',1,1));
@@ -663,13 +671,11 @@ def plot_dendogram(Z):
 	plt.show()
 	# a huge jump in distance is typically what we're interested in if we want to argue for a certain number of clusters
 
-	pdb.set_trace()
-
 def run_hierarchical_clustering(X):
-	""" run_hierarchical_clustering: 
-	Args:
+	""" run_hierarchical_clustering: hierarchical clustering algorithm and plot dendogram
+	Args:X ndarray X_train and X_test concatenated
 	Output:
-
+	Exxample: run_hierarchical_clustering(X) # X is the dataset (without the labels)
 	"""
 	# generate the linkage matrix using Ward variance minimization algorithm.
 	#no matter the method and metric specified, linkage() function will use that method and metric
@@ -678,15 +684,53 @@ def run_hierarchical_clustering(X):
 	#the smallest distance according the selected method and metric
 	#[idx1, idx2, dist, sample_count] 
 	#Plotting a Dendrogram. X=X.T clustering of features, X clustering of subjects
+	import pylab
+	from sklearn.metrics.pairwise import euclidean_distances
+	#labels = ['a','b','c','d']
 	X = X.T
-	Z = linkage(X, 'ward')
+	D = euclidean_distances(X, X)
+	if sum(np.diagonal(D)) > 0:
+		raise SomethingError("The distance matrix is not diagonal!!!!")
+	Z = linkage(D, 'ward') #method='centroid'
 	# Cophenetic Correlation Coefficient compares (correlates) the actual 
 	#pairwise distances of all your samples to those implied by the hierarchical clustering
 	c, coph_dists = cophenet(Z, pdist(X))
-	print("Cophenetic Correlation Coefficient ={:.3f} The closer the value is to 1, \
-		the better the clustering preserves the original distances".format(c))
+	print("Cophenetic Correlation Coefficient ={:.3f} The closer the value is to 1,the better the clustering preserves the original distances".format(c))
 	plot_dendogram(Z)
-
+	# Plot dendogram and distance matrix
+	#https://stackoverflow.com/questions/2982929/plotting-results-of-hierarchical-clustering-ontop-of-a-matrix-of-data-in-python
+	# Compute and plot first dendrogram.
+	fig = pylab.figure(figsize=(8,8))
+	ax1 = fig.add_axes([0.09,0.1,0.2,0.6])
+	Y = linkage(D, method='centroid')
+	Z1 = dendrogram(Y, orientation='right')
+	print("values passed to leaf_label_func\nleaves : ", Z1["leaves"])
+	#temp = {Z1["leaves"][ii]: labels[ii] for ii in range(len(Z1["leaves"]))}
+	ax1.set_xticks([])
+	ax1.set_yticks([])
+	ax1.set_title('Centroid linkage)')
+	# Compute and plot second dendrogram.
+	ax2 = fig.add_axes([0.3,0.71,0.6,0.2])
+	Y = linkage(D, method='ward')
+	Z2 = dendrogram(Y)
+	ax2.set_xticks([])
+	ax2.set_yticks([])
+	ax2.set_title('Ward linkage)')
+	# Plot distance matrix.
+	axmatrix = fig.add_axes([0.3,0.1,0.6,0.6])
+	idx1 = Z1['leaves']
+	idx2 = Z2['leaves']
+	D = D[idx1,:]
+	D = D[:,idx2]
+	
+	im = axmatrix.matshow(D, aspect='auto', origin='lower', cmap=pylab.cm.YlGnBu)
+	axmatrix.set_xticks([])
+	axmatrix.set_yticks([])
+	# Plot colorbar.
+	axcolor = fig.add_axes([0.91,0.1,0.02,0.6])
+	pylab.colorbar(im, cax=axcolor)
+	fig.show()
+	fig.savefig('images/dendrogram.png')
 
 def run_truncatedSVD(X_train, y_train, X_test, y_test):
 	""" run_truncatedSVD: dimensionality reduction for sparse matrices (Single Value decompotitoion)
@@ -1035,7 +1079,7 @@ def run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, targe
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
-	dectree = DecisionTreeClassifier(max_depth=3).fit(X_train, y_train)
+	dectree = DecisionTreeClassifier(max_depth=3, class_weight='balanced').fit(X_train, y_train)
 	y_train_pred = dectree.predict_proba(X_train)[:,1]
 	y_test_pred = dectree.predict_proba(X_test)[:,1]
 	y_pred = [int(a) for a in dectree.predict(X_test)]
@@ -1081,7 +1125,9 @@ def run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features, t
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
-	XGBmodel = XGBClassifier().fit(X_train, y_train)
+	ratio01s= int(sum(y_train==0)/sum(y_train==1))
+	sample_weight = np.array([2 if i == 1 else 0 for i in y_train])
+	XGBmodel = XGBClassifier(class_weight='balanced').fit(X_train, y_train,sample_weight=None)
 	y_train_pred = XGBmodel.predict_proba(X_train)[:,1]
 	y_test_pred = XGBmodel.predict_proba(X_test)[:,1]
 	y_pred = [int(a) for a in XGBmodel.predict(X_test)]
@@ -1133,10 +1179,13 @@ def run_gradientboosting(X_train, y_train, X_test, y_test, X_features, threshold
 	Output:
 	"""
 	# default setting are 0.1, 3 (larger learnign rate more complex trees more overfitting)
+
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
-	learn_r = 1; max_depth=6;
-	clf = GradientBoostingClassifier(learning_rate =learn_r, max_depth=max_depth, random_state=0).fit(X_train, y_train)
+	ratio01s= int(sum(y_train==0)/sum(y_train==1))
+	sample_weight = np.array([ratio01s if i == 1 else 1 for i in y_train])
+	learn_r = .001; max_depth=6;
+	clf = GradientBoostingClassifier(learning_rate =learn_r, max_depth=3, random_state=0).fit(X_train, y_train, sample_weight=sample_weight)
 	y_train_pred = clf.predict_proba(X_train)[:,1]
 	y_test_pred = clf.predict_proba(X_test)[:,1]
 	y_pred = [int(a) for a in clf.predict(X_test)]
@@ -1168,7 +1217,8 @@ def run_svm(X_train, y_train, X_test, y_test, X_features, threshold=None):
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
 	# SVM model, cost and gamma parameters for RBF kernel. out of the box
-	svm = SVC(cache_size=1000, kernel='rbf').fit(X_train, y_train)
+	#, class_weight='balanced'
+	svm = SVC(cache_size=1000, kernel='rbf',class_weight='balanced').fit(X_train, y_train)
 
 	y_train_pred = svm.predict(X_train)
 	y_test_pred = svm.predict(X_test)
@@ -1240,7 +1290,7 @@ def run_randomforest(X_train, y_train, X_test, y_test, X_features, threshold=Non
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
-	rf = RandomForestClassifier(n_estimators=500, max_features =60,min_samples_leaf=1).fit(X_train,y_train)
+	rf = RandomForestClassifier(n_estimators=60, max_features =10,min_samples_leaf=28, class_weight='balanced').fit(X_train,y_train)
 	y_train_pred = rf.predict_proba(X_train)[:,1]
 	y_test_pred = rf.predict_proba(X_test)[:,1]
 	y_pred = [int(a) for a in rf.predict(X_test)]
@@ -1320,7 +1370,7 @@ def run_logreg(X_train, y_train, X_test, y_test, threshold=None):
 	if threshold is None:
 		threshold = 0.5
 	# Create logistic regression object
-	logreg = LogisticRegression().fit(X_train, y_train)
+	logreg = LogisticRegression(class_weight='balanced').fit(X_train, y_train)
 	# Train the model using the training sets
 	# model prediction
 	y_train_pred = logreg.predict_proba(X_train)[:,1]
@@ -1369,6 +1419,11 @@ def run_multi_layer_perceptron(X_train, y_train, X_test, y_test):
 	print('Accuracy MLP hidden layer size = {} on test set {:.2f}'.format(unitsperlayer, mlp_layers.score(X_test, y_test)))
 	y_train_pred = mlp_layers.predict_proba(X_train)[:,1]
 	y_test_pred = mlp_layers.predict_proba(X_test)[:,1]
+	print("Compute PSI(population stability index or relative entropy \n")
+	psi = psi_relative_entropy(y_test_pred, y_train_pred, 10)
+	print("Compute kolmogorov test\n")
+	ks_two_samples_goodness_of_fit(y_test_pred,y_train_pred[:len(y_test_pred)])
+	pdb.set_trace()
 	y_pred = [int(a) for a in mlp_layers.predict(X_test)]
 	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
 	print("Baseline classifier using MLP: %s of %s values correct." % (num_correct, len(y_test)))
@@ -1959,6 +2014,58 @@ def run_correlation_matrix(dataset,feature_label=None):
 def chi_square_of_df_cols(df, col1, col2):
 	df_col1, df_col2 = df[col1], df[col2]
 	obs = np.array(df_col1, df_col2 ).T
+
+def ks_two_samples_goodness_of_fit(sample1, sample2):
+	"""ks_two_samples_goodness_of_fit: Perform a Kolmogorov-Smirnov two sample test that two data samples come from the same distribution. 
+	Note that we are not specifying what that common distribution is.  
+	Args: sample1, sample2 continuous distribution
+	Output:
+	"""
+	print("Kolmogorov smirnoff test: H0 2 independent samples are drawn from the same continuous distribution")
+	ks_stat, ks_pvalue = stats.ks_2samp(sample1, sample2)
+	print("[KS statistic={:.3f}, p-value{:.3f}]".format(ks_stat,ks_pvalue))
+	if ks_pvalue < 0.01:
+		print("We reject H0: y_pred and y_test come from the same continuous distribution")
+	else:
+		print("We can't reject H0: y_pred and y_test come from the same continuous distribution")
+		
+
+def psi_relative_entropy(bench, comp, group):
+	""" psi_relative_entropy: population stability index, metric to measure goodness of fit, is a measure of the stability
+	of a variable iover time. It is a symmetric version of KL. PSI <0.1 is stable, 0.1-0.25 needs monitoring,
+	 >0.25 stabilty of the variable is suspect. 
+	 To create a PSI, we need to select a benchmark. Normally a build sample is treated as a benchmark. 
+	 We create 10 or 20 bins from the benchmark. Then we compare the target against the benchmark
+	 https://qizeresearch.wordpress.com/2013/11/20/population-stability-index-psi/
+	 Args:bench list with the sample , comp list with the distrib target, group is the number of bins
+	 Output:psi
+	 Example: psi_relative_entropy([], [],  20)
+
+	"""
+	from math import floor, log
+	ben_len = len(bench)
+	comp  =comp[:ben_len]
+	comp_len = len(comp) 
+	bench.sort()
+	comp.sort()
+	psi_cut = []
+	n=int(floor(ben_len/group))
+	for i in range(1,group):
+		lowercut=bench[(i-1)*n+1]
+		if i!=group:
+			uppercut=bench[(i*n)]
+			ben_cnt=n
+		else:
+			uppercut=bench[-1]
+			ben_cnt=ben_len-group*(n-1)
+	comp_cnt = len([i for i in comp if i > lowercut and i<=uppercut])
+	ben_pct=(ben_cnt+0.0)/ben_len
+	comp_pct=(comp_cnt+0.0)/comp_len
+	psi_cut.append((ben_pct-comp_pct)*log(ben_pct/comp_pct))
+	psi=sum(psi_cut)
+	print("PSI ={}".format(psi))
+	return psi
+	
 
 def anova_test(df, feature=None, target_label=None):
 	""" The one-way analysis of variance (ANOVA) is used to determine whether there are any statistically significant differences between the means of three or more independent (unrelated) groups.
