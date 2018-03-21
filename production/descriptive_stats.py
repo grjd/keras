@@ -82,7 +82,7 @@ def main():
 	leakage_data(dataframe)
 	run_print_dataset(dataframe)
 	features_list = dataframe.columns.values.tolist()
-	dict_features  = split_features_in_groups()
+	dict_features = split_features_in_groups()
 	print("Dictionary of static(all years) features ".format(dict_features))
 	# Select subset of explanatory variables from prior information MUST include the target_variable
 
@@ -121,31 +121,20 @@ def main():
 	#print("Xy_imputed:\n{}".format(Xy_imputed))	
 	# If necessay, run_binarization_features and run_encoding_categorical_features
 	# remove duplicated feature names, NOTE conver to set rearrange the order of the features
-	#explanatory_features = list(set(explanatory_features))
-	#unique_explanatory = []
-	#[unique_explanatory.append(item) for item in explanatory_features if item not in unique_explanatory]
-	#explanatory_features = []
-	#explanatory_features = unique_explanatory
-
-	#if explanatory_features.index(target_variable) > 0:
-		# this is already checked in run_variable_selection
-	#	print("target variable:{} in position:{}".format(target_variable,explanatory_features.index(target_variable)))
-	#dataset=dataset.T.drop_duplicates().T
-	#explanatory_features =explanatory_features[:-1]
 	Xy = dataframe[explanatory_and_target_features].values
 	X = Xy[:,:-1]
 	X_scaled, scaler = run_transformations(X) # standarize to minmaxscale or others make input normal
-	print("X scaled dimensions:{} \n {}".format(X_scaled.shape, X_scaled))
+	print("X scaled dimensions:{} \n ".format(X_scaled.shape))
 	# (3.3) detect multicollinearity: Plot correlation and graphs of variables
 	#convert ndarray to pandas DataFrame
 	X_df_scaled = pd.DataFrame(X_scaled, columns=explanatory_features)
 	Xy_df_scaled = X_df_scaled
-	Xy_df_scaled['conversion'] = Xy[:,-1]
+	Xy_df_scaled[target_variable] = Xy[:,-1]
 	#corr_X_df = run_correlation_matrix(X_df_scaled, explanatory_features) #[0:30] correlation matrix of features
 	corr_Xy_df = run_correlation_matrix(Xy_df_scaled, explanatory_and_target_features) # correlation matrix of features and target
 	#corr_matrix = corr_df.as_matrix()
 	corr_with_target = corr_Xy_df[target_variable]
-	print("Correlations with the  target:\n{}".format(corr_with_target.sort_values()))
+	print("Correlations with the target:\n{}".format(corr_with_target.sort_values()))
 	#corr_with_target = calculate_correlation_with_target(Xdf_imputed_scaled, target_values) # correlation array of features with the target
 	threshold = np.mean(np.abs(corr_Xy_df.as_matrix())) + 1*np.std(np.abs(corr_Xy_df.as_matrix()))
 	graph = build_graph_correlation_matrix(corr_Xy_df, threshold, corr_with_target)
@@ -153,31 +142,36 @@ def main():
 	# # print sumary network metrics
 	print_summary_network(graph_metrics, nodes=corr_Xy_df.keys().tolist(), corrtarget=corr_with_target)
 	# #(4) Descriptive analytics: plot scatter and histograms
-	# longit_xy_scatter = ['scd_visita', 'fcsrtlibdem_visita'] #it works for longitudinal
-	# plot_scatter_target_cond(Xy_df_scaled,longit_xy_scatter, target_variable)
-	# features_to_plot = ['scd_visita1', 'fcsrtlibdem_visita1'] 
-	# plot_histogram_pair_variables(dataset, features_to_plot)
+	longit_xy_scatter = ['scd_visita', 'gds_visita'] #it works for longitudinal
+	plot_scatter_target_cond(Xy_df_scaled,longit_xy_scatter, target_variable)
+	features_to_plot = ['scd_visita1', 'gds_visita1'] 
+	plot_histogram_pair_variables(Xy_df_scaled, features_to_plot)
 	# #sp_visita (sobrepeso), depre_(depresion),ansi_,tce_(traumatismo), sue_dia_(duerme dia), sue_noc_(duerme noche), imc_(imc), cor_(corazon)
 	# #tabac_(fuma), valfelc_(felicidad) 
-	# longit_pattern = re.compile("^fcsrtlibdem_+visita[1-5]+$") 
+	longit_pattern = re.compile("^scd_+visita[1-5]+$") 
+	longit_pattern2 = re.compile("^stai_+visita[1-5]+$") 
+	longit_pattern3 = re.compile("^gds_+visita[1-5]+$") 
 	# longit_pattern = re.compile("^mmse_+visita[1-5]+$") 
 	# # plot N histograms one each each variable_visitai
-	# plot_histograma_one_longitudinal(dataset_orig, longit_pattern)
-	# #plot 1 histogram by grouping vlalues of one continuous feature 
-	# plot_histograma_bygroup(dataset_orig, 'mmse_visita1')
+	plot_histograma_one_longitudinal(dataframe_orig, longit_pattern)
+	plot_histograma_one_longitudinal(dataframe_orig, longit_pattern2)
+	plot_histograma_one_longitudinal(dataframe_orig, longit_pattern3)
+	# #plot 1 histogram by grouping values of one continuous feature 
+	plot_histograma_bygroup(Xy_df_scaled, 'sue_rec')
 	# # plot one histogram grouping by the value of the target variable
-	# plot_histograma_bygroup_target(dataset_orig, 'conversion')
+	plot_histograma_bygroup_target(Xy_df_scaled, target_variable)
 	# # plot some categorical features hardcoded inside the function gropued by target
 	# # categorical_features = ['sexo','nivel_educativo', 'apoe', 'edad']
-	# plot_histograma_bygroup_categorical(dataset_orig, target_variable)
+	plot_histograma_bygroup_categorical(dataframe_orig, target_variable)
+	
 	# # perform statistical tests: ANOVA
-	# features_to_test = ['scd_visita1']
-	# target_anova_variable = 'valsatvid_visita1'#'conversion' nivel_educativo' #tabac_visita1 depre_visita1
-	# run_statistical_tests(Xy_df_scaled,features_to_test, target_anova_variable)
+	features_to_test = ['scd_visita1']
+	target_anova_variable = 'conversion' # nivel_educativo' #tabac_visita1 depre_visita1
+	run_statistical_tests(Xy_df_scaled,features_to_test, target_anova_variable)
 	
 	# # (5) Dimensionality Reduction
-	# pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
-	# print("The variance ratio by the {} principal compments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
+	pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
+	print("The variance ratio by the {} principal compments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
 	
 	# (6) Feature Engineering
 	#expla_features = sorted(X_df_scaled.kyes().tolist()); set(expla_features) == set(explanatory_features) d
@@ -192,9 +186,18 @@ def main():
 		X_features.remove(target_variable)
 	X = Xy_df_scaled[X_features].values
 	X_train, X_test, y_train, y_test = run_split_dataset_in_train_test(X, y, test_size=0.2)
+	# resampling data with SMOTE
+	X_resampled_train, y_resampled_train = resampling_SMOTE(X_train, y_train)
+
+
+
 	#####
-	xgbm_estimator = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
+	deepnetwork_res = run_keras_deep_learning(X_train, y_train, X_test, y_test)
+
 	pdb.set_trace()
+	dectree_estimator =run_random_decision_tree(X_train, y_train, X_test, y_test, X_features,target_variable)
+	
+	xgbm_estimator = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
 	
 	svd_reduced = run_truncatedSVD(X_train, y_train, X_test, y_test)
 	tSNE_reduced  = run_tSNE_manifold_learning(X_train, y_train, X_test, y_test)
@@ -349,7 +352,7 @@ def plot_histograma_one_longitudinal(df, longit_pattern=None):
 	# plot histogram for longitudinal pattern
 	fig, ax = plt.subplots(2,3)
 	fig.set_size_inches(15,5)
-	fig.suptitle('Distribution of scd 5 visits')
+	#fig.suptitle('Distribution in' +  str(len(longit_status_columns)) + ' visits')
 	for i in range(len(longit_status_columns)):
 		row,col = int(i/3), i%3
 		d  = df[longit_status_columns[i]].value_counts()
@@ -372,13 +375,13 @@ def plot_histograma_bygroup(df, label=None):
 	print("Plotting histogram in log scale grouping by:{}".format(label))
 	df[label].describe()
 	fig = plt.figure()
-	fig.set_size_inches(20,5)
+	fig.set_size_inches(12,4)
 	ax = fig.add_subplot(111)
 	grd = df.groupby([label]).size()
 	ax.set_yscale("log")
 	ax.set_xticks(np.arange(len(grd)))
-	ax.set_xlabel(label + ': values ')
-	fig.suptitle(label)
+	ax.set_xlabel('Group by values of ' + label )
+	fig.suptitle('Histogram of ' + label + ' log scale')
 	#ax.set_xticklabels(['%d'  %i for i in d.index], rotation='vertical')
 	p = ax.bar(np.arange(len(grd)), grd, color='orange')
 	plt.show()
@@ -403,7 +406,13 @@ def plot_histograma_bygroup_categorical(df, target_variable=None):
 	df['sexo'] = df['sexo'].astype('category').cat.rename_categories(['M', 'F'])
 	df['nivel_educativo'] = df['nivel_educativo'].astype('category').cat.rename_categories(['~Pr', 'Pr', 'Se', 'Su'])
 	df['apoe'] = df['apoe'].astype('category').cat.rename_categories(['No', 'Het', 'Hom'])
-	df['edad_visita1_cat'] = pd.cut(df['edad_visita1'], range(0, 100, 10), right=False)
+	df['edad'] = pd.cut(df['edad'], range(0, 100, 10), right=False)
+	
+	df['alfrut'] = df['alfrut'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
+	df['alcar'] = df['alcar'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
+	df['aldulc'] = df['aldulc'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
+	df['alverd'] = df['alverd'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
+
 	#in absolute numbers
 	fig, ax = plt.subplots(1,4)
 	fig.set_size_inches(20,5)
@@ -414,7 +423,7 @@ def plot_histograma_bygroup_categorical(df, target_variable=None):
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[1])
 	d = df.groupby([target_variable, 'apoe']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[2])
-	d = df.groupby([target_variable, 'edad_visita1_cat']).size()
+	d = df.groupby([target_variable, 'edad']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[3])
 	#in relative numbers
 	fig, ax = plt.subplots(1,4)
@@ -429,7 +438,24 @@ def plot_histograma_bygroup_categorical(df, target_variable=None):
 	d = df.groupby([target_variable, 'apoe']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[2])
-	d = df.groupby([target_variable, 'edad_visita1_cat']).size().unstack(level=1)
+	d = df.groupby([target_variable, 'edad']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[3])
+	plt.show()
+	#in relative numbers
+	fig, ax = plt.subplots(1,4)
+	fig.set_size_inches(20,5)
+	fig.suptitle('Conversion by relative numbers, for Alimentation')
+	d = df.groupby([target_variable, 'alfrut']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[0])
+	d = df.groupby([target_variable, 'alcar']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[1])
+	d = df.groupby([target_variable, 'aldulc']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[2])
+	d = df.groupby([target_variable, 'alverd']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[3])
 	plt.show()
@@ -954,6 +980,21 @@ def build_dummy_scores(X_train, y_train, X_test, y_test):
 	dict_dummy_scores = {'uniform':dummy_scores[0] , 'constant0':dummy_scores[1],'constant1':dummy_scores[2]}
 	return dict_dummy_scores
 
+def resampling_SMOTE(X_train, y_train):
+	""" resampling_SMOTE: """
+	from imblearn.over_sampling import SMOTE
+	sm = SMOTE(ratio='minority',random_state=1234,kind='svm')
+	X_resampled_train, y_resampled_train = sm.fit_sample(X_train, y_train)
+	print('---------------Resampled data statistics---------------')
+	converters = sum(y_resampled_train)
+	converters_ratio = converters/y_resampled_train.shape[0]
+	nonconverters_ratio = 1-converters_ratio
+	print('Total number of subjects : {} '.format(len(y_resampled_train)))
+	print('Total number of non converters : {}'.format(sum(y_resampled_train==0)))
+	print('Total number of converters : {}'.format(sum(y_resampled_train==1)))
+	print('Percent of non converters is : {:.4f}%,  converters is : {:.4f}%'.format(nonconverters_ratio*100, converters_ratio*100))
+	return X_resampled_train, y_resampled_train
+	
 	
 def run_model_evaluation(y_true, y_pred):
 	""" """
@@ -1533,6 +1574,7 @@ def build_model_with_keras(X_train):
 	""" build_model_with_keras
 	Args:
 	Outoput:compiled keras model""" 
+	
 	activation = 'relu'; optimizer = 'rmsprop'; loss = 'binary_crossentropy'; metrics=['accuracy'];
 	model = Sequential() 
 	model.add(Dense(8, activation=activation,  kernel_initializer='uniform', kernel_regularizer=regularizers.l2(0.001), input_shape=(X_train.shape[1],)))
@@ -1566,8 +1608,9 @@ def run_keras_deep_learning(X_train, y_train, X_test, y_test):
 	num_epochs = 200
 	#history = model.fit(X_train, y_train, epochs=num_epochs, batch_size=16, \
 	#	verbose=2, validation_split=0.2, callbacks=callbacks)
+	class_weight = {0:1., 1:8.}
 	history = model.fit(partial_x_train, partial_y_train, epochs=num_epochs, batch_size=16, \
-		verbose=2, validation_data=(x_val, y_val))
+		verbose=2, validation_data=(x_val, y_val), class_weight = class_weight)
 	model_loss, model_acc = model.evaluate(X_test, y_test)
 	print("Deep Network Loss={}, accuracy={}".format(model_loss, model_acc))
 	#compare accuraccy with  a purely random classifier 
@@ -1616,7 +1659,7 @@ def run_keras_deep_learning(X_train, y_train, X_test, y_test):
 		model = build_model_with_keras(X_train)
 		plot_model(model, show_shapes=True, to_file='dn_model_cv.png')
 		#evaluate the network (trains the model)
-		history = model.fit(partial_train_data,partial_train_targets, validation_data=(val_data, val_targets), epochs=num_epochs, batch_size=16, verbose=1)
+		history = model.fit(partial_train_data,partial_train_targets, validation_data=(val_data, val_targets), epochs=num_epochs, batch_size=16, verbose=1,class_weight = class_weight)
  		#evaluates model in validation data
 		eval_loss, eval_acc = model.evaluate(val_data, val_targets, verbose=0)
 		all_scores.append(eval_acc)
@@ -1650,7 +1693,7 @@ def run_keras_deep_learning(X_train, y_train, X_test, y_test):
 	# Training the final model
 	print("Training the final model with the best parameters")
 	model = build_model_with_keras(X_train)
-	model.fit(X_train, y_train, epochs=20, batch_size=16, verbose=0)
+	model.fit(X_train, y_train, epochs=20, batch_size=16, verbose=0,class_weight = class_weight)
 	model_loss, model_acc = model.evaluate(X_test, y_test)
 	#compare accuraccy with  a purely random classifier 
 	y_test_copy = np.copy(y_test)
@@ -1821,7 +1864,7 @@ def run_statistical_tests(dataset, feature_label, target_label):
 	anova_test(dataset, feature_label, target_label)
 
 def plot_histogram_pair_variables(dataset, feature_label=None):
-	"""" histogram_plot_pair_variables: plot 2 hisotgram one for each variables
+	"""" histogram_plot_pair_variables: plot 2 histotgrams one for each variable
 	Args: dataset Pandas dataframe and festure_label list of variables with at least two contained in the dataset
 	Example: histogram_plot_pair_variables(dataset, ['var1, 'var2']) """
 	
