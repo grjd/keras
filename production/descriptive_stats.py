@@ -131,47 +131,47 @@ def main():
 	Xy_df_scaled = X_df_scaled
 	Xy_df_scaled[target_variable] = Xy[:,-1]
 	#corr_X_df = run_correlation_matrix(X_df_scaled, explanatory_features) #[0:30] correlation matrix of features
-	corr_Xy_df = run_correlation_matrix(Xy_df_scaled, explanatory_and_target_features) # correlation matrix of features and target
-	#corr_matrix = corr_df.as_matrix()
-	corr_with_target = corr_Xy_df[target_variable]
-	print("Correlations with the target:\n{}".format(corr_with_target.sort_values()))
-	#corr_with_target = calculate_correlation_with_target(Xdf_imputed_scaled, target_values) # correlation array of features with the target
-	threshold = np.mean(np.abs(corr_Xy_df.as_matrix())) + 1*np.std(np.abs(corr_Xy_df.as_matrix()))
-	graph = build_graph_correlation_matrix(corr_Xy_df, threshold, corr_with_target)
-	graph_metrics = calculate_network_metrics(graph)
-	# # print sumary network metrics
-	print_summary_network(graph_metrics, nodes=corr_Xy_df.keys().tolist(), corrtarget=corr_with_target)
-	# #(4) Descriptive analytics: plot scatter and histograms
-	longit_xy_scatter = ['scd_visita', 'gds_visita'] #it works for longitudinal
-	plot_scatter_target_cond(Xy_df_scaled,longit_xy_scatter, target_variable)
-	features_to_plot = ['scd_visita1', 'gds_visita1'] 
-	plot_histogram_pair_variables(Xy_df_scaled, features_to_plot)
-	# #sp_visita (sobrepeso), depre_(depresion),ansi_,tce_(traumatismo), sue_dia_(duerme dia), sue_noc_(duerme noche), imc_(imc), cor_(corazon)
-	# #tabac_(fuma), valfelc_(felicidad) 
-	longit_pattern = re.compile("^scd_+visita[1-5]+$") 
-	longit_pattern2 = re.compile("^stai_+visita[1-5]+$") 
-	longit_pattern3 = re.compile("^gds_+visita[1-5]+$") 
-	# longit_pattern = re.compile("^mmse_+visita[1-5]+$") 
-	# # plot N histograms one each each variable_visitai
-	plot_histograma_one_longitudinal(dataframe_orig, longit_pattern)
-	plot_histograma_one_longitudinal(dataframe_orig, longit_pattern2)
-	plot_histograma_one_longitudinal(dataframe_orig, longit_pattern3)
-	# #plot 1 histogram by grouping values of one continuous feature 
-	plot_histograma_bygroup(Xy_df_scaled, 'sue_rec')
-	# # plot one histogram grouping by the value of the target variable
-	plot_histograma_bygroup_target(Xy_df_scaled, target_variable)
-	# # plot some categorical features hardcoded inside the function gropued by target
-	# # categorical_features = ['sexo','nivel_educativo', 'apoe', 'edad']
-	plot_histograma_bygroup_categorical(dataframe_orig, target_variable)
+	# corr_Xy_df = run_correlation_matrix(Xy_df_scaled, explanatory_and_target_features) # correlation matrix of features and target
+	# #corr_matrix = corr_df.as_matrix()
+	# corr_with_target = corr_Xy_df[target_variable]
+	# print("Correlations with the target:\n{}".format(corr_with_target.sort_values()))
+	# #corr_with_target = calculate_correlation_with_target(Xdf_imputed_scaled, target_values) # correlation array of features with the target
+	# threshold = np.mean(np.abs(corr_Xy_df.as_matrix())) + 1*np.std(np.abs(corr_Xy_df.as_matrix()))
+	# graph = build_graph_correlation_matrix(corr_Xy_df, threshold, corr_with_target)
+	# graph_metrics = calculate_network_metrics(graph)
+	# # # print sumary network metrics
+	# print_summary_network(graph_metrics, nodes=corr_Xy_df.keys().tolist(), corrtarget=corr_with_target)
+	# # #(4) Descriptive analytics: plot scatter and histograms
+	# longit_xy_scatter = ['scd_visita', 'gds_visita'] #it works for longitudinal
+	# plot_scatter_target_cond(Xy_df_scaled,longit_xy_scatter, target_variable)
+	# features_to_plot = ['scd_visita1', 'gds_visita1'] 
+	# plot_histogram_pair_variables(Xy_df_scaled, features_to_plot)
+	# # #sp_visita (sobrepeso), depre_(depresion),ansi_,tce_(traumatismo), sue_dia_(duerme dia), sue_noc_(duerme noche), imc_(imc), cor_(corazon)
+	# # #tabac_(fuma), valfelc_(felicidad) 
+	# longit_pattern = re.compile("^scd_+visita[1-5]+$") 
+	# longit_pattern2 = re.compile("^stai_+visita[1-5]+$") 
+	# longit_pattern3 = re.compile("^gds_+visita[1-5]+$") 
+	# # longit_pattern = re.compile("^mmse_+visita[1-5]+$") 
+	# # # plot N histograms one each each variable_visitai
+	# plot_histograma_one_longitudinal(dataframe_orig, longit_pattern)
+	# plot_histograma_one_longitudinal(dataframe_orig, longit_pattern2)
+	# plot_histograma_one_longitudinal(dataframe_orig, longit_pattern3)
+	# # #plot 1 histogram by grouping values of one continuous feature 
+	# plot_histograma_bygroup(Xy_df_scaled, 'sue_rec')
+	# # # plot one histogram grouping by the value of the target variable
+	# plot_histograma_bygroup_target(Xy_df_scaled, target_variable)
+	# # # plot some categorical features hardcoded inside the function gropued by target
+	# # # categorical_features = ['sexo','nivel_educativo', 'apoe', 'edad']
+	# plot_histograma_bygroup_categorical(dataframe_orig, target_variable)
 	
-	# # perform statistical tests: ANOVA
-	features_to_test = ['scd_visita1']
-	target_anova_variable = 'conversion' # nivel_educativo' #tabac_visita1 depre_visita1
-	run_statistical_tests(Xy_df_scaled,features_to_test, target_anova_variable)
+	# # # perform statistical tests: ANOVA
+	# features_to_test = ['scd_visita1']
+	# target_anova_variable = 'conversion' # nivel_educativo' #tabac_visita1 depre_visita1
+	# run_statistical_tests(Xy_df_scaled,features_to_test, target_anova_variable)
 	
-	# # (5) Dimensionality Reduction
-	pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
-	print("The variance ratio by the {} principal compments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
+	# # # (5) Dimensionality Reduction
+	# pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
+	# print("The variance ratio by the {} principal compments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
 	
 	# (6) Feature Engineering
 	#expla_features = sorted(X_df_scaled.kyes().tolist()); set(expla_features) == set(explanatory_features) d
@@ -189,7 +189,33 @@ def main():
 	# resampling data with SMOTE
 	X_resampled_train, y_resampled_train = resampling_SMOTE(X_train, y_train)
 
+	#####
+	learners = {}
+	learners['random_decision_tree'] = run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
+	print_feature_importances(learners['random_decision_tree'],explanatory_features)
+	learners['rf_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)
+	print_feature_importances(learners['rf_estimator'],explanatory_features)
+	learners['orxgbm_estimator'] = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
+	print_feature_importances(learners['orxgbm_estimator'],explanatory_features)
+	#only for XGBClassifier learner
+	plot_feature_importance(learners['orxgbm_estimator'],explanatory_features)
+	pdb.set_trace()
+	all_results = evaluate_learners_metrics(learners, X_train, y_train, X_test, y_test)
+	
+	#'SVC', Bayes etc object has no attribute 'feature_importances_
 
+	learners['mlp_estimator'] = run_multi_layer_perceptron(X_train, y_train, X_test, y_test)	
+	learners['random_decision_tree'] = run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
+	print_feature_importances(learners['orxgbm_estimator'],explanatory_features)
+
+	learners['svm_estimator'] = run_svm(X_train, y_train, X_test, y_test, X_features)
+	learners['orxgbm_estimator'] = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
+	learners['naive_bayes_estimator'] = run_naive_Bayes(X_train, y_train, X_test, y_test, 0)
+	learners['rf_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)
+	
+
+	all_results = evaluate_learners_metrics(learners, X_train, y_train, X_test, y_test)
+	pdb.set_trace()
 
 	#####
 	deepnetwork_res = run_keras_deep_learning(X_train, y_train, X_test, y_test)
@@ -828,21 +854,105 @@ def run_PCA_for_visualization(Xy_df, target_label, explained_variance=None):
 	#Noise filtering https://jakevdp.github.io/PythonDataScienceHandbook/05.09-principal-component-analysis.html
 	return pca, projected
 
-def compute_metrics_estimator(estimator,X_test,y_test):
+def compute_metrics_estimator(estimator, X_train, y_train, X_test,y_test):
 	""" compute_metrics_estimator compute metrics between a pair of arrays y_pred and y_test
-	Evaluate a score comparing y_pred=estimator().fit(X_train)predict(X_test) from y_test
+	Evaluate a score comparing y_pred=estimator().https://www.kaggle.com/ganakar/using-ensemble-methods-and-smote-samplingfit(X_train)predict(X_test) from y_test
 	Args:estimator(object),X_test,y_test
 	Output: dictionary label:value
 	Example: compute_metrics_estimator(estimator,X_test,y_test) the estimator has been previously fit"""
-	print("Computing metrics for estimator {}".format(estimator))
-	y_pred = estimator.predict(X_test)
-	scores = {'accuracy_score':accuracy_score(y_test, y_pred), 'matthews_corrcoef':matthews_corrcoef(y_test, y_pred), \
-	'f1_score':f1_score(y_test, y_pred),'cohen_kappa_score':cohen_kappa_score(y_test, y_pred), \
-	'recall_score': recall_score(y_test, y_pred), 'precision_score':precision_score(y_test, y_pred), \
-	'roc_auc_score':roc_auc_score(y_pred,y_test),'log_loss':log_loss(y_pred,y_test),\
-	'confusion_matrix':confusion_matrix(y_pred,y_test).T}
+	print("Computing metrics for estimator {}".format(estimator.__class__.__name__))
+	y_pred_train = estimator.predict(X_train)
+	y_pred_test = estimator.predict(X_test)
+	scores = {'accuracy_test':accuracy_score(y_test, y_pred_test), 'accuracy_train':accuracy_score(y_train, y_pred_train),\
+	'matthews_corrcoef_test':matthews_corrcoef(y_test, y_pred_test),'matthews_corrcoef_train':matthews_corrcoef(y_train, y_pred_train),\
+	'f1_test':f1_score(y_test, y_pred_test),'f1_train':f1_score(y_train, y_pred_train),\
+	'cohen_kappa_test':cohen_kappa_score(y_test, y_pred_test),'cohen_kappa_train':cohen_kappa_score(y_train, y_pred_train), \
+	'recall_test': recall_score(y_test, y_pred_test),'recall_train': recall_score(y_train, y_pred_train), \
+	'precision_test':precision_score(y_test, y_pred_test),'precision_train':precision_score(y_train, y_pred_train), \
+	'roc_auc_test':roc_auc_score(y_test, y_pred_test),'roc_auc_train':roc_auc_score(y_train, y_pred_train),\
+	'log_loss_test':log_loss(y_test, y_pred_test),'log_loss_train':log_loss(y_train, y_pred_train),\
+	'confusion_matrix_test':confusion_matrix(y_test, y_pred_test).T, 'confusion_matrix_train':confusion_matrix(y_train, y_pred_train).T}
 	print('Estimator metrics:{}'.format(scores))
 	return scores
+
+def evaluate_learners_metrics(learners, X_train, y_train, X_test,y_test): 
+	""" evaluate_learners_metrics
+	Args:learners list of learners fit, results array each element is the metric for a learner eg results
+	https://www.kaggle.com/ganakar/using-ensemble-methods-and-smote-sampling
+	"""
+	import matplotlib.patches as mpatches
+	results = {}; appended_results = []
+	for key, value in learners.iteritems():
+		clf_name = value.__class__.__name__
+		results[clf_name] = {}
+		results[clf_name] = compute_metrics_estimator(value, X_train, y_train, X_test,y_test)
+		#plot most important features
+		
+	#plot results
+	fig, ax = plt.subplots(2, 8, figsize = (12,7))
+	tit_label={0:'Training ',1:'Testing '}
+	bar_width = 0.2
+	plt.tick_params(
+	axis='x',          # changes apply to the x-axis
+	which='both',      # both major and minor ticks are affected
+	bottom='off',      # ticks along the bottom edge are off
+	top='off',         # ticks along the top edge are off
+	labelbottom='off') # labels along the bottom edge are off
+	#len(colors) = len(learners)
+	colors = ['#5F9EA0','#6495ED','#90EE90','#9ACD32','#90AC32','#40AC32' ]
+	for k, learner in enumerate(results.keys()):
+		for j, metric in enumerate(['accuracy_train','matthews_corrcoef_train',\
+			'cohen_kappa_train','recall_train','precision_train','f1_train','roc_auc_train','log_loss_train']):
+			ax[0, j].bar(k*bar_width, results[learner][metric], width = bar_width, color = colors[k])
+			ax[0, j].set_xlim((-0.1, .9))
+			ax[0,j].set_facecolor('white')
+			plt.setp(ax[0,j].get_xticklabels(),visible=False)
+		for j, metric in enumerate(['accuracy_test','matthews_corrcoef_test',\
+			'cohen_kappa_test','recall_test','precision_test','f1_test','roc_auc_test','log_loss_test']):
+			ax[1, j].bar(k*bar_width, results[learner][metric], width = bar_width, color = colors[k])
+			ax[1, j].set_xlim((-0.1, .9))
+			ax[1,j].set_facecolor('white')
+	for r in range(2):
+		# Add unique y-labels
+		ax[r, 0].set_ylabel("Accuracy")
+		ax[r, 1].set_ylabel("Matthews")
+		ax[r, 2].set_ylabel("Cohen kappa")
+		ax[r, 3].set_ylabel("Recall")
+		ax[r, 4].set_ylabel("Precision")
+		ax[r, 5].set_ylabel("F1")
+		ax[r, 6].set_ylabel("ROC AUC")
+		ax[r, 7].set_ylabel("Log Loss")
+
+		# Add titles
+		ax[r, 0].set_title(tit_label[r]+"Accuracy ")
+		ax[r, 1].set_title(tit_label[r]+"Matthews ")
+		ax[r, 2].set_title(tit_label[r]+"Cohen ")
+		ax[r, 3].set_title(tit_label[r]+"Recall")
+		ax[r, 4].set_title(tit_label[r]+"Precision")
+		ax[r, 5].set_title(tit_label[r]+"F1 ")
+		ax[r, 6].set_title(tit_label[r]+"ROC AUC")
+		ax[r, 7].set_title(tit_label[r]+"Log Loss")
+	# Create patches for the legend
+	patches = []
+	for i, learner in enumerate(results.keys()):
+		patches.append(mpatches.Patch(color = colors[i], label = learner))
+		#plt.legend(handles = patches, bbox_to_anchor = (-2, 2.4), \
+		#	loc = 'upper center', borderaxespad = 0., ncol = 4, fontsize = 'x-large')
+	plt.legend(handles = patches,loc = 2 , fontsize = 'x-large')
+	plt.suptitle("Performance Metrics for Four Supervised Learning Models", fontsize = 12)
+	plt.tight_layout()
+	plt.show()
+
+def plot_feature_importance(learner, features):
+	""" plot_feature_importance use booster in 3.2.4.3.5. sklearn.ensemble.GradientBoostingClassifier """
+	from xgboost import plot_importance
+	plt.figure(figsize=(6, 6))
+	features_imp = pd.DataFrame(learner.feature_importances_, index=features)
+	features_imp  = features_imp.sort_values(by=0, ascending=False)
+	plot_importance(learner)
+	print("The most important features are {}".format(features_imp.head(20)))
+	pdb.set_trace()
+
 
 def compute_metrics_estimator_with_cv(estimator,X_test,y_test,cv):
 	""" compute_metrics_estimator_with_cv : evaluate a score with sklearn.model_selection.cross_val_score for X_test y_test 
@@ -1023,7 +1133,7 @@ def run_sgd_classifier(X_train, y_train, X_test, y_test, loss,cv):
 	#class_weight='balanced' addresses the skewness of the dataset in terms of labels
 	# loss='hinge' LSVM,  loss='log' gives logistic regression, a probabilistic classifier
 	# ‘l1’ and ‘elasticnet’ might bring sparsity to the model (feature selection) not achievable with ‘l2’.
-	clf = GridSearchCV(SGDClassifier(loss=loss, penalty='elasticnet',l1_ratio=0.15, n_iter=5, shuffle=True, verbose=False, n_jobs=10, \
+	clf = GridSearchCV(SGDClassifier(loss=loss, penalty='elasticnet',l1_ratio=0.15, n_iter=5, shuffle=True, verbose=False, n_jobs=1, \
 		average=False, class_weight='balanced',random_state=0),tuned_parameters, cv=cv, scoring='f1_macro').fit(X_train, y_train)
 	if loss is 'log':
 		y_train_pred = clf.predict_proba(X_train)[:,1]
@@ -1272,7 +1382,7 @@ def run_svm(X_train, y_train, X_test, y_test, X_features, threshold=None):
 	#Generate indices to split data into training and test set.
 	cv = kfolds.split(X_all,y_all)
 	title ='linearSVM Learning Curve'
-	plot_learning_curve(svm, title, X_all, y_all, ylim=(0.7, 1.01), cv=cv, n_jobs=4)
+	plot_learning_curve(svm, title, X_all, y_all, ylim=(0.7, 1.01), cv=cv, n_jobs=1)
 	print('Accuracy of SVM classifier on training set {:.2f}'.format(svm.score(X_train, y_train)))
 	print('Accuracy of SVM classifier on test set {:.2f}'.format(svm.score(X_test, y_test)))
 	#plot confusion matrix and AUC
@@ -1445,6 +1555,7 @@ def run_multi_layer_perceptron(X_train, y_train, X_test, y_test):
 	fig, subaxes = plt.subplots(1,3, figsize=(5,15))	
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
+	# class_weight is not implemented in MLP, call it with balanced datasets
 	for units, axis in zip([1,10,100],subaxes):
 		mlp = MLPClassifier(hidden_layer_sizes = [units], solver = 'lbfgs', random_state = 0).fit(X_train, y_train)
 		#title = 'MultiLayerPerceptron layer with {} units'.format(units)
@@ -1464,7 +1575,6 @@ def run_multi_layer_perceptron(X_train, y_train, X_test, y_test):
 	psi = psi_relative_entropy(y_test_pred, y_train_pred, 10)
 	print("Compute kolmogorov test\n")
 	ks_two_samples_goodness_of_fit(y_test_pred,y_train_pred[:len(y_test_pred)])
-	pdb.set_trace()
 	y_pred = [int(a) for a in mlp_layers.predict(X_test)]
 	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
 	print("Baseline classifier using MLP: %s of %s values correct." % (num_correct, len(y_test)))
@@ -2143,7 +2253,14 @@ def t_test(dataset, features=None):
 	""" t test"""
 	print("Calculating t test for features:\n",df.ix[0])
 
+def print_feature_importances(learner, features):
+	""" print_fearure_importances only for elarners that take feature_importances_
+	XGB, random forest, decision tree (NO SVC, mlp_estimator, Bayes, Keras)"""
+	features_imp = pd.DataFrame(learner.feature_importances_, index=features)
+	features_imp  = features_imp.sort_values(by=0, ascending=False)
+	print("The most important features are {}".format(features_imp.head(20)))
 
 
 if __name__ == "__name__":
+	#print(Parallel(n_jobs=2)(parallel_func() for _ in range(3)))  # forgot delayed around parallel_func here
 	main()
