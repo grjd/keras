@@ -130,48 +130,48 @@ def main():
 	X_df_scaled = pd.DataFrame(X_scaled, columns=explanatory_features)
 	Xy_df_scaled = X_df_scaled
 	Xy_df_scaled[target_variable] = Xy[:,-1]
-	#corr_X_df = run_correlation_matrix(X_df_scaled, explanatory_features) #[0:30] correlation matrix of features
-	# corr_Xy_df = run_correlation_matrix(Xy_df_scaled, explanatory_and_target_features) # correlation matrix of features and target
-	# #corr_matrix = corr_df.as_matrix()
-	# corr_with_target = corr_Xy_df[target_variable]
-	# print("Correlations with the target:\n{}".format(corr_with_target.sort_values()))
-	# #corr_with_target = calculate_correlation_with_target(Xdf_imputed_scaled, target_values) # correlation array of features with the target
-	# threshold = np.mean(np.abs(corr_Xy_df.as_matrix())) + 1*np.std(np.abs(corr_Xy_df.as_matrix()))
-	# graph = build_graph_correlation_matrix(corr_Xy_df, threshold, corr_with_target)
-	# graph_metrics = calculate_network_metrics(graph)
-	# # # print sumary network metrics
-	# print_summary_network(graph_metrics, nodes=corr_Xy_df.keys().tolist(), corrtarget=corr_with_target)
-	# # #(4) Descriptive analytics: plot scatter and histograms
-	# longit_xy_scatter = ['scd_visita', 'gds_visita'] #it works for longitudinal
-	# plot_scatter_target_cond(Xy_df_scaled,longit_xy_scatter, target_variable)
-	# features_to_plot = ['scd_visita1', 'gds_visita1'] 
-	# plot_histogram_pair_variables(Xy_df_scaled, features_to_plot)
-	# # #sp_visita (sobrepeso), depre_(depresion),ansi_,tce_(traumatismo), sue_dia_(duerme dia), sue_noc_(duerme noche), imc_(imc), cor_(corazon)
-	# # #tabac_(fuma), valfelc_(felicidad) 
-	# longit_pattern = re.compile("^scd_+visita[1-5]+$") 
-	# longit_pattern2 = re.compile("^stai_+visita[1-5]+$") 
-	# longit_pattern3 = re.compile("^gds_+visita[1-5]+$") 
-	# # longit_pattern = re.compile("^mmse_+visita[1-5]+$") 
-	# # # plot N histograms one each each variable_visitai
-	# plot_histograma_one_longitudinal(dataframe_orig, longit_pattern)
-	# plot_histograma_one_longitudinal(dataframe_orig, longit_pattern2)
-	# plot_histograma_one_longitudinal(dataframe_orig, longit_pattern3)
-	# # #plot 1 histogram by grouping values of one continuous feature 
-	# plot_histograma_bygroup(Xy_df_scaled, 'sue_rec')
-	# # # plot one histogram grouping by the value of the target variable
-	# plot_histograma_bygroup_target(Xy_df_scaled, target_variable)
-	# # # plot some categorical features hardcoded inside the function gropued by target
-	# # # categorical_features = ['sexo','nivel_educativo', 'apoe', 'edad']
-	# plot_histograma_bygroup_categorical(dataframe_orig, target_variable)
+	corr_X_df = run_correlation_matrix(X_df_scaled, explanatory_features) #[0:30] correlation matrix of features
+	corr_Xy_df = run_correlation_matrix(Xy_df_scaled, explanatory_and_target_features) # correlation matrix of features and target
+	#corr_matrix = corr_df.as_matrix()
+	corr_with_target = corr_Xy_df[target_variable]
+	print("Correlations with the target:\n{}".format(corr_with_target.sort_values()))
+	#corr_with_target = calculate_correlation_with_target(Xdf_imputed_scaled, target_values) # correlation array of features with the target
+	threshold = np.mean(np.abs(corr_Xy_df.as_matrix())) + 1*np.std(np.abs(corr_Xy_df.as_matrix()))
+	graph = build_graph_correlation_matrix(corr_Xy_df, threshold, corr_with_target)
+	graph_metrics = calculate_network_metrics(graph)
+	# # print sumary network metrics
+	print_summary_network(graph_metrics, nodes=corr_Xy_df.keys().tolist(), corrtarget=corr_with_target)
+	# #(4) Descriptive analytics: plot scatter and histograms
+	longit_xy_scatter = ['scd_visita', 'gds_visita'] #it works for longitudinal
+	plot_scatter_target_cond(Xy_df_scaled,longit_xy_scatter, target_variable)
+	features_to_plot = ['scd_visita1', 'gds_visita1'] 
+	plot_histogram_pair_variables(Xy_df_scaled, features_to_plot)
+	# #sp_visita (sobrepeso), depre_(depresion),ansi_,tce_(traumatismo), sue_dia_(duerme dia), sue_noc_(duerme noche), imc_(imc), cor_(corazon)
+	# #tabac_(fuma), valfelc_(felicidad) 
+	longit_pattern = re.compile("^scd_+visita[1-5]+$") 
+	longit_pattern2 = re.compile("^stai_+visita[1-5]+$") 
+	longit_pattern3 = re.compile("^gds_+visita[1-5]+$") 
+	# longit_pattern = re.compile("^mmse_+visita[1-5]+$") 
+	# # plot N histograms one each each variable_visitai
+	plot_histograma_one_longitudinal(dataframe_orig, longit_pattern)
+	plot_histograma_one_longitudinal(dataframe_orig, longit_pattern2)
+	plot_histograma_one_longitudinal(dataframe_orig, longit_pattern3)
+	# #plot 1 histogram by grouping values of one continuous feature 
+	plot_histograma_bygroup(Xy_df_scaled, 'sue_rec')
+	# # plot one histogram grouping by the value of the target variable
+	plot_histograma_bygroup_target(Xy_df_scaled, target_variable)
+	# # plot some categorical features hardcoded inside the function gropued by target
+	# # categorical_features = ['sexo','nivel_educativo', 'apoe', 'edad']
+	plot_histograma_bygroup_categorical(dataframe_orig, target_variable)
 	
-	# # # perform statistical tests: ANOVA
-	# features_to_test = ['scd_visita1']
-	# target_anova_variable = 'conversion' # nivel_educativo' #tabac_visita1 depre_visita1
-	# run_statistical_tests(Xy_df_scaled,features_to_test, target_anova_variable)
+	# # perform statistical tests: ANOVA
+	features_to_test = ['scd_visita1']
+	target_anova_variable = 'conversion' # nivel_educativo' #tabac_visita1 depre_visita1
+	run_statistical_tests(Xy_df_scaled,features_to_test, target_anova_variable)
 	
-	# # # (5) Dimensionality Reduction
-	# pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
-	# print("The variance ratio by the {} principal compments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
+	# # (5) Dimensionality Reduction
+	pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
+	print("The variance ratio by the {} principal compments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
 	
 	# (6) Feature Engineering
 	#expla_features = sorted(X_df_scaled.kyes().tolist()); set(expla_features) == set(explanatory_features) d
@@ -215,12 +215,10 @@ def main():
 	
 
 	all_results = evaluate_learners_metrics(learners, X_train, y_train, X_test, y_test)
-	pdb.set_trace()
 
 	#####
 	deepnetwork_res = run_keras_deep_learning(X_train, y_train, X_test, y_test)
 
-	pdb.set_trace()
 	dectree_estimator =run_random_decision_tree(X_train, y_train, X_test, y_test, X_features,target_variable)
 	
 	xgbm_estimator = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
