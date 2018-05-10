@@ -67,7 +67,7 @@ import networkx as nx
 from adspy_shared_utilities import plot_class_regions_for_classifier, plot_decision_tree, plot_feature_importances, plot_class_regions_for_classifier_subplot
 
 def main():
-	plt.close('all')
+	#plt.close('all')
 	# get the data in csv format
 	dataframe = run_load_csv()
 	dataframe_orig = dataframe
@@ -130,14 +130,21 @@ def main():
 	X_df_scaled = pd.DataFrame(X_scaled, columns=explanatory_features)
 	Xy_df_scaled = X_df_scaled
 	Xy_df_scaled[target_variable] = Xy[:,-1]
+	
+	#plot grid of pairs
+	plot_grid_pairs(Xy_df_scaled, ['scd_visita1'] + dict_features['vanilla'] + dict_features['sleep'] + dict_features['diet']+ dict_features['cardiovascular'])
+	pdb.set_trace()
+
+
 	corr_X_df = run_correlation_matrix(X_df_scaled, explanatory_features) #[0:30] correlation matrix of features
 	corr_Xy_df = run_correlation_matrix(Xy_df_scaled, explanatory_and_target_features) # correlation matrix of features and target
+
 	#corr_matrix = corr_df.as_matrix()
 	corr_with_target = corr_Xy_df[target_variable]
 	print("Correlations with the target:\n{}".format(corr_with_target.sort_values()))
 	#corr_with_target = calculate_correlation_with_target(Xdf_imputed_scaled, target_values) # correlation array of features with the target
 	threshold = np.mean(np.abs(corr_Xy_df.as_matrix())) + 1*np.std(np.abs(corr_Xy_df.as_matrix()))
-	graph = build_graph_correlation_matrix(corr_Xy_df, threshold, corr_with_target)
+	graph = build_connectedGraph_correlation_matrix(corr_Xy_df, threshold, corr_with_target)
 	graph_metrics = calculate_network_metrics(graph)
 	# # print sumary network metrics
 	print_summary_network(graph_metrics, nodes=corr_Xy_df.keys().tolist(), corrtarget=corr_with_target)
@@ -164,17 +171,17 @@ def main():
 	# # categorical_features = ['sexo','nivel_educativo', 'apoe', 'edad']
 	plot_histograma_bygroup_categorical(dataframe_orig, target_variable)
 	
-	# # perform statistical tests: ANOVA
-	features_to_test = ['scd_visita1']
-	target_anova_variable = 'conversion' # nivel_educativo' #tabac_visita1 depre_visita1
-	run_statistical_tests(Xy_df_scaled,features_to_test, target_anova_variable)
+	# # # perform statistical tests: ANOVA
+	# features_to_test = ['scd_visita1']
+	# target_anova_variable = 'conversion' # nivel_educativo' #tabac_visita1 depre_visita1
+	# run_statistical_tests(Xy_df_scaled,features_to_test, target_anova_variable)
 	
-	# # (5) Dimensionality Reduction
-	pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
-	print("The variance ratio by the {} principal compments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
+	# # # (5) Dimensionality Reduction
+	# pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
+	# print("The variance ratio by the {} principal compments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
 	
 	# (6) Feature Engineering
-	#expla_features = sorted(X_df_scaled.kyes().tolist()); set(expla_features) == set(explanatory_features) d
+	#expla_features = sorted(X_df_scaled.kyes().tolist()); set(expla_features) == set(explanatory_features) 
 	
 	formula= build_formula(explanatory_features)
 	# build design matrix(patsy.dmatrix) and rank the features in the formula y ~ X 
@@ -199,7 +206,6 @@ def main():
 	print_feature_importances(learners['orxgbm_estimator'],explanatory_features)
 	#only for XGBClassifier learner
 	plot_feature_importance(learners['orxgbm_estimator'],explanatory_features)
-	pdb.set_trace()
 	all_results = evaluate_learners_metrics(learners, X_train, y_train, X_test, y_test)
 	
 	#'SVC', Bayes etc object has no attribute 'feature_importances_
@@ -212,7 +218,7 @@ def main():
 	learners['orxgbm_estimator'] = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
 	learners['naive_bayes_estimator'] = run_naive_Bayes(X_train, y_train, X_test, y_test, 0)
 	learners['rf_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)
-	
+	pdb.set_trace()
 
 	all_results = evaluate_learners_metrics(learners, X_train, y_train, X_test, y_test)
 
@@ -949,7 +955,6 @@ def plot_feature_importance(learner, features):
 	features_imp  = features_imp.sort_values(by=0, ascending=False)
 	plot_importance(learner)
 	print("The most important features are {}".format(features_imp.head(20)))
-	pdb.set_trace()
 
 
 def compute_metrics_estimator_with_cv(estimator,X_test,y_test,cv):
@@ -1971,6 +1976,45 @@ def run_statistical_tests(dataset, feature_label, target_label):
 	#chi_square_of_df_cols(dataset, feature_label[0], feature_label[1])
 	anova_test(dataset, feature_label, target_label)
 
+def plot_grid_pairs(df, features):
+	""" plot_grid_pairs plot paurs of features with seaborn.pairplot 
+	Args: dataframe, list of features
+	"""
+	#https://seaborn.pydata.org/tutorial/axis_grids.html
+	feature_x = features[6]
+	feature_y = features[0]
+	feature_z = features[8] #conditional
+ 	#Draw conditional plots of segmented data using factorplot and FacetGrid
+	sns.factorplot(data=df, x=feature_x, y=feature_y)
+	sns.factorplot(data=df, x=feature_x, y=feature_y, col=feature_z)
+
+	#kernel density estimate KDE plot
+	g = sns.FacetGrid(df, col=feature_z)
+	g.map(sns.distplot, feature_x) 
+	#scatter plot
+	g.map(plt.scatter, feature_x, feature_y)
+	#draw regression plot
+	g.map(plt.scatter,feature_x, feature_y)  
+	#PairGrid to showing the interactions between variables
+	g = sns.FacetGrid(df[[feature_x,feature_y]], col="tabac", size=4, aspect=.5)
+	g.map(sns.barplot, feature_x, feature_y)
+ 
+	g = sns.pairplot(df[[feature_x,feature_y]],diag_kind="hist")
+	g.map_upper(sns.regplot) 
+	g.map_lower(sns.residplot) 
+	g.map_diag(plt.hist) 
+	for ax in g.axes.flat:
+		plt.setp(ax.get_xticklabels(), rotation=45) 
+	g.add_legend() 
+	g.set(alpha=0.5)
+	#view both a joint distribution and its marginals at once
+	sns.jointplot(feature_x, feature_y, data=df[features], kind='kde')
+	g = sns.JointGrid(x=feature_x, y=feature_y, data=df[features]) 
+	g.plot_joint(sns.regplot, order=2) 
+	g.plot_marginals(sns.distplot)
+
+
+
 def plot_histogram_pair_variables(dataset, feature_label=None):
 	"""" histogram_plot_pair_variables: plot 2 histotgrams one for each variable
 	Args: dataset Pandas dataframe and festure_label list of variables with at least two contained in the dataset
@@ -1995,8 +2039,8 @@ def plot_histogram_pair_variables(dataset, feature_label=None):
 	fig.suptitle(msgsuptitle)
 	plt.show()
 
-def build_graph_correlation_matrix(corr_df, threshold=None, corr_target=None):
-	""" build_graph_correlation_matrix: requires package pip install pygraphviz. Plot only connected compoennts, omit isolated nodes
+def build_connectedGraph_correlation_matrix(corr_df, threshold=None, corr_target=None):
+	""" build_connectedGraph_correlation_matrix: requires package pip install pygraphviz. Plot only connected compoennts, omit isolated nodes
 	Args:A is the dataframe correlation matrix
 	Output:G
 	"""
