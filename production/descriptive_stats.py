@@ -10,6 +10,15 @@ Data Pipeline:
 	
 	7. Modeling
 	8. Explainability
+
+	# 1. Exploratory Data analysis EDA: 
+	#	1.0 EDA plot
+	#   1.1. Detect Multicollinearity
+	# 	1.2. Variable Selection (leakage, combine features)
+	#	1.3. Transformation (scaling, discretize continuous variables, expand categorical variables)
+	# 2. Prediction
+	# 3. Causation
+	# 4. Deployment	
 ========================
 """
 from __future__ import print_function
@@ -26,12 +35,14 @@ from patsy import dmatrices
 import itertools
 import warnings
 from copy import deepcopy
+import statsmodels.api as sm
 
 from scipy import stats
 from scipy.cluster.hierarchy import dendrogram, linkage, cophenet
 from scipy.spatial.distance import squareform, pdist
 from sklearn.linear_model import SGDClassifier, LogisticRegression, Lasso
 from sklearn.neural_network import MLPClassifier
+from sklearn import model_selection
 from sklearn.model_selection import train_test_split, cross_val_score, GridSearchCV, StratifiedKFold, ShuffleSplit, KFold
 from sklearn.metrics import r2_score, roc_curve, auc, roc_auc_score, log_loss, accuracy_score, confusion_matrix, classification_report, precision_score, matthews_corrcoef, recall_score, f1_score, cohen_kappa_score
 from sklearn.feature_selection import SelectKBest, f_classif, mutual_info_classif, chi2
@@ -51,7 +62,8 @@ from sklearn.manifold.t_sne import (_joint_probabilities,_kl_divergence)
 from sklearn.svm import SVC
 from sklearn.dummy import DummyClassifier
 from sklearn.naive_bayes import GaussianNB
-from sklearn.tree import DecisionTreeClassifier
+from sklearn.tree import DecisionTreeClassifier, export_graphviz
+from sklearn import tree
 from xgboost import XGBClassifier
 from keras import regularizers
 from keras.datasets import mnist
@@ -69,29 +81,92 @@ from adspy_shared_utilities import plot_class_regions_for_classifier, plot_decis
 def main():
 	#plt.close('all')
 	# get the data in csv format
-	dataframe = run_load_csv()
-	dataframe_orig = dataframe
-	# 3. Data preparation: 
-	# 	3.1. Variable Selection 
-	#	3.2. Transformation (scaling, discretize continuous variables, expand categorical variables)
-	#	3.3. Detect Multicollinearity
-	# (3.1) Feature Selection : cosmetic name changing and select input and output 
-	# cleanup_column_names(df,rename_dict={},do_inplace=True) cometic cleanup lowercase, remove blanks
+	dataframe = run_load_csv()	
+	# Feature Selection : cosmetic name changing and select input and output 
+	print('Calling for cosmetic cleanup (all lowercase, /, remove blanks) e.g. cleanup_column_names(df,rename_dict={},do_inplace=True)') 
 	cleanup_column_names(dataframe, {}, True)
-	# remove features about the target
-	leakage_data(dataframe)
-	run_print_dataset(dataframe)
+	#copy dataframe with the cosmetic changes e.g. Tiempo is now tiempo
+	dataframe_orig = dataframe.copy()
+	###########################################################################################
+	##################  3.0. EDA plot ##########################################################
+	edaplot = False
+	if edaplot is True:
+		print('Plot longitudinal features')
+		longit_pattern = re.compile("^scd_+visita[1-5]+$") 
+		longit_pattern2 = re.compile("^stai_+visita[1-5]+$") 
+		longit_pattern3 = re.compile("^gds_+visita[1-5]+$") 
+		# longit_pattern = re.compile("^mmse_+visita[1-5]+$") 
+		# # plot N histograms one each each variable_visitai
+		plot_histograma_one_longitudinal(dataframe_orig, longit_pattern)
+		plot_histograma_one_longitudinal(dataframe_orig, longit_pattern2)
+		plot_histograma_one_longitudinal(dataframe_orig, longit_pattern3)
+		# YS: this is hardcode fix
+		plot_histograma_bygroup_categorical(dataframe_orig, target_variable='conversion')
+		#(4) Descriptive analytics: plot scatter and histograms
+		#longit_xy_scatter = ['scd_visita', 'gds_visita'] #it works for longitudinal
+		plot_scatter_target_cond(dataframe_orig, ['scd_visita', 'gds_visita'], target_variable='conversion')
+		#features_to_plot = ['scd_visita1', 'gds_visita1'] 
+		plot_histogram_pair_variables(dataframe_orig, ['scd_visita2', 'gds_visita2'] )
+		# #plot 1 histogram by grouping values of one continuous feature 
+		plot_histograma_bygroup(dataframe_orig, 'sue_rec')
+		# # plot one histogram grouping by the value of the target variable
+		plot_histograma_bygroup_target(dataframe_orig, 'conversion')
+
+	################################################################################################
+	##################  1.1.Detect Multicollinearity  ##############################################
+	multicollin = False
+	if multicollin is True:
+		feature_x = 'scd_visita1'
+		feature_y = 'conversion'
+		dfjoints = dataframe_orig[[feature_x, feature_y]].dropna()
+		#plot_jointdistributions(dfjoints, feature_x, feature_y)
+		# To plot scatter feature_x and feature_x2 uncomment
+		# #feature_x2 = 'alcar' 
+		# #dfjoints = dataframe[[feature_x,feature_y, feature_x2]].dropna() 
+		# #plot_jointdistributions(dfjoints, feature_x, feature_y, feature_x2)
+		# dfjoints = dataframe[[feature_x,feature_y]].dropna()
+		plot_jointdistributions(dfjoints, feature_x, feature_y)
+
+		#Detect multicollinearities
+		#cols_list = [['scd_visita1', 'gds_visita1']] to multicollinearity of a list
+		cols_list = [['scd_visita1', 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'preocupacion_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1', 'act_aten_visita1', 'act_orie_visita1', 'act_mrec_visita1', 'act_memt_visita1', 'act_visu_visita1', 'act_expr_visita1', 'act_comp_visita1', 'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'act_apat_visita1', 'gds_visita1', 'stai_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'eq5dsalud_visita1', 'eq5deva_visita1', 'relafami_visita1', 'relaamigo_visita1', 'relaocio_visita1', 'rsoled_visita1', 'valcvida_visita1', 'valsatvid_visita1', 'valfelc_visita1']]
+		cols_list = [['scd_visita1', 'gds_visita1']]
+		#for cols in cols_list:
+		#for cols in dict_features.keys():
+		for cols in cols_list:
+		 	print("Calculating miulticolinearities for Group feature: ", cols)
+		 	#features = dict_features[cols]
+		 	features = cols
+		 	#detect_multicollinearities calls to plot_jointdistributions
+		 	detect_multicollinearities(dataframe, 'conversion', features)
+	################################################################################################
+	##################  END 1.1.Detect Multicollinearity t ##########################################
+
+	######################################################################################################
+	##################  1.2. Variable Selection ##########################################################
+	# Leakage data and remove unnecessary features
+	colstoremove = ['tiempo','tpo1.2','tpo1.3','tpo1.4','tpo1.5','dx_visita1','fecha_visita1','fecha_nacimiento','id']
+	print('Calling to leakage_data to remove features:', colstoremove, ' about the target \n')
+	dataframe = leakage_data(dataframe, colstoremove)
+	print('Removed ', dataframe_orig.shape[1] - dataframe.shape[1], ' columns in the dataframe \n' )
+
 	features_list = dataframe.columns.values.tolist()
+	#combine physical exercise and diet features
+	dataframe = combine_features(dataframe)
 	dict_features = split_features_in_groups()
 	print("Dictionary of static(all years) features ".format(dict_features))
+	run_print_dataset(dataframe)
+	
 	# Select subset of explanatory variables from prior information MUST include the target_variable
-
 	features_static =  dict_features['vanilla'] + dict_features['sleep'] + dict_features['anthropometric'] + \
 	dict_features['family_history'] + dict_features['sensory'] +  dict_features['intellectual'] + dict_features['demographics'] +\
-	dict_features['professional'] +  dict_features['cardiovascular'] + dict_features['ictus'] + dict_features['diet']
+	dict_features['professional'] +  dict_features['cardiovascular'] + dict_features['ictus'] + dict_features['diet']  + dict_features['physical_exercise']
+		
 	all_features = dataframe.keys().tolist()
-	#Remove cognitive performance features for data leakage
+	print('Length features_static=', len(features_static), ' Length dataframe_orig=', dataframe_orig.shape[1],' Length dataframe post =', dataframe.shape[1])
+	#Remove cognitive performance features for data leakage. This can be done in colstoremove
 	features_to_remove = ['mmse_visita1','reloj_visita1','faq_visita1','fcsrtrl1_visita1','fcsrtrl2_visita1','fcsrtrl3_visita1','fcsrtlibdem_visita1','p_visita1','animales_visita1','cn_visita1','cdrsum_visita1']
+	features_to_remove = features_to_remove + [ 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1','act_memt_visita1', 'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'relaocio_visita1', 'rsoled_visita1']
 	selected_features = [x for x in all_features if x not in features_to_remove]
 	features_year1 = [s for s in selected_features  if "visita1" in s ];
 	#features_year2 = [s for s in dataset.keys().tolist()  if "visita2" in s]; features_year2.remove('fecha_visita2')
@@ -99,93 +174,98 @@ def main():
 	#features_year4 = [s for s in dataset.keys().tolist()  if "visita4" in s]; features_year4.remove('fecha_visita4'); features_year4.remove('act_prax_visita4'), features_year4.remove('act_comp_visita4')
 	#features_year5 = [s for s in dataset.keys().tolist()  if "visita5" in s]; features_year5.remove('fecha_visita5'); features_year5.remove('act_prax_visita5'), features_year5.remove('act_comp_visita5')
 	explanatory_features = features_static + features_year1
-	#explanatory_features = None # If None explanatory_features assigned to features_list
+	#explanatory_features = ['my favorite list of features']
 	target_variable = 'conversion' # if none assigned to 'conversion'. target_variable = ['visita_1_EQ5DMOV']
 	print("Calling to run_variable_selection(dataset, explanatory_features= {}, target_variable={})".format(explanatory_features, target_variable))
 	#dataset, explanatory_features = run_variable_selection(dataset, explanatory_features, target_variable)
 	# dataset with all features including the target and removed NaN
 	#dataframe.dropna(axis=0, how='any', inplace=True)
+
 	explanatory_and_target_features = deepcopy(explanatory_features)
 	explanatory_and_target_features.append(target_variable)
 	dataframe = dataframe[explanatory_and_target_features]
 	print ("Features containing NAN values:\n {}".format(dataframe.isnull().any()))
 	print( "Number of NaN cells in original dataframe:{} / {}, total rows:{}".format(pd.isnull(dataframe.values).sum(axis=1).sum(), dataframe.size, dataframe.shape[0]))
-	#ss = dataset.isnull().sum(axis=1)
-	#print(" Number of cells with NaNs per Row:\n{}".format(ss[ss==0]))
-
+	
 	dataframe.dropna(axis=0, how='any', inplace=True)
 	print( "Number of NaN cells in the imputed dataframe: {} / {}, total rows:{}".format(pd.isnull(dataframe.values).sum(axis=1).sum(), dataframe.size, dataframe.shape[0]))
-	# (3.2) Transformation (scaling, discretize continuous variables, expand categorical variables)
-	# to imput missing values uncomment these 2 lines
-	#dataset, Xy_imputed = run_imputations(dataset, type_imput='zero')
-	#print("Xy_imputed:\n{}".format(Xy_imputed))	
-	# If necessay, run_binarization_features and run_encoding_categorical_features
-	# remove duplicated feature names, NOTE conver to set rearrange the order of the features
+	######################################################################################################
+	##################  END 1.2. Variable Selection ##########################################################
+
+	######################################################################################################
+	##################   1.3. Transformation (Scaling) ###################################################
 	Xy = dataframe[explanatory_and_target_features].values
 	X = Xy[:,:-1]
-	X_scaled, scaler = run_transformations(X) # standarize to minmaxscale or others make input normal
+	y = Xy[:,-1]
+	X_scaled, scaler = run_transformations(X) # Normalize to minmaxscale or others make input normal
 	print("X scaled dimensions:{} \n ".format(X_scaled.shape))
+	
+	#construct a LogisticRegression model to choose the best performing features 
+	nbofRFEfeatures = 0
+	if nbofRFEfeatures > 0:
+		print('Running RFE algorithm to select the ', nbofRFEfeatures, ' most important features for Logistic Regression...\n')
+		best_logreg_features = recursive_feature_elimination(X_scaled, y, nbofRFEfeatures, explanatory_and_target_features[:-1])
+		best_logreg_features.append(target_variable)
+		dataframe = dataframe[best_logreg_features]
+
 	# (3.3) detect multicollinearity: Plot correlation and graphs of variables
 	#convert ndarray to pandas DataFrame
 	X_df_scaled = pd.DataFrame(X_scaled, columns=explanatory_features)
-	Xy_df_scaled = X_df_scaled
+	Xy_df_scaled = X_df_scaled.copy()
 	Xy_df_scaled[target_variable] = Xy[:,-1]
-	
-	#plot grid of pairs
-	plot_grid_pairs(Xy_df_scaled, ['scd_visita1'] + dict_features['vanilla'] + dict_features['sleep'] + dict_features['diet']+ dict_features['cardiovascular'])
-	pdb.set_trace()
 
+	########################################################################################################
+	##################   1.3. END Transformation (Scaling)###################################################
 
-	corr_X_df = run_correlation_matrix(X_df_scaled, explanatory_features) #[0:30] correlation matrix of features
-	corr_Xy_df = run_correlation_matrix(Xy_df_scaled, explanatory_and_target_features) # correlation matrix of features and target
+	######################################################################################################
+	##################  1.4. Network analysis ############################################################
+	#corr_X_df = run_correlation_matrix(X_df_scaled, explanatory_features) #[0:30] correlation matrix of features
+	networkanalysis = False
+	if networkanalysis is True:
+		corr_Xy_df = run_correlation_matrix(Xy_df_scaled, explanatory_and_target_features) # correlation matrix of features and target
+		#corr_matrix = corr_df.as_matrix()
+		corr_with_target = corr_Xy_df[target_variable]
+		print("Correlations with the target:\n{}".format(corr_with_target.sort_values()))
+		#corr_with_target = calculate_correlation_with_target(Xdf_imputed_scaled, target_values) # correlation array of features with the target
+		threshold = np.mean(np.abs(corr_Xy_df.as_matrix())) + 1*np.std(np.abs(corr_Xy_df.as_matrix()))
+		graph = build_connectedGraph_correlation_matrix(corr_Xy_df, threshold, corr_with_target)
+		graph_metrics = calculate_network_metrics(graph)
+		# # print sumary network metrics
+		print_summary_network(graph_metrics, nodes=corr_Xy_df.keys().tolist(), corrtarget=corr_with_target)
+	######################################################################################################
+	##################  END 1.4. Network analysis ############################################################
 
-	#corr_matrix = corr_df.as_matrix()
-	corr_with_target = corr_Xy_df[target_variable]
-	print("Correlations with the target:\n{}".format(corr_with_target.sort_values()))
-	#corr_with_target = calculate_correlation_with_target(Xdf_imputed_scaled, target_values) # correlation array of features with the target
-	threshold = np.mean(np.abs(corr_Xy_df.as_matrix())) + 1*np.std(np.abs(corr_Xy_df.as_matrix()))
-	graph = build_connectedGraph_correlation_matrix(corr_Xy_df, threshold, corr_with_target)
-	graph_metrics = calculate_network_metrics(graph)
-	# # print sumary network metrics
-	print_summary_network(graph_metrics, nodes=corr_Xy_df.keys().tolist(), corrtarget=corr_with_target)
-	# #(4) Descriptive analytics: plot scatter and histograms
-	longit_xy_scatter = ['scd_visita', 'gds_visita'] #it works for longitudinal
-	plot_scatter_target_cond(Xy_df_scaled,longit_xy_scatter, target_variable)
-	features_to_plot = ['scd_visita1', 'gds_visita1'] 
-	plot_histogram_pair_variables(Xy_df_scaled, features_to_plot)
-	# #sp_visita (sobrepeso), depre_(depresion),ansi_,tce_(traumatismo), sue_dia_(duerme dia), sue_noc_(duerme noche), imc_(imc), cor_(corazon)
-	# #tabac_(fuma), valfelc_(felicidad) 
-	longit_pattern = re.compile("^scd_+visita[1-5]+$") 
-	longit_pattern2 = re.compile("^stai_+visita[1-5]+$") 
-	longit_pattern3 = re.compile("^gds_+visita[1-5]+$") 
-	# longit_pattern = re.compile("^mmse_+visita[1-5]+$") 
-	# # plot N histograms one each each variable_visitai
-	plot_histograma_one_longitudinal(dataframe_orig, longit_pattern)
-	plot_histograma_one_longitudinal(dataframe_orig, longit_pattern2)
-	plot_histograma_one_longitudinal(dataframe_orig, longit_pattern3)
-	# #plot 1 histogram by grouping values of one continuous feature 
-	plot_histograma_bygroup(Xy_df_scaled, 'sue_rec')
-	# # plot one histogram grouping by the value of the target variable
-	plot_histograma_bygroup_target(Xy_df_scaled, target_variable)
-	# # plot some categorical features hardcoded inside the function gropued by target
-	# # categorical_features = ['sexo','nivel_educativo', 'apoe', 'edad']
-	plot_histograma_bygroup_categorical(dataframe_orig, target_variable)
-	
+	######################################################################################################
+	##################  1.4. Statistical tests ############################################################
 	# # # perform statistical tests: ANOVA
-	# features_to_test = ['scd_visita1']
-	# target_anova_variable = 'conversion' # nivel_educativo' #tabac_visita1 depre_visita1
-	# run_statistical_tests(Xy_df_scaled,features_to_test, target_anova_variable)
-	
+	statstest = False
+	if statstest is True:
+		feature_to_test = ['scd_visita1']
+		target_anova_variable = 'conversion' # nivel_educativo' #tabac_visita1 depre_visita1
+		tests_result = run_statistical_tests(Xy_df_scaled,feature_to_test, target_anova_variable)
+		#tests_result.keys() 
+	######################################################################################################
+	##################  END 1.4. Statistical tests ########################################################
+
+	######################################################################################################
+	##################  1.5. Dimensionality Reduction ############################################################
 	# # # (5) Dimensionality Reduction
-	# pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
-	# print("The variance ratio by the {} principal compments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
+	dimreduction = False
+	if dimreduction is True:
+		pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
+		print("The variance ratio by the {} principal compments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
+	#Manifold learning
+	######################################################################################################
+	##################  END 1.5. Dimensionality Reduction ############################################################
 	
-	# (6) Feature Engineering
-	#expla_features = sorted(X_df_scaled.kyes().tolist()); set(expla_features) == set(explanatory_features) 
-	
+	######################################################################################################
+	################## 2. PREDICTION ############################################################
+
 	formula= build_formula(explanatory_features)
 	# build design matrix(patsy.dmatrix) and rank the features in the formula y ~ X 
-	X_prep = run_feature_ranking(Xy_df_scaled, formula)
+	run_feature_ranking(Xy_df_scaled, formula)
+	
+	
 	#Split dataset into train and test
 	y = Xy_df_scaled[target_variable].values
 	X_features = explanatory_features
@@ -193,13 +273,23 @@ def main():
 		X_features.remove(target_variable)
 	X = Xy_df_scaled[X_features].values
 	X_train, X_test, y_train, y_test = run_split_dataset_in_train_test(X, y, test_size=0.2)
+
+	learners = {}
+	print('Building a Logistic Regression Classifier.....\n')
+	learners['lr_estimator'] = run_logistic_regression(X_train, y_train, X_test, y_test, 0.5,explanatory_and_target_features[:-1])
+	learners['svm_estimator'] = run_svm(X_train, y_train, X_test, y_test, X_features)
+
+	
+	
+	#####
 	# resampling data with SMOTE
 	X_resampled_train, y_resampled_train = resampling_SMOTE(X_train, y_train)
-
 	#####
-	learners = {}
+	
+	
 	learners['random_decision_tree'] = run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
 	print_feature_importances(learners['random_decision_tree'],explanatory_features)
+	pdb.set_trace()
 	learners['rf_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)
 	print_feature_importances(learners['rf_estimator'],explanatory_features)
 	learners['orxgbm_estimator'] = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
@@ -240,7 +330,7 @@ def main():
 	svm_estimator = run_svm(X_train, y_train, X_test, y_test, X_features)
 	lasso_estimator = run_logreg_Lasso(X_train, y_train, X_test, y_test,10)
 	sgd_estimator = run_sgd_classifier(X_train, y_train, X_test, y_test,'hinge',10) #loss = log|hinge
-	lr_estimator = run_logreg(X_train, y_train, X_test, y_test, 0.5)
+	#lr_estimator = run_logistic_regression(X_train, y_train, X_test, y_test, 0.5)
 	naive_bayes_estimator = run_naive_Bayes(X_train, y_train, X_test, y_test, 0)
 	
 	dectree_estimator =run_random_decision_tree(X_train, y_train, X_test, y_test, X_features,target_variable)
@@ -344,20 +434,43 @@ def run_variable_selection(dataframe, explanatory_features=None,target_variable=
 	print(" explanatory features:  {}".format(dataframe.keys()))
 	return dataframe, explanatory_features 
 
+def combine_features(dataset):
+	""" combine_features: combine features and remove redundant 
+	Args:dataset
+	Output: detaset"""
+	diet_med = ['alfrut','alaves', 'alaceit', 'alpast', 'alpan', 'alverd','allact','alpesblan', 'alpeszul']
+	phys_exercise = ['a01', 'ejfre', 'ejminut']
+	dataset['physical_exercise'] = dataset['ejfre']*dataset['ejminut']
+	dataset.drop(['a01', 'ejfre', 'ejminut'], axis=1,  inplace=True)
+	return dataset
 
-def leakage_data(dataset):
-	"""leakage_data: remove attributes about the target """
+	# print('Adding: diet_med in dataframe \n')
+	# dataset['diet_med'] = dataset[diet_med].sum()
+	# for i in diet_med:
+	# 	print('Removing: ', i, ' in dataframe')
+	# 	dataset.drop(i, axis=1,inplace=True)
+
+
+
+def leakage_data(dataset, colstoremove):
+	"""leakage_data: remove attributes about the target and others we may not need
+	Args: dataset (pd)
+	Output: dataset (pd)"""
 	#tiempo (time to convert), tpo1.1..5 (time from year 1 to conversion), dx visita1
-	dataset.drop('tiempo', axis=1,inplace=True)
-	dataset.drop('tpo1.2', axis=1,inplace=True)
-	dataset.drop('tpo1.3', axis=1,inplace=True)
-	dataset.drop('tpo1.4', axis=1,inplace=True)
-	dataset.drop('tpo1.5', axis=1,inplace=True)
-	dataset.drop('dx_visita1', axis=1,inplace=True)
-	#Dummy features to remove: id, fecha nacimiento, fecha_visita
-	dataset.drop('fecha_visita1', axis=1,inplace=True)
-	dataset.drop('fecha_nacimiento', axis=1,inplace=True)
-	dataset.drop('id', axis=1,inplace=True)
+	for col in colstoremove:
+		dataset.drop(col, axis=1,inplace=True)
+	return dataset	
+	# dataset.drop('tiempo', axis=1,inplace=True)
+	# dataset.drop('tpo1.2', axis=1,inplace=True)
+	# dataset.drop('tpo1.3', axis=1,inplace=True)
+	# dataset.drop('tpo1.4', axis=1,inplace=True)
+	# dataset.drop('tpo1.5', axis=1,inplace=True)
+	# dataset.drop('dx_visita1', axis=1,inplace=True)
+	# #Dummy features to remove: id, fecha nacimiento, fecha_visita
+	# dataset.drop('fecha_visita1', axis=1,inplace=True)
+	# dataset.drop('fecha_nacimiento', axis=1,inplace=True)
+	# dataset.drop('id', axis=1,inplace=True)
+	return dataset
 
 def cleanup_column_names(df,rename_dict={},do_inplace=True):
     """cleanup_column_names: renames columns of a pandas dataframe. It converts column names to snake case if rename_dict is not passed. 
@@ -370,8 +483,6 @@ def cleanup_column_names(df,rename_dict={},do_inplace=True):
                     for col in df.columns.values.tolist()}, inplace=do_inplace)
     else:
         return df.rename(columns=rename_dict,inplace=do_inplace)
-    #to drop coulumns
-    #df = df.drop('ferature_name', axis=1)
 
 def plot_histograma_one_longitudinal(df, longit_pattern=None):
 	""" plot_histogram_pair_variables: histograma 1 for each year 
@@ -546,9 +657,11 @@ def run_transformations(dataset):
 	# feature scaling scaling individual samples to have unit norm
 	# the quick way to normalize : X_scaled = preprocessing.scale(X_train), fit_transform is practical if we are going to train models 
 	# To scale [-1,1] use MaxAbsScaler(). MinMaxScaler formula is std*(max-min) + min
+	print('Normalizing the dataset using MinMaxScaler (values shifted and rescaled to ranging from 0 to 1) \n')
 	scaler = preprocessing.MinMaxScaler()
-	#The same instance of the transformer can then be applied to some new test data unseen during the fit call:
-	# the same scaling and shifting operations will be applied to be consistent with the transformation performed on the train data
+	#Standarization substracts the mean and divide by std so that the new distribution has unit variance.
+	#Unlike min-max scaling, standardization does not bound values to a specific range this may be a problem
+	#standardization is much less affected by outliers
 	X_train_minmax = scaler.fit_transform(dataset)
 	print("Orignal ndarray \n {}".format(dataset))
 	#print("X_train_minmax \n {}".format(X_train_minmax))
@@ -566,20 +679,32 @@ def split_features_in_groups():
 	""" split_features_in_groups
 	Output: dictionaty 'group name':list of features"""
 	dict_features = {}
-	vanilla = ['sexo', 'lat_manual', 'nivel_educativo', 'apoe', 'edad']
-	sleep = ['hsnoct' , 'sue_dia' , 'sue_noc' , 'sue_con' , 'sue_man' , 'sue_suf' , 'sue_pro' , 'sue_ron' , 'sue_mov' , 'sue_rui' , 'sue_hor', 'sue_rec']
+	#vanilla = ['sexo', 'lat_manual', 'nivel_educativo', 'apoe', 'edad']
+	vanilla = ['sexo', 'lat_manual', 'nivel_educativo', 'edad']
+	#sleep = ['hsnoct' , 'sue_dia' , 'sue_noc' , 'sue_con' , 'sue_man' , 'sue_suf' , 'sue_pro' , 'sue_ron' , 'sue_mov' , 'sue_rui' , 'sue_hor', 'sue_rec']
+	sleep = ['sue_noc',  'sue_hor', 'sue_rec']
 	family_history = ['dempad' , 'edempad' , 'demmad' , 'edemmad']
+	family_history = ['dempad' , 'demmad']
 	anthropometric = ['imc'] #['pabd' , 'peso' , 'talla' , 'imc']
 	sensory = ['audi', 'visu']
-	intellectual = ['a01' , 'a02' , 'a03' , 'a04' , 'a05' , 'a06' , 'a07' , 'a08' , 'a09' , 'a10' , 'a11' , 'a12' , 'a13' , 'a14'] 
-	demographics = ['sdhijos' , 'numhij' , 'sdvive' , 'sdeconom' , 'sdresid' , 'sdestciv']
-	professional = ['sdtrabaja' , 'sdocupac', 'sdatrb']
-	cardiovascular = ['hta', 'hta_ini', 'glu', 'lipid', 'tabac', 'tabac_ini', 'tabac_fin', 'tabac_cant', 'sp', 'cor', 'cor_ini', 'arri', 'arri_ini', 'card', 'card_ini']
-	ictus = ['tir', 'ictus', 'ictus_num', 'ictus_ini', 'ictus_secu', 'tce', 'tce_num', 'tce_ini', 'tce_con', 'tce_secu']
+	#intellectual = ['a01' , 'a02' , 'a03' , 'a04' , 'a05' , 'a06' , 'a07' , 'a08' , 'a09' , 'a10' , 'a11' , 'a12' , 'a13' , 'a14'] 
+	intellectual = ['a02', 'a03', 'a08', 'a11', 'a12', 'a13', 'a14']
+	#demographics = ['sdhijos' , 'numhij' , 'sdvive' , 'sdeconom' , 'sdresid' , 'sdestciv']
+	demographics = ['numhij' , 'sdvive' , 'sdeconom' , 'sdresid' , 'sdestciv']
+	#professional = ['sdtrabaja' , 'sdocupac', 'sdatrb']
+	professional = [ 'sdatrb']
+	#cardiovascular = ['hta', 'hta_ini', 'glu', 'lipid', 'tabac', 'tabac_ini', 'tabac_fin', 'tabac_cant', 'sp', 'cor', 'cor_ini', 'arri', 'arri_ini', 'card', 'card_ini']
+	cardiovascular = ['hta', 'glu', 'lipid', 'tabac_cant', 'sp', 'cor', 'arri',  'card']
+	#ictus = ['tir', 'ictus', 'ictus_num', 'ictus_ini', 'ictus_secu', 'tce', 'tce_num', 'tce_ini', 'tce_con', 'tce_secu']
+	ictus = ['ictus', 'tce', 'tce_con']
 	diet = ['alfrut', 'alcar', 'alpesblan', 'alpeszul', 'alaves', 'alaceit', 'alpast', 'alpan', 'alverd', 'alleg', 'alemb', 'allact', 'alhuev', 'aldulc']
+	#physical_exercise = ['a01', 'ejfre', 'ejminut']
+	physical_exercise = ['physical_exercise'] #ejfre' * 'ejminut
+
 	dict_features = {'vanilla':vanilla, 'sleep':sleep,'anthropometric':anthropometric, 'family_history':family_history, \
 	'sensory':sensory,'intellectual':intellectual,'demographics':demographics,'professional':professional, \
-	'cardiovascular':cardiovascular, 'ictus':ictus, 'diet':diet}
+	'cardiovascular':cardiovascular, 'ictus':ictus, 'diet':diet, 'physical_exercise':physical_exercise}
+
 	return dict_features
 
 def build_formula(features):
@@ -587,43 +712,57 @@ def build_formula(features):
 	Args: None
 	Outputs: formula"""
 	#formula = 'conversion ~ '; formula += 'C(sexo) + C(nivel_educativo) + C(apoe)'; 
-	formula = 'conversion ~ '; formula += 'sexo + lat_manual + nivel_educativo + apoe '; 
+	#formula = 'conversion ~ '; formula += 'sexo + lat_manual + nivel_educativo + apoe '; 
+	formula = 'conversion ~ '; formula += 'sexo + lat_manual + nivel_educativo '; 
 	#sleep
-	formula += '+ hsnoct + sue_dia + sue_noc + sue_con + sue_man + sue_suf + sue_pro +sue_ron+ sue_mov+sue_rui + sue_hor + sue_rec'
+	#formula += '+ hsnoct + sue_dia + sue_noc + sue_con + sue_man + sue_suf + sue_pro +sue_ron+ sue_mov+sue_rui + sue_hor + sue_rec'
+	formula += '+ sue_noc + sue_hor + sue_rec'
+
 	#family history
-	formula += '+ dempad + edempad + demmad + edemmad'
+	#formula += '+ dempad + edempad + demmad + edemmad'
+	formula += '+ dempad + demmad '
 	#Anthropometric measures
 	#formula += '+ pabd + peso + talla + imc'
 	formula += '+ imc'
 	#sensory disturbances
 	formula += '+ audi + visu'
 	#intellectual activities
-	formula += '+ a01 + a02 + a03 + a04 + a05 + a06 + a07 + a08 + a09 + a10 + a11 + a12 + a13 + a14' 
+	#formula += '+ a01 + a02 + a03 + a04 + a05 + a06 + a07 + a08 + a09 + a10 + a11 + a12 + a13 + a14'
+	formula += '+ a02 + a03 + a08 + a11 + a12 + a13 + a14' 
+
 	#demographics
-	formula += '+ sdhijos + numhij+ sdvive + sdeconom + sdresid + sdestciv'
+	#formula += '+ sdhijos + numhij+ sdvive + sdeconom + sdresid + sdestciv'
+	formula += '+ numhij+ sdvive + sdeconom + sdresid + sdestciv'
+
 	#professional life
-	formula += '+ sdtrabaja + sdocupac + sdatrb'
+	#formula += '+ sdtrabaja + sdocupac + sdatrb'
+	formula += '+ sdatrb'
 	#cardiovascular risk
-	formula += '+ hta + hta_ini + glu + lipid + tabac + tabac_ini + tabac_fin + tabac_cant + sp + cor + cor_ini + arri + arri_ini + card + card_ini'
+	#formula += '+ hta + hta_ini + glu + lipid + tabac + tabac_ini + tabac_fin + tabac_cant + sp + cor + cor_ini + arri + arri_ini + card + card_ini'
+	formula += '+ hta + glu + lipid + tabac_cant + sp + cor + arri + card'
 	#brain conditions that may affect cog performance
-	formula += '+ tir + ictus + ictus_num + ictus_ini + ictus_secu + tce + tce_num + tce_ini + tce_con + tce_secu'
+	#formula += '+ tir + ictus + ictus_num + ictus_ini + ictus_secu + tce + tce_num + tce_ini + tce_con + tce_secu'
+	formula += '+ ictus + tce + tce_con'
 	#diet
-	formula += '+ alfrut + alcar + alpesblan + alpeszul +alaves + alaceit + alpast + alpan + alverd + alleg + alemb + allact + alhuev + aldulc'
+	formula += '+ alfrut + alcar + alpesblan + alpeszul + alaves + alaceit + alpast + alpan + alverd + alleg + alemb + allact + alhuev + aldulc'
+	#physical exercise
+	#formula += ' + ' + ' + '.join(selcols('ejfre_visita',1,1));formula += ' + ' + ' + '.join(selcols('ejminut_visita',1,1));
+	formula += '+ physical_exercise'
 	#scd
-	formula += ' + ' + ' + '.join(selcols('scd_visita',1,1)); formula += ' + ' + ' + '.join(selcols('peorotros_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('tpoevol_visita',1,1)); #formula += ' + ' + ' + '.join(selcols('edadinicio_visita',1,1)); 
-	formula += ' + ' + ' + '.join(selcols('preocupacion_visita',1,1));formula += ' + ' + ' + '.join(selcols('eqm06_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('eqm07_visita',1,1));formula += ' + ' + ' + '.join(selcols('eqm09_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('eqm10_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('scd_visita',1,1)); #formula += ' + ' + ' + '.join(selcols('peorotros_visita',1,1));
+	#formula += ' + ' + ' + '.join(selcols('tpoevol_visita',1,1)); formula += ' + ' + ' + '.join(selcols('edadinicio_visita',1,1)); 
+	formula += ' + ' + ' + '.join(selcols('preocupacion_visita',1,1)); #formula += ' + ' + ' + '.join(selcols('eqm06_visita',1,1));
+	#formula += ' + ' + ' + '.join(selcols('eqm07_visita',1,1));formula += ' + ' + ' + '.join(selcols('eqm09_visita',1,1));
+	#formula += ' + ' + ' + '.join(selcols('eqm10_visita',1,1));
 	#cognitive complaints
-	formula += ' + ' + ' + '.join(selcols('eqm81_visita',1,1));formula += ' + ' + ' + '.join(selcols('eqm86_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('eqm82_visita',1,1));formula += ' + ' + ' + '.join(selcols('eqm83_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('eqm84_visita',1,1));formula += ' + ' + ' + '.join(selcols('eqm85_visita',1,1));
+	#formula += ' + ' + ' + '.join(selcols('eqm81_visita',1,1));formula += ' + ' + ' + '.join(selcols('eqm86_visita',1,1));
+	#formula += ' + ' + ' + '.join(selcols('eqm82_visita',1,1));formula += ' + ' + ' + '.join(selcols('eqm83_visita',1,1));
+	#formula += ' + ' + ' + '.join(selcols('eqm84_visita',1,1));formula += ' + ' + ' + '.join(selcols('eqm85_visita',1,1));
 	formula += ' + ' + ' + '.join(selcols('act_aten_visita',1,1));formula += ' + ' + ' + '.join(selcols('act_orie_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('act_mrec_visita',1,1));formula += ' + ' + ' + '.join(selcols('act_memt_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('act_mrec_visita',1,1));#formula += ' + ' + ' + '.join(selcols('act_memt_visita',1,1));
 	formula += ' + ' + ' + '.join(selcols('act_visu_visita',1,1));formula += ' + ' + ' + '.join(selcols('act_expr_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('act_comp_visita',1,1));formula += ' + ' + ' + '.join(selcols('act_ejec_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('act_prax_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('act_comp_visita',1,1));#formula += ' + ' + ' + '.join(selcols('act_ejec_visita',1,1));
+	#formula += ' + ' + ' + '.join(selcols('act_prax_visita',1,1));
 	#cognitive performance
 	# formula += ' + ' + ' + '.join(selcols('mmse_visita',1,1));formula += ' + ' + ' + '.join(selcols('reloj_visita',1,1));
 	# formula += ' + ' + ' + '.join(selcols('faq_visita',1,1));
@@ -634,21 +773,26 @@ def build_formula(features):
 	#psychioatric symptomes
 	formula += ' + ' + ' + '.join(selcols('gds_visita',1,1));
 	formula += ' + ' + ' + '.join(selcols('stai_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('act_depre_visita',1,1))
-	formula += ' + ' + ' + '.join(selcols('act_ansi_visita',1,1));
+	#formula += ' + ' + ' + '.join(selcols('act_depre_visita',1,1))
+	#formula += ' + ' + ' + '.join(selcols('act_ansi_visita',1,1));
 	formula += ' + ' + ' + '.join(selcols('act_apat_visita',1,1));
 	#social engagement
 	formula += ' + ' + ' + '.join(selcols('relafami_visita',1,1));formula += ' + ' + ' + '.join(selcols('relaamigo_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('relaocio_visita',1,1));formula += ' + ' + ' + '.join(selcols('rsoled_visita',1,1));
-	#physical exercise
-	formula += ' + ' + ' + '.join(selcols('ejfre_visita',1,1));formula += ' + ' + ' + '.join(selcols('ejminut_visita',1,1));
+	#formula += ' + ' + ' + '.join(selcols('relaocio_visita',1,1));formula += ' + ' + ' + '.join(selcols('rsoled_visita',1,1));
+
 	#quality of life
 	formula += ' + ' + ' + '.join(selcols('valcvida_visita',1,1));formula += ' + ' + ' + '.join(selcols('valsatvid_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('valfelc_visita',1,1));formula += ' + ' + ' + '.join(selcols('eq5dmov_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('eq5dcp_visita',1,1));formula += ' + ' + ' + '.join(selcols('eq5dact_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('eq5ddol_visita',1,1));formula += ' + ' + ' + '.join(selcols('eq5dans_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('valfelc_visita',1,1));
 	formula += ' + ' + ' + '.join(selcols('eq5dsalud_visita',1,1));formula += ' + ' + ' + '.join(selcols('eq5deva_visita',1,1));
+
+	#formula += ' + ' + ' + '.join(selcols('eq5dmov_visita',1,1));
+	#formula += ' + ' + ' + '.join(selcols('eq5dcp_visita',1,1));formula += ' + ' + ' + '.join(selcols('eq5dact_visita',1,1));
+	#formula += ' + ' + ' + '.join(selcols('eq5ddol_visita',1,1));formula += ' + ' + ' + '.join(selcols('eq5dans_visita',1,1));
 	
+	#[ 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 
+	#'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1','act_memt_visita1', 
+	#'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 
+	#'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'relaocio_visita1', 'rsoled_visita1']
 	return formula
 
 
@@ -1225,10 +1369,14 @@ def run_kneighbors(X_train, y_train, X_test, y_test, kneighbors=None):
 	return knn
 
 def run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable):
-	""" run_random_decision_tree : Bagging algotihm 
+	""" run_random_decision_tree : Bagging algorithm 
 	Args:
 	Output"""
 	import pygraphviz as pgv
+	import pydotplus
+	import collections
+	from IPython.display import Image
+
 	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
 	X_all = np.concatenate((X_train, X_test), axis=0)
@@ -1269,6 +1417,23 @@ def run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, targe
 	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
 	plt.tight_layout()
 	plt.show()
+	# Visualization of Decision Trees with graphviz
+	pdb.set_trace()
+	labelstarget = np.unique(y_train).tolist()
+	dot_data = tree.export_graphviz(dectree, out_file=None, filled=True, rounded=True, feature_names=X_features) #, class_names=['NC', 'C'])
+	graph = pydotplus.graph_from_dot_data(dot_data)
+	colors = ('turquoise', 'orange')
+	edges = collections.defaultdict(list)
+	for edge in graph.get_edge_list():
+		 edges[edge.get_source()].append(int(edge.get_destination()))
+	for edge in edges:
+		edges[edge].sort()
+		for i in range(2):
+			dest = graph.get_node(str(edges[edge][i]))[0]
+			dest.set_fillcolor(colors[i])   
+	Image(graph.create_png())
+	graph.write_png("decision_tree.png")
+	pdb.set_trace()
 	return dectree
 
 def run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features, threshold=None):
@@ -1371,23 +1536,37 @@ def run_svm(X_train, y_train, X_test, y_test, X_features, threshold=None):
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
 	# SVM model, cost and gamma parameters for RBF kernel. out of the box
-	#, class_weight='balanced'
-	svm = SVC(cache_size=1000, kernel='rbf',class_weight='balanced').fit(X_train, y_train)
-
+	#, class_weight='balanced' kernel poly is horrible
+	svm = SVC(cache_size=1000, kernel='sigmoid',class_weight='balanced').fit(X_train, y_train)
+	# ROC in SVM with explicit weihghts works horribly use balanced
+	#svm = SVC(cache_size=1000, kernel='rbf',class_weight={0:.4, 1:.6}).fit(X_train, y_train)
 	y_train_pred = svm.predict(X_train)
 	y_test_pred = svm.predict(X_test)
 	y_pred = [int(a) for a in svm.predict(X_test)]
 	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
 	print("Baseline classifier using SVM: %s of %s values correct." % (num_correct, len(y_test)))
-	
-	# plot learning curves
-	kfolds = StratifiedKFold(5)
-	#Generate indices to split data into training and test set.
-	cv = kfolds.split(X_all,y_all)
-	title ='linearSVM Learning Curve'
-	plot_learning_curve(svm, title, X_all, y_all, ylim=(0.7, 1.01), cv=cv, n_jobs=1)
+	#confusion matrix on the test data
+	conf_matrix = confusion_matrix(y_test, y_pred)
+	print(conf_matrix)
 	print('Accuracy of SVM classifier on training set {:.2f}'.format(svm.score(X_train, y_train)))
 	print('Accuracy of SVM classifier on test set {:.2f}'.format(svm.score(X_test, y_test)))
+	print(classification_report(y_test, y_pred))
+	
+	# plot learning curves
+	title ='SVM Learning Curve'
+	plot_learning_curve(svm, title, X_all, y_all, n_jobs=1)
+	#Check if the model generalizes well.
+	print('Calling to cross_validation_formodel to see whether the model generalizes well...\n')
+	modelCV = SVC()
+	results_CV = cross_validation_formodel(modelCV, X_train, y_train, n_splits=10)
+	
+	print('Plotting learning curve for CV...\n')
+	kfolds = StratifiedKFold(10)
+	#Generate indices to split data into training and test set.
+	cv = kfolds.split(X_all,y_all)
+	title ='SVM CV Learning Curve'
+	plot_learning_curve(svm, title, X_all, y_all, cv=cv, n_jobs=1)
+	
 	#plot confusion matrix and AUC
 	fig,ax = plt.subplots(1,3)
 	fig.set_size_inches(15,5)
@@ -1396,6 +1575,7 @@ def run_svm(X_train, y_train, X_test, y_test, X_features, threshold=None):
 	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
 	plt.tight_layout()
 	plt.show()
+	pdb.set_trace()
 	####
 	print("Exhaustive search for SVM parameters to improve the out-of-the-box performance of vanilla SVM.")
 	parameters = {'C':10. ** np.arange(5,10), 'gamma':2. ** np.arange(-5, -1)}
@@ -1513,18 +1693,27 @@ def run_logreg_Lasso(X_train, y_train, X_test, y_test,cv=None):
 	plt.show()
 	return lasso
 
-def run_logreg(X_train, y_train, X_test, y_test, threshold=None):
-	"""run_logreg: logistic regression classifier
+def run_logistic_regression(X_train, y_train, X_test, y_test, threshold=None, explanatory_variables=None, ):
+	"""run_logistic_regression: logistic regression classifier
 	Args:  X_train, y_train, X_test, y_test, threshold=[0,1] for predict_proba
 	Output: logreg estimator"""
 	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
+	#print logistic regression summary using statsmodels
+	logit_model_sm = sm.Logit(y_all,X_all)
+	result_sm = logit_model_sm.fit()
+	print(result_sm.summary(xname=explanatory_variables))
+	#Check the The p-values if for most of the variables are smaller than 0.05, most of them are significant to the model.
+
 	if threshold is None:
 		threshold = 0.5
-	# Create logistic regression object
-	logreg = LogisticRegression(class_weight='balanced').fit(X_train, y_train)
+	# Create logistic regression object, class_weight='balanced':replicating the smaller class until you have 
+	#as many samples as in the larger one, but in an implicit way.
+	#Explicit weight , more emphasis with more weight on the less populated class e.g class_weight={0:.8, 1:1}
+	#logreg = LogisticRegression(class_weight='balanced').fit(X_train, y_train)
+	logreg = LogisticRegression(class_weight={0:.2, 1:.8}).fit(X_train, y_train)
 	# Train the model using the training sets
 	# model prediction
 	y_train_pred = logreg.predict_proba(X_train)[:,1]
@@ -1533,10 +1722,21 @@ def run_logreg(X_train, y_train, X_test, y_test, threshold=None):
 	y_pred = [int(a) for a in logreg.predict(X_test)]
 	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
 	print("Baseline classifier using LogReg: %s of %s values correct." % (num_correct, len(y_test)))
-	# plot learning curve
-	plot_learning_curve(logreg, 'LogReg', X_all, y_all, n_jobs=1)	
+	#confusion matrix on the test data
+	conf_matrix = confusion_matrix(y_test, y_pred)
+	print(conf_matrix)
 	print('Accuracy of LogReg classifier on training set {:.2f}'.format(logreg.score(X_train, y_train)))
 	print('Accuracy of LogReg classifier on test set {:.2f}'.format(logreg.score(X_test, y_test)))
+	print(classification_report(y_test, y_pred))
+	# plot learning curve
+	plot_learning_curve(logreg, 'LogReg', X_all, y_all, n_jobs=1)	
+
+	#Check if the model generalizes well.
+	print('Calling to cross_validation_formodel to see whether the model generalizes well...\n')
+	modelCV = LogisticRegression()
+	results_CV = cross_validation_formodel(modelCV, X_train, y_train, n_splits=10)
+	
+
 	#plot confusion matrix and AUC
 	fig,ax = plt.subplots(1,3)
 	fig.set_size_inches(15,5)
@@ -1591,9 +1791,9 @@ def plot_scatter_target_cond(df, preffix_longit_xandy, target_variable=None):
 	preffix_longit_y:preffix of longitudinal variable to plot in Y axis eg audi_visita, target_variable: target feature contained in dataframe 
 	Example: scatter_plot_target_cond(df, 'conversion')"""
 	# scatter_plot_target_cond: average and standard deviation of longitudinal status
-	#selcols(prefix,year ini,year end), if we dont have longitudinal set to 1,1
-	df['longit_x_avg'] = df[selcols(preffix_longit_xandy[0],1,1)].mean(axis=1)
-	df['longit_y_avg'] = df[selcols(preffix_longit_xandy[1],1,1)].mean(axis=1)
+	#selcols(prefix,year ini,year end), if we dont have longitudinal set to 1,1 if we do 1,5
+	df['longit_x_avg'] = df[selcols(preffix_longit_xandy[0],1,5)].mean(axis=1)
+	df['longit_y_avg'] = df[selcols(preffix_longit_xandy[1],1,5)].mean(axis=1)
 	#df['longit_x_std'] = df[selcols(preffix_longit_x,1,1)].std(axis=1)
 	def_no = df[df[target_variable]==0]
 	def_yes = df[df[target_variable]==1]
@@ -1953,13 +2153,16 @@ def calculate_top_features_contributing_class(clf, features, numbertop=None):
 		print("\tand the top {} features labels contributing to the class labels are:{} \n".format(numbertop, operator.itemgetter(*toplist)(features)))
 	
 def run_load_csv(csv_path = None):
-	""" load csv database, print summary of data"""
+	""" load csv database, load csv file and print summary
+	Args: csv_path
+	Output: dataset pandas dataframe"""
 	if csv_path is None:
-		csv_path = "/Users/jaime/vallecas/data/scc/sccplus-24012018.csv"
-		csv_path = "/Users/jaime/vallecas/data/scc/SCDPlus_IM_09032018.csv"
+		csv_path = "/Users/jaime/vallecas/data/scc/SCDPlus_IM_21052018.csv"
+
 	dataset = pd.read_csv(csv_path) #, sep=';')
+	print('Loaded the csv file: ', csv_path, '\n')
 	#summary of data
-	print("Number f Rows=", dataset.shape[0])
+	print("Number of Rows=", dataset.shape[0])
 	print("Name of the features:",dataset.columns.values)
 	print("\n\nColumn data types:",dataset.dtypes)
 	print("Number of Features=", dataset.shape[1])
@@ -1973,8 +2176,15 @@ def run_load_csv(csv_path = None):
 	return dataset
 
 def run_statistical_tests(dataset, feature_label, target_label):
+	"""run_statistical_tests ANOVA test
+	Args:dataset, feature_label, target_label
+	Output: test results """
 	#chi_square_of_df_cols(dataset, feature_label[0], feature_label[1])
-	anova_test(dataset, feature_label, target_label)
+	anova_result = anova_test(dataset, feature_label, target_label)
+	ttest_result = t_test(dataset, feature_label, target_label)
+	#chi_result  = chi_square(dataset, feature_label)
+	dict_results = {'anova': anova_result, 'ttest': ttest_result} #, 'chi':chi_result}
+	return dict_results
 
 def plot_grid_pairs(df, features):
 	""" plot_grid_pairs plot paurs of features with seaborn.pairplot 
@@ -2206,9 +2416,16 @@ def run_correlation_matrix(dataset,feature_label=None):
 	plt.show()
 	return corr
 
-def chi_square_of_df_cols(df, col1, col2):
-	df_col1, df_col2 = df[col1], df[col2]
-	obs = np.array(df_col1, df_col2 ).T
+def chi_square(df, col1):
+	""" Calculate a one-way chi square test (scipy.stats.chisquare(f_obs, f_exp=None, ddof=0, axis=0)[source])
+	This test is invalid when the observed or expected frequencies in each category are too small. 
+	A typical rule is that all of the observed and expected frequencies should be at least 5.
+	When just f_obs is given, it is assumed that the expected frequencies are uniform and given by the mean of the observed frequencies.
+	Args:The chi square test tests the null hypothesis that the categorical data has the given frequencies.
+	Output:"""
+	from scipy.stats import chisquare
+	res_chi =  chisquare([df[col1]])
+
 
 def ks_two_samples_goodness_of_fit(sample1, sample2):
 	"""ks_two_samples_goodness_of_fit: Perform a Kolmogorov-Smirnov two sample test that two data samples come from the same distribution. 
@@ -2263,15 +2480,16 @@ def psi_relative_entropy(bench, comp, group):
 	
 
 def anova_test(df, feature=None, target_label=None):
-	""" The one-way analysis of variance (ANOVA) is used to determine whether there are any statistically significant differences between the means of three or more independent (unrelated) groups.
-	ANOVA test for pandas data set and features.  one-way ANOVA is an omnibus test statistic and cannot tell you which specific groups were statistically significantly different from each other, only that at least two groups were
+	""" The one-way analysis of variance (ANOVA) is used to determine whether there are any statistically significant differences between 
+	the means of three or more independent (unrelated) groups.
+	ANOVA test for pandas data set and features.  one-way ANOVA is an omnibus test statistic and cannot tell you which specific groups 
+	were statistically significantly different from each other, only that at least two groups were
 	Example: anova_test(dataset, features = [dataset.keys()[1], dataset.keys()[2]]) 
 	MSwithin = SSwithin/DFwithin"""
 	#from scipy import stats
 	#F, p = stats.f_oneway(dataset[features[0]], dataset[features[1]], dataset[features[1]])
 	#print("ANOVA test groups", features, ". F =", F, " p =", p)
 	import scipy.stats as ss
-	import statsmodels.api as sm
 	from statsmodels.formula.api import ols
 	ctrl = df[feature[0]].where(df[target_label]==0).dropna()
 	sccs = df[feature[0]].where(df[target_label]==1).dropna()
@@ -2291,9 +2509,20 @@ def ancova_test(dataset, features=None):
 	""" ACNOVA test controlling for features that may have a relationship with the dependent variable"""
 	print("Calculating ANCOVA for features:\n",df.ix[0])
 
-def t_test(dataset, features=None):
-	""" t test"""
-	print("Calculating t test for features:\n",df.ix[0])
+def t_test(dataset, feature1, feature2):
+	""" t test: Calculate the T-test for the means of two independent samples of scores"""
+	from scipy.stats import ttest_ind
+	print('Calculating scipy.stats.ttest_ind for features:', feature1, ' and ', feature2, ' \n')
+	print('It is a two-sided test for the null hypothesis that 2 independent samples have identical expected values. ') 
+	#by default It assumes equal variance ttest_ind(dataset[feature1], dataset[feature2], equal_var=True)
+	# For unequal variance is called Welch's test
+	#Student's t-test assumes that the two populations have normal distributions and with equal variances. 
+	#Welch's t-test is designed for unequal variances, but the assumption of normality is maintained.
+	# Welch's t-test is an approximate solution to the Behrens–Fisher problem.
+	tstat_student, pval_student = ttest_ind(dataset[feature1], dataset[feature2])
+	#print('Computing Welchs ttest, equal variance is not assumed')
+	#tstat_welch, pval_welch = ttest_ind(dataset[feature1], dataset[feature2], equal_var=False)
+
 
 def print_feature_importances(learner, features):
 	""" print_fearure_importances only for elarners that take feature_importances_
@@ -2301,6 +2530,117 @@ def print_feature_importances(learner, features):
 	features_imp = pd.DataFrame(learner.feature_importances_, index=features)
 	features_imp  = features_imp.sort_values(by=0, ascending=False)
 	print("The most important features are {}".format(features_imp.head(20)))
+
+def detect_multicollinearities(df, target, cols=None):
+	""" detect_multicollinearities 
+	Args:
+	Output: """
+	f =plt.figure(figsize=(8, 4))
+	sns.countplot(df[target], palette='RdBu')
+	cols.append('conversion')
+	df = df[cols].dropna(axis=0)
+	# count number of obvs in each class
+	nonconverters, converters = df[target].value_counts()
+	print('Number of nonconverters: ', nonconverters)
+	print('Number of converters : ', converters)
+
+	print(" Generate a scatter plot matrix with the mean columns...\n")# 
+	g = sns.pairplot(data=df.dropna(),hue = target, palette='RdBu')
+	dir_images = '/Users/jaime/github/code/tensorflow/production/images'
+	filenametosav = cols[0] + '_scatter.png'
+	g.savefig(os.path.join(dir_images, filenametosav))
+
+	print(" Generate and visualize the correlation matrix...\n")
+	corr = df.corr().round(3)
+	# Mask for the upper triangle
+	mask = np.zeros_like(corr, dtype=np.bool)
+	mask[np.triu_indices_from(mask)] = True
+	f, ax = plt.subplots(figsize=(20, 20))
+	# Define custom colormap
+	cmap = sns.diverging_palette(220, 10, as_cmap=True)
+	# Draw the heatmap
+	sns.heatmap(corr, mask=mask, cmap=cmap, vmin=-1, vmax=1, center=0,
+            square=True, linewidths=.5, cbar_kws={"shrink": .5}, annot=True)
+	plt.tight_layout()
+	dir_images = '/Users/jaime/github/code/tensorflow/production/images'
+	filenametosav = cols[0] + '_corr.png'
+	f.savefig(os.path.join(dir_images, filenametosav))
+	# plot joint distributions of each feature against the target
+	run_jointdibutions= True
+	if run_jointdibutions is True:
+		print('Plotting joint distributions for: ', cols, '\n')
+		feature_y = target
+		for i in cols[:-1]:
+			feature_x = i
+			dfjoints = df[[feature_x,feature_y]].dropna()
+			plot_jointdistributions(dfjoints, feature_x, feature_y)
+			print('\n     Closing all figures.   ....\n')
+
+def plot_jointdistributions(dfjoints, feature_x, feature_y, feature_x2=None):
+	""" plot_jointdistributions
+	Args: dfjoints (pandas dataframe), feature_x, feature_y, feature_x2 (for scatter only)
+	Output:"""
+	#dfjoints = dataframe[['scd_visita1', 'conversion']].dropna()
+	#dfjoints = dataframe[[dict_features['diet_keto'][3], 'conversion']].dropna() 
+	#https://jakevdp.github.io/PythonDataScienceHandbook/04.14-visualization-with-seaborn.html
+	dir_images = '/Users/jaime/github/code/tensorflow/production/images'
+	print("Plot Kernel Density Estimation (KDE) of ", feature_x, " and ", feature_y)
+	
+	sns_plot =sns.jointplot(dfjoints[feature_x], dfjoints[feature_y],dfjoints, kind='kde')
+	sns_plot.savefig(os.path.join(dir_images, 'joint_' + feature_x + feature_y + '.png'))
+	print("Combine Histograms and KDE can be combined using distplot for: ", feature_x, " and ", feature_y)
+	f = plt.figure(figsize=(6,6))
+	ax =sns.distplot(dfjoints[feature_x])
+	ax =sns.distplot(dfjoints[feature_y]);
+	f.savefig(os.path.join(dir_images, 'distplot_' + feature_x + feature_y + '.png'))
+	print("Joint distribution and the marginal distributions together for: ", feature_x, " and ", feature_y)
+
+	with sns.axes_style('white'):
+		f = sns.jointplot(feature_x, feature_y, dfjoints, kind='reg') #kind='hex' 'kde'
+		f.savefig(os.path.join(dir_images, 'jointplot_' + feature_x + feature_y + '.png'))
+	f = plt.figure(figsize=(6,6))
+	sns.kdeplot(dfjoints[feature_x][dfjoints[feature_y]==0], label='NonConv', shade=True)
+	sns.kdeplot(dfjoints[feature_x][dfjoints[feature_y]==1], label='Conv', shade=True)
+	f.savefig(os.path.join(dir_images, 'kdeplot_' + feature_x + feature_y + '.png'))
+	plt.xlabel(feature_x);	
+	f = plt.figure(figsize=(6,6))
+	sns_plot = sns.violinplot(feature_y, feature_x, data=dfjoints,
+               palette=["lightblue", "lightpink"]);	
+	f.savefig(os.path.join(dir_images, 'violinplot_' + feature_x + feature_y + '.png'))
+	#scatter plot feature_x1, featue_x2 regplot, which will automatically fit a linear regression to the data:
+	if feature_x2 is not None: 
+		g = sns.lmplot(feature_x, feature_x2, col=feature_y, data=dfjoints, markers=".", scatter_kws=dict(color='c'))
+		g.map(plt.axhline, y=0.1, color="k", ls=":");
+		g.set_axis_labels(feature_x,feature_x2)
+		g.savefig(os.path.join(dir_images, 'lmplot_' + feature_x + feature_y + '.png'))
+	
+def recursive_feature_elimination(X, y, nbofbestfeatures, explanatory_features):
+	""" recursive_feature_elimination (RFE) using a logisticregression model, RFE tries to select features by
+	recursively considering smaller and smaller sets of features. 
+	RFE select features by recursively considering smaller and smaller sets of features
+	Args:X,y
+	Output:"""
+	from sklearn.feature_selection import RFE
+	logreg = LogisticRegression()
+	#nbofbestfeatures = 20
+	rfe = RFE(logreg, nbofbestfeatures)
+	rfe = rfe.fit(X, y )
+	print(rfe.support_)
+	print(rfe.ranking_)
+	best_logreg_features = []
+	print('Creating the list of ', nbofbestfeatures,' most important features\n')
+	for i in range(0, len(rfe.support_.tolist())):
+		if rfe.support_.tolist()[i] == True:
+			best_logreg_features.append(explanatory_features[i])
+	return best_logreg_features
+
+def cross_validation_formodel(modelCV, X_train, y_train, n_splits):
+	""" cross_validation_formodel"""
+	kfold = model_selection.KFold(n_splits=n_splits, random_state=7)
+	scoring = 'accuracy'
+	results = model_selection.cross_val_score(modelCV, X_train, y_train, cv=kfold, scoring=scoring)
+	print("%d-fold cross validation average accuracy: %.3f" % (n_splits, results.mean()))
+	return results
 
 
 if __name__ == "__name__":
