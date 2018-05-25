@@ -153,13 +153,14 @@ def main():
 	features_list = dataframe.columns.values.tolist()
 	#combine physical exercise and diet features
 	dataframe = combine_features(dataframe)
+
 	dict_features = split_features_in_groups()
 	print("Dictionary of static(all years) features ".format(dict_features))
 	run_print_dataset(dataframe)
 	
 	# Select subset of explanatory variables from prior information MUST include the target_variable
 	features_static =  dict_features['vanilla'] + dict_features['sleep'] + dict_features['anthropometric'] + \
-	dict_features['family_history'] + dict_features['sensory'] +  dict_features['intellectual'] + dict_features['demographics'] +\
+	dict_features['familiar_ad'] + dict_features['sensory'] +  dict_features['intellectual'] + dict_features['demographics'] +\
 	dict_features['professional'] +  dict_features['cardiovascular'] + dict_features['ictus'] + dict_features['diet']  + dict_features['physical_exercise']
 		
 	all_features = dataframe.keys().tolist()
@@ -238,12 +239,13 @@ def main():
 	######################################################################################################
 	##################  1.4. Statistical tests ############################################################
 	# # # perform statistical tests: ANOVA
-	statstest = False
+	statstest = True
 	if statstest is True:
-		feature_to_test = ['scd_visita1']
+		feature_to_test = ['familiar_ad', 'nivel_educativo', 'tabac_cant', 'apoe'] #['scd_visita1']
 		target_anova_variable = 'conversion' # nivel_educativo' #tabac_visita1 depre_visita1
 		tests_result = run_statistical_tests(Xy_df_scaled,feature_to_test, target_anova_variable)
 		#tests_result.keys() 
+	pdb.set_trace()
 	######################################################################################################
 	##################  END 1.4. Statistical tests ########################################################
 
@@ -264,7 +266,7 @@ def main():
 	formula= build_formula(explanatory_features)
 	# build design matrix(patsy.dmatrix) and rank the features in the formula y ~ X 
 	run_feature_ranking(Xy_df_scaled, formula)
-	
+	pdb.set_trace()
 	
 	#Split dataset into train and test
 	y = Xy_df_scaled[target_variable].values
@@ -442,14 +444,10 @@ def combine_features(dataset):
 	phys_exercise = ['a01', 'ejfre', 'ejminut']
 	dataset['physical_exercise'] = dataset['ejfre']*dataset['ejminut']
 	dataset.drop(['a01', 'ejfre', 'ejminut'], axis=1,  inplace=True)
+	dataset['familiar_ad'] = dataset['demmad'] | dataset['dempad']
+	dataset.drop(['edemmad', 'edempad'], axis=1,  inplace=True)
+
 	return dataset
-
-	# print('Adding: diet_med in dataframe \n')
-	# dataset['diet_med'] = dataset[diet_med].sum()
-	# for i in diet_med:
-	# 	print('Removing: ', i, ' in dataframe')
-	# 	dataset.drop(i, axis=1,inplace=True)
-
 
 
 def leakage_data(dataset, colstoremove):
@@ -538,15 +536,20 @@ def plot_histograma_bygroup_target(df, target_label=None):
 	grd2 = df.groupby([target_label]).size()
 	print("conversion subjects are {}% out of {} observations".format(100* grd2[1]/(grd2[1]+grd2[0]), grd2[1]+grd2[0]))
 	p = grd2.plot(kind='barh', color='orange')
-	fig.suptitle('number of conversors vs non conversors')
+	title = 'number of ' + target_label + '  vs non' + target_label
+	fig.suptitle(title)
 	plt.show()
 
 def plot_histograma_bygroup_categorical(df, target_variable=None):
 	# target related to categorical features
 	#categorical_features = ['sexo','nivel_educativo', 'apoe', 'edad']
-	df['sexo'] = df['sexo'].astype('category').cat.rename_categories(['M', 'F'])
-	df['nivel_educativo'] = df['nivel_educativo'].astype('category').cat.rename_categories(['~Pr', 'Pr', 'Se', 'Su'])
+	#df['sexo'] = df['sexo'].astype('category').cat.rename_categories(['M', 'F'])
 	df['apoe'] = df['apoe'].astype('category').cat.rename_categories(['No', 'Het', 'Hom'])
+	df['nivel_educativo'] = df['nivel_educativo'].astype('category').cat.rename_categories(['~Pr', 'Pr', 'Se', 'Su'])
+	#df['apoe'] = df['apoe'].astype('category').cat.rename_categories(['No', 'Het', 'Hom'])
+	df['familiar_ad'] = df['familiar_ad'].astype('category').cat.rename_categories(['NoFam', 'Fam'])
+	#pdb.set_trace()
+	
 	df['edad'] = pd.cut(df['edad'], range(0, 100, 10), right=False)
 	
 	df['alfrut'] = df['alfrut'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
@@ -558,11 +561,14 @@ def plot_histograma_bygroup_categorical(df, target_variable=None):
 	fig, ax = plt.subplots(1,4)
 	fig.set_size_inches(20,5)
 	fig.suptitle('Conversion by absolute numbers, for various demographics')
-	d = df.groupby([target_variable, 'sexo']).size()
+	#d = df.groupby([target_variable, 'sexo']).size()
+	d = df.groupby([target_variable, 'apoe']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[0])
 	d = df.groupby([target_variable, 'nivel_educativo']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[1])
-	d = df.groupby([target_variable, 'apoe']).size()
+	#d = df.groupby([target_variable, 'apoe']).size()
+	d = df.groupby([target_variable, 'familiar_ad']).size()
+
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[2])
 	d = df.groupby([target_variable, 'edad']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[3])
@@ -570,13 +576,16 @@ def plot_histograma_bygroup_categorical(df, target_variable=None):
 	fig, ax = plt.subplots(1,4)
 	fig.set_size_inches(20,5)
 	fig.suptitle('Conversion by relative numbers, for various demographics')
-	d = df.groupby([target_variable, 'sexo']).size().unstack(level=1)
+	#d = df.groupby([target_variable, 'sexo']).size().unstack(level=1)
+	d = df.groupby([target_variable, 'apoe']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[0])
 	d = df.groupby([target_variable, 'nivel_educativo']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[1])
-	d = df.groupby([target_variable, 'apoe']).size().unstack(level=1)
+	#d = df.groupby([target_variable, 'apoe']).size().unstack(level=1)
+	d = df.groupby([target_variable, 'familiar_ad']).size().unstack(level=1)
+
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[2])
 	d = df.groupby([target_variable, 'edad']).size().unstack(level=1)
@@ -679,12 +688,10 @@ def split_features_in_groups():
 	""" split_features_in_groups
 	Output: dictionaty 'group name':list of features"""
 	dict_features = {}
-	#vanilla = ['sexo', 'lat_manual', 'nivel_educativo', 'apoe', 'edad']
-	vanilla = ['sexo', 'lat_manual', 'nivel_educativo', 'edad']
+	vanilla = ['sexo', 'lat_manual', 'nivel_educativo', 'apoe', 'edad']
+	#vanilla = ['sexo', 'lat_manual', 'nivel_educativo', 'edad']
 	#sleep = ['hsnoct' , 'sue_dia' , 'sue_noc' , 'sue_con' , 'sue_man' , 'sue_suf' , 'sue_pro' , 'sue_ron' , 'sue_mov' , 'sue_rui' , 'sue_hor', 'sue_rec']
 	sleep = ['sue_noc',  'sue_hor', 'sue_rec']
-	family_history = ['dempad' , 'edempad' , 'demmad' , 'edemmad']
-	family_history = ['dempad' , 'demmad']
 	anthropometric = ['imc'] #['pabd' , 'peso' , 'talla' , 'imc']
 	sensory = ['audi', 'visu']
 	#intellectual = ['a01' , 'a02' , 'a03' , 'a04' , 'a05' , 'a06' , 'a07' , 'a08' , 'a09' , 'a10' , 'a11' , 'a12' , 'a13' , 'a14'] 
@@ -700,8 +707,10 @@ def split_features_in_groups():
 	diet = ['alfrut', 'alcar', 'alpesblan', 'alpeszul', 'alaves', 'alaceit', 'alpast', 'alpan', 'alverd', 'alleg', 'alemb', 'allact', 'alhuev', 'aldulc']
 	#physical_exercise = ['a01', 'ejfre', 'ejminut']
 	physical_exercise = ['physical_exercise'] #ejfre' * 'ejminut
-
-	dict_features = {'vanilla':vanilla, 'sleep':sleep,'anthropometric':anthropometric, 'family_history':family_history, \
+	#family_history = ['dempad' , 'edempad' , 'demmad' , 'edemmad']
+	#family_history = ['dempad' , 'demmad']
+	familiar_ad = ['familiar_ad']
+	dict_features = {'vanilla':vanilla, 'sleep':sleep,'anthropometric':anthropometric, 'familiar_ad':familiar_ad, \
 	'sensory':sensory,'intellectual':intellectual,'demographics':demographics,'professional':professional, \
 	'cardiovascular':cardiovascular, 'ictus':ictus, 'diet':diet, 'physical_exercise':physical_exercise}
 
@@ -720,7 +729,8 @@ def build_formula(features):
 
 	#family history
 	#formula += '+ dempad + edempad + demmad + edemmad'
-	formula += '+ dempad + demmad '
+	#formula += '+ dempad + demmad '
+	formula += '+ familiar_ad '
 	#Anthropometric measures
 	#formula += '+ pabd + peso + talla + imc'
 	formula += '+ imc'
