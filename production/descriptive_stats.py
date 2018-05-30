@@ -80,6 +80,8 @@ from adspy_shared_utilities import plot_class_regions_for_classifier, plot_decis
 
 def main():
 	#plt.close('all')
+	df = socioeconomics_infographics()
+	pdb.set_trace()
 	# get the data in csv format
 	dataframe = run_load_csv()	
 	# Feature Selection : cosmetic name changing and select input and output 
@@ -89,6 +91,7 @@ def main():
 	dataframe_orig = dataframe.copy()
 	###########################################################################################
 	##################  3.0. EDA plot ##########################################################
+	target_variable='conversion'
 	edaplot = False
 	if edaplot is True:
 		print('Plot longitudinal features')
@@ -101,10 +104,10 @@ def main():
 		plot_histograma_one_longitudinal(dataframe_orig, longit_pattern2)
 		plot_histograma_one_longitudinal(dataframe_orig, longit_pattern3)
 		# YS: this is hardcode fix
-		plot_histograma_bygroup_categorical(dataframe_orig, target_variable='conversion')
+		plot_histograma_bygroup_categorical(dataframe_orig, target_variable=target_variable)
 		#(4) Descriptive analytics: plot scatter and histograms
 		#longit_xy_scatter = ['scd_visita', 'gds_visita'] #it works for longitudinal
-		plot_scatter_target_cond(dataframe_orig, ['scd_visita', 'gds_visita'], target_variable='conversion')
+		plot_scatter_target_cond(dataframe_orig, ['scd_visita', 'gds_visita'], target_variable=target_variable)
 		#features_to_plot = ['scd_visita1', 'gds_visita1'] 
 		plot_histogram_pair_variables(dataframe_orig, ['scd_visita2', 'gds_visita2'] )
 		# #plot 1 histogram by grouping values of one continuous feature 
@@ -440,7 +443,7 @@ def combine_features(dataset):
 	""" combine_features: combine features and remove redundant 
 	Args:dataset
 	Output: detaset"""
-	diet_med = ['alfrut','alaves', 'alaceit', 'alpast', 'alpan', 'alverd','allact','alpesblan', 'alpeszul']
+	#diet_med = ['alfrut','alaves', 'alaceit', 'alpast', 'alpan', 'alverd','allact','alpesblan', 'alpeszul']
 	phys_exercise = ['a01', 'ejfre', 'ejminut']
 	dataset['physical_exercise'] = dataset['ejfre']*dataset['ejminut']
 	dataset.drop(['a01', 'ejfre', 'ejminut'], axis=1,  inplace=True)
@@ -546,69 +549,74 @@ def plot_histograma_bygroup_categorical(df, target_variable=None):
 	#df['sexo'] = df['sexo'].astype('category').cat.rename_categories(['M', 'F'])
 	df['apoe'] = df['apoe'].astype('category').cat.rename_categories(['No', 'Het', 'Hom'])
 	df['nivel_educativo'] = df['nivel_educativo'].astype('category').cat.rename_categories(['~Pr', 'Pr', 'Se', 'Su'])
-	#df['apoe'] = df['apoe'].astype('category').cat.rename_categories(['No', 'Het', 'Hom'])
 	df['familiar_ad'] = df['familiar_ad'].astype('category').cat.rename_categories(['NoFam', 'Fam'])
-	#pdb.set_trace()
-	
+	df['nivelrenta'] = df['nivelrenta'].astype('category').cat.rename_categories(['Baja', 'Media', 'Alta'])
 	df['edad'] = pd.cut(df['edad'], range(0, 100, 10), right=False)
 	
-	df['alfrut'] = df['alfrut'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
-	df['alcar'] = df['alcar'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
-	df['aldulc'] = df['aldulc'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
-	df['alverd'] = df['alverd'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
+	# df['alfrut'] = df['alfrut'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
+	# df['alcar'] = df['alcar'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
+	# df['aldulc'] = df['aldulc'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
+	# df['alverd'] = df['alverd'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
+	#Diet
+	nb_of_categories = 4
+	df['dietaproteica_cut'] = pd.cut(df['dietaproteica'],nb_of_categories)
+	df['dietagrasa_cut'] = pd.cut(df['dietagrasa'],nb_of_categories)
+	df['dietaglucemica_cut'] = pd.cut(df['dietaglucemica'],nb_of_categories)
+	df['dietasaludable_cut']= pd.cut(df['dietasaludable'],nb_of_categories)
+	
 
 	#in absolute numbers
-	fig, ax = plt.subplots(1,4)
+	fig, ax = plt.subplots(1,5)
 	fig.set_size_inches(20,5)
 	fig.suptitle('Conversion by absolute numbers, for various demographics')
-	#d = df.groupby([target_variable, 'sexo']).size()
 	d = df.groupby([target_variable, 'apoe']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[0])
 	d = df.groupby([target_variable, 'nivel_educativo']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[1])
-	#d = df.groupby([target_variable, 'apoe']).size()
 	d = df.groupby([target_variable, 'familiar_ad']).size()
-
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[2])
-	d = df.groupby([target_variable, 'edad']).size()
+	d = df.groupby([target_variable, 'nivelrenta']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[3])
+	d = df.groupby([target_variable, 'edad']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[4])
+
 	#in relative numbers
-	fig, ax = plt.subplots(1,4)
+	fig, ax = plt.subplots(1,5)
 	fig.set_size_inches(20,5)
 	fig.suptitle('Conversion by relative numbers, for various demographics')
-	#d = df.groupby([target_variable, 'sexo']).size().unstack(level=1)
 	d = df.groupby([target_variable, 'apoe']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[0])
 	d = df.groupby([target_variable, 'nivel_educativo']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[1])
-	#d = df.groupby([target_variable, 'apoe']).size().unstack(level=1)
 	d = df.groupby([target_variable, 'familiar_ad']).size().unstack(level=1)
-
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[2])
-	d = df.groupby([target_variable, 'edad']).size().unstack(level=1)
+	d = df.groupby([target_variable, 'nivelrenta']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[3])
+	d = df.groupby([target_variable, 'edad']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[4])
 	plt.show()
-	#in relative numbers
+	
+	#diet in relative numbers
 	fig, ax = plt.subplots(1,4)
 	fig.set_size_inches(20,5)
 	fig.suptitle('Conversion by relative numbers, for Alimentation')
-	d = df.groupby([target_variable, 'alfrut']).size().unstack(level=1)
+	d = df.groupby([target_variable, 'dietaproteica_cut']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[0])
-	d = df.groupby([target_variable, 'alcar']).size().unstack(level=1)
+	d = df.groupby([target_variable, 'dietagrasa_cut']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[1])
-	d = df.groupby([target_variable, 'aldulc']).size().unstack(level=1)
+	d = df.groupby([target_variable, 'dietaglucemica_cut']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[2])
-	d = df.groupby([target_variable, 'alverd']).size().unstack(level=1)
+	d = df.groupby([target_variable, 'dietasaludable_cut']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[3])
-	plt.show()
 
 def run_imputations(dataset, type_imput=None):
 	""" run_imputations: datasets with missign values are incompatible with scikit-learn 
@@ -2168,6 +2176,7 @@ def run_load_csv(csv_path = None):
 	Output: dataset pandas dataframe"""
 	if csv_path is None:
 		csv_path = "/Users/jaime/vallecas/data/scc/SCDPlus_IM_21052018.csv"
+		csv_path = "/Users/jaime/vallecas/data/scc/socioeconomics_29052018.csv" #socioeconomics dataset
 
 	dataset = pd.read_csv(csv_path) #, sep=';')
 	print('Loaded the csv file: ', csv_path, '\n')
@@ -2245,6 +2254,7 @@ def plot_histogram_pair_variables(dataset, feature_label=None):
 	# features = [dataset.Visita_1_MMSE, dataset.years_school ]
 	features = [dataset[feature_label[f]] for f in range(len(feature_label))]
 	#plot two first features
+
 	ax[0].hist(features[0].dropna(), nb_of_bins, facecolor='red', alpha=0.5, label="scc")
 	ax[1].hist(features[1].dropna(), nb_of_bins, facecolor='red', alpha=0.5, label="scc")
 	#fig.subplots_adjust(left=0, right=1, bottom=0, top=0.5, hspace=0.05, wspace=1)
@@ -2547,7 +2557,7 @@ def detect_multicollinearities(df, target, cols=None):
 	Output: """
 	f =plt.figure(figsize=(8, 4))
 	sns.countplot(df[target], palette='RdBu')
-	cols.append('conversion')
+	cols.append(target)
 	df = df[cols].dropna(axis=0)
 	# count number of obvs in each class
 	nonconverters, converters = df[target].value_counts()
@@ -2651,6 +2661,66 @@ def cross_validation_formodel(modelCV, X_train, y_train, n_splits):
 	results = model_selection.cross_val_score(modelCV, X_train, y_train, cv=kfold, scoring=scoring)
 	print("%d-fold cross validation average accuracy: %.3f" % (n_splits, results.mean()))
 	return results
+
+def socioeconomics_infographics():
+	""" socioeconomics_infographics: EDA for wealth, diet etc
+	"""
+	plt.close('all')
+	dataframe = run_load_csv('/Users/jaime/vallecas/data/scc/Dataset_29052018.csv')	
+	target_variable = 'conversionmci'
+	# Feature Selection : cosmetic name changing and select input and output 
+	print('Calling for cosmetic cleanup (all lowercase, /, remove blanks) e.g. cleanup_column_names(df,rename_dict={},do_inplace=True)') 
+	cleanup_column_names(dataframe, {}, True)
+	#combine features to create familiar_ad and physical exercise
+	dataframe = combine_features(dataframe)
+	#copy dataframe with the cosmetic changes e.g. Tiempo is now tiempo
+	dataframe_orig = dataframe.copy()
+	#replace -1 by 0 
+	dataframe['conversionmci'].replace(-1,0, inplace=True)
+	plot_histograma_bygroup_categorical(dataframe_orig, target_variable=target_variable)
+	#(4) Descriptive analytics: plot scatter and histograms
+	#longit_xy_scatter = ['scd_visita', 'gds_visita'] #it works for longitudinal
+	#plot_scatter_target_cond(dataframe_orig, ['renta', 'anos_escolaridad'], target_variable=target_variable)
+	#features_to_plot = ['scd_visita1', 'gds_visita1'] 
+	plot_histogram_pair_variables(dataframe, ['renta', 'anos_escolaridad'] )
+	# #plot 1 histogram by grouping values of one continuous feature 
+	plot_histograma_bygroup(dataframe, 'renta')
+	# # plot one histogram grouping by the value of the target variable
+	plot_histograma_bygroup_target(dataframe, target_variable)
+	#multicollinearity
+	feature_x = 'renta'
+	feature_y = 'anos_escolaridad'
+	dfjoints = dataframe_orig[[feature_x, feature_y]].dropna()
+	#plot_jointdistributions(dfjoints, feature_x, feature_y)
+	# To plot scatter feature_x and feature_x2 uncomment
+	# #feature_x2 = 'alcar' 
+	# #dfjoints = dataframe[[feature_x,feature_y, feature_x2]].dropna() 
+	# #plot_jointdistributions(dfjoints, feature_x, feature_y, feature_x2)
+	# dfjoints = dataframe[[feature_x,feature_y]].dropna()
+	plot_jointdistributions(dfjoints, feature_x, feature_y)
+	feature_y = 'mmse_visita1'
+	
+	
+	#plot_jointdistributions(dataframe_orig[[feature_x, feature_y]].dropna(), feature_x, 'mmse_visita1')
+
+
+
+	#Detect multicollinearities
+	#cols_list = [['scd_visita1', 'gds_visita1']] to multicollinearity of a list
+	cols_list = [['scd_visita1', 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'preocupacion_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1', 'act_aten_visita1', 'act_orie_visita1', 'act_mrec_visita1', 'act_memt_visita1', 'act_visu_visita1', 'act_expr_visita1', 'act_comp_visita1', 'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'act_apat_visita1', 'gds_visita1', 'stai_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'eq5dsalud_visita1', 'eq5deva_visita1', 'relafami_visita1', 'relaamigo_visita1', 'relaocio_visita1', 'rsoled_visita1', 'valcvida_visita1', 'valsatvid_visita1', 'valfelc_visita1']]
+	cols_list = [['scd_visita1', 'gds_visita1']]
+	cols_list = [['mmse_visita1',	'anos_escolaridad', 'renta', 'reloj_visita1','fcsrtrl1_visita1','animales_visita1', 'dietaproteica', 'dietagrasa', 'dietasaludable']]
+
+
+	#for cols in cols_list:
+	#for cols in dict_features.keys():
+	for cols in cols_list:
+	 	print("Calculating miulticolinearities for Group feature: ", cols, ' \n')
+	 	#features = dict_features[cols]
+	 	features = cols
+	 	print('Detect collinearities conversionmci and ', features)
+	 	#detect_multicollinearities calls to plot_jointdistributions
+	 	detect_multicollinearities(dataframe, 'conversionmci', features)
 
 
 if __name__ == "__name__":
