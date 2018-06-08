@@ -79,9 +79,12 @@ import networkx as nx
 from adspy_shared_utilities import plot_class_regions_for_classifier, plot_decision_tree, plot_feature_importances, plot_class_regions_for_classifier_subplot
 
 def main():
-	#plt.close('all')
-	df = socioeconomics_infographics()
-	pdb.set_trace()
+	plt.close('all')
+	#Particular EDAs
+	#df = meritxell_eda()
+	#pdb.set_trace()
+	#df = socioeconomics_infographics()
+	
 	# get the data in csv format
 	dataframe = run_load_csv()	
 	# Feature Selection : cosmetic name changing and select input and output 
@@ -89,38 +92,45 @@ def main():
 	cleanup_column_names(dataframe, {}, True)
 	#copy dataframe with the cosmetic changes e.g. Tiempo is now tiempo
 	dataframe_orig = dataframe.copy()
+	#combine physical exercise and diet features
+	dataframe = combine_features(dataframe)
 	###########################################################################################
 	##################  3.0. EDA plot ##########################################################
-	target_variable='conversion'
+	target_variable = 'conversionmci'
 	edaplot = False
 	if edaplot is True:
 		print('Plot longitudinal features')
-		longit_pattern = re.compile("^scd_+visita[1-5]+$") 
+		longit_pattern = re.compile("^scd_+visita[1-5]+$"); 
 		longit_pattern2 = re.compile("^stai_+visita[1-5]+$") 
-		longit_pattern3 = re.compile("^gds_+visita[1-5]+$") 
+		longit_pattern3 = re.compile("^gds_+visita[1-5]+$")
+		longit_pattern4 = re.compile("^fcsrtrl1_visita[1-5]+$") 
+		longit_pattern5 = re.compile("^preocupacion_visita[1-5]+$") 
+		
 		# longit_pattern = re.compile("^mmse_+visita[1-5]+$") 
 		# # plot N histograms one each each variable_visitai
-		plot_histograma_one_longitudinal(dataframe_orig, longit_pattern)
-		plot_histograma_one_longitudinal(dataframe_orig, longit_pattern2)
-		plot_histograma_one_longitudinal(dataframe_orig, longit_pattern3)
+		plot_histograma_one_longitudinal(dataframe, longit_pattern)
+		plot_histograma_one_longitudinal(dataframe, longit_pattern2)
+		plot_histograma_one_longitudinal(dataframe, longit_pattern3)
+		plot_histograma_one_longitudinal(dataframe, longit_pattern4)
+		plot_histograma_one_longitudinal(dataframe, longit_pattern5)
 		# YS: this is hardcode fix
-		plot_histograma_bygroup_categorical(dataframe_orig, target_variable=target_variable)
+		plot_histograma_bygroup_categorical(dataframe, target_variable=target_variable)
 		#(4) Descriptive analytics: plot scatter and histograms
 		#longit_xy_scatter = ['scd_visita', 'gds_visita'] #it works for longitudinal
-		plot_scatter_target_cond(dataframe_orig, ['scd_visita', 'gds_visita'], target_variable=target_variable)
+		plot_scatter_target_cond(dataframe, ['scd_visita', 'gds_visita'], target_variable=target_variable)
 		#features_to_plot = ['scd_visita1', 'gds_visita1'] 
-		plot_histogram_pair_variables(dataframe_orig, ['scd_visita2', 'gds_visita2'] )
+		plot_histogram_pair_variables(dataframe, ['scd_visita2', 'gds_visita2'] )
 		# #plot 1 histogram by grouping values of one continuous feature 
-		plot_histograma_bygroup(dataframe_orig, 'sue_rec')
+		plot_histograma_bygroup(dataframe, 'glu')
 		# # plot one histogram grouping by the value of the target variable
-		plot_histograma_bygroup_target(dataframe_orig, 'conversion')
+		plot_histograma_bygroup_target(dataframe, 'conversionmci')
 
 	################################################################################################
 	##################  1.1.Detect Multicollinearity  ##############################################
 	multicollin = False
 	if multicollin is True:
 		feature_x = 'scd_visita1'
-		feature_y = 'conversion'
+		feature_y = target_variable
 		dfjoints = dataframe_orig[[feature_x, feature_y]].dropna()
 		#plot_jointdistributions(dfjoints, feature_x, feature_y)
 		# To plot scatter feature_x and feature_x2 uncomment
@@ -133,7 +143,8 @@ def main():
 		#Detect multicollinearities
 		#cols_list = [['scd_visita1', 'gds_visita1']] to multicollinearity of a list
 		cols_list = [['scd_visita1', 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'preocupacion_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1', 'act_aten_visita1', 'act_orie_visita1', 'act_mrec_visita1', 'act_memt_visita1', 'act_visu_visita1', 'act_expr_visita1', 'act_comp_visita1', 'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'act_apat_visita1', 'gds_visita1', 'stai_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'eq5dsalud_visita1', 'eq5deva_visita1', 'relafami_visita1', 'relaamigo_visita1', 'relaocio_visita1', 'rsoled_visita1', 'valcvida_visita1', 'valsatvid_visita1', 'valfelc_visita1']]
-		cols_list = [['scd_visita1', 'gds_visita1']]
+		cols_list = [['scd_visita1', 'gds_visita1', 'educrenta', 'nivelrenta', 'apoe']]
+
 		#for cols in cols_list:
 		#for cols in dict_features.keys():
 		for cols in cols_list:
@@ -141,45 +152,51 @@ def main():
 		 	#features = dict_features[cols]
 		 	features = cols
 		 	#detect_multicollinearities calls to plot_jointdistributions
-		 	detect_multicollinearities(dataframe, 'conversion', features)
+		 	detect_multicollinearities(dataframe, target_variable, features)
+
 	################################################################################################
 	##################  END 1.1.Detect Multicollinearity t ##########################################
 
 	######################################################################################################
 	##################  1.2. Variable Selection ##########################################################
 	# Leakage data and remove unnecessary features
-	colstoremove = ['tiempo','tpo1.2','tpo1.3','tpo1.4','tpo1.5','dx_visita1','fecha_visita1','fecha_nacimiento','id']
-	print('Calling to leakage_data to remove features:', colstoremove, ' about the target \n')
-	dataframe = leakage_data(dataframe, colstoremove)
-	print('Removed ', dataframe_orig.shape[1] - dataframe.shape[1], ' columns in the dataframe \n' )
-
-	features_list = dataframe.columns.values.tolist()
-	#combine physical exercise and diet features
-	dataframe = combine_features(dataframe)
-
-	dict_features = split_features_in_groups()
-	print("Dictionary of static(all years) features ".format(dict_features))
-	run_print_dataset(dataframe)
-	
-	# Select subset of explanatory variables from prior information MUST include the target_variable
-	features_static =  dict_features['vanilla'] + dict_features['sleep'] + dict_features['anthropometric'] + \
-	dict_features['familiar_ad'] + dict_features['sensory'] +  dict_features['intellectual'] + dict_features['demographics'] +\
-	dict_features['professional'] +  dict_features['cardiovascular'] + dict_features['ictus'] + dict_features['diet']  + dict_features['physical_exercise']
-		
-	all_features = dataframe.keys().tolist()
-	print('Length features_static=', len(features_static), ' Length dataframe_orig=', dataframe_orig.shape[1],' Length dataframe post =', dataframe.shape[1])
 	#Remove cognitive performance features for data leakage. This can be done in colstoremove
 	features_to_remove = ['mmse_visita1','reloj_visita1','faq_visita1','fcsrtrl1_visita1','fcsrtrl2_visita1','fcsrtrl3_visita1','fcsrtlibdem_visita1','p_visita1','animales_visita1','cn_visita1','cdrsum_visita1']
 	features_to_remove = features_to_remove + [ 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1','act_memt_visita1', 'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'relaocio_visita1', 'rsoled_visita1']
+	colstoremove = ['tiempomci','tpo1.2','tpo1.3','tpo1.4','tpo1.5','dx_visita1','fecha_visita1','fecha_nacimiento','id', 'ultimodx','conversiondementia', 'tiempodementia']
+	colstoremove = colstoremove + features_to_remove
+	#colstoremove = ['dx_visita1','fecha_nacimiento','id']
+	print('Calling to leakage_data to remove features:', colstoremove, ' about the target \n')
+	dataframe = leakage_data(dataframe, colstoremove)
+	print('Removed ', dataframe_orig.shape[1] - dataframe.shape[1], ' columns in the dataframe \n' )
+	features_list = dataframe.columns.values.tolist()
+	#combine physical exercise and diet features
+	#dataframe = combine_features(dataframe)
+	
+	dict_features = split_features_in_groups()
+	print("Dictionary of static features: ", dict_features)
+	run_print_dataset(dataframe)
+	
+	# Select subset of explanatory variables from prior information MUST include the target_variable
+	features_static = dict_features['vanilla'] + dict_features['sleep'] + dict_features['anthropometric'] + \
+	dict_features['intellectual'] + dict_features['offspring'] + \
+	dict_features['professional'] +  dict_features['cardiovascular'] + dict_features['ictus'] + \
+	dict_features['diet'] + dict_features['wealth'] + dict_features['physical_exercise'] + dict_features['familiar_ad'] 
+	
+	all_features = dataframe.keys().tolist()
+	print('Length features_static=', len(features_static), ' Length dataframe_orig=', dataframe_orig.shape[1],' Length dataframe post =', dataframe.shape[1])
+	#Remove cognitive performance features for data leakage. This can be done in colstoremove
+	#features_to_remove = ['mmse_visita1','reloj_visita1','faq_visita1','fcsrtrl1_visita1','fcsrtrl2_visita1','fcsrtrl3_visita1','fcsrtlibdem_visita1','p_visita1','animales_visita1','cn_visita1','cdrsum_visita1']
+	#features_to_remove = features_to_remove + [ 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1','act_memt_visita1', 'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'relaocio_visita1', 'rsoled_visita1']
 	selected_features = [x for x in all_features if x not in features_to_remove]
-	features_year1 = [s for s in selected_features  if "visita1" in s ];
+	features_year1 = [s for s in selected_features if "visita1" in s ];
 	#features_year2 = [s for s in dataset.keys().tolist()  if "visita2" in s]; features_year2.remove('fecha_visita2')
 	#features_year3 = [s for s in dataset.keys().tolist()  if "visita3" in s]; features_year3.remove('fecha_visita3'); features_year3.remove('act_prax_visita3'), features_year3.remove('act_comp_visita3')
 	#features_year4 = [s for s in dataset.keys().tolist()  if "visita4" in s]; features_year4.remove('fecha_visita4'); features_year4.remove('act_prax_visita4'), features_year4.remove('act_comp_visita4')
 	#features_year5 = [s for s in dataset.keys().tolist()  if "visita5" in s]; features_year5.remove('fecha_visita5'); features_year5.remove('act_prax_visita5'), features_year5.remove('act_comp_visita5')
 	explanatory_features = features_static + features_year1
 	#explanatory_features = ['my favorite list of features']
-	target_variable = 'conversion' # if none assigned to 'conversion'. target_variable = ['visita_1_EQ5DMOV']
+	#target_variable = 'conversion' # if none assigned to 'conversion'. target_variable = ['visita_1_EQ5DMOV']
 	print("Calling to run_variable_selection(dataset, explanatory_features= {}, target_variable={})".format(explanatory_features, target_variable))
 	#dataset, explanatory_features = run_variable_selection(dataset, explanatory_features, target_variable)
 	# dataset with all features including the target and removed NaN
@@ -190,6 +207,12 @@ def main():
 	dataframe = dataframe[explanatory_and_target_features]
 	print ("Features containing NAN values:\n {}".format(dataframe.isnull().any()))
 	print( "Number of NaN cells in original dataframe:{} / {}, total rows:{}".format(pd.isnull(dataframe.values).sum(axis=1).sum(), dataframe.size, dataframe.shape[0]))
+	coluswithnans = []
+	for colu in dataframe.columns:
+		nanscount = np.sum(pd.isnull(dataframe[colu]))
+		if nanscount > 0:
+			coluswithnans.append(colu)
+			print("Number of NaNs for column", colu, " = ", nanscount)
 	
 	dataframe.dropna(axis=0, how='any', inplace=True)
 	print( "Number of NaN cells in the imputed dataframe: {} / {}, total rows:{}".format(pd.isnull(dataframe.values).sum(axis=1).sum(), dataframe.size, dataframe.shape[0]))
@@ -205,7 +228,7 @@ def main():
 	print("X scaled dimensions:{} \n ".format(X_scaled.shape))
 	
 	#construct a LogisticRegression model to choose the best performing features 
-	nbofRFEfeatures = 0
+	nbofRFEfeatures = 0 # how many best features you want to find
 	if nbofRFEfeatures > 0:
 		print('Running RFE algorithm to select the ', nbofRFEfeatures, ' most important features for Logistic Regression...\n')
 		best_logreg_features = recursive_feature_elimination(X_scaled, y, nbofRFEfeatures, explanatory_and_target_features[:-1])
@@ -242,13 +265,14 @@ def main():
 	######################################################################################################
 	##################  1.4. Statistical tests ############################################################
 	# # # perform statistical tests: ANOVA
-	statstest = True
+	statstest = False
 	if statstest is True:
 		feature_to_test = ['familiar_ad', 'nivel_educativo', 'tabac_cant', 'apoe'] #['scd_visita1']
-		target_anova_variable = 'conversion' # nivel_educativo' #tabac_visita1 depre_visita1
+		feature_to_test = ['renta', 'hta', 'glu', 'lipid', 'tabac_cant', 'cor', 'arri', 'card', 'ictus', 'tce', 'imc','valcvida_visita1', 'physical_exercise', 'dietaketo', 'dietaglucemica', 'dietasaludable','sue_noc', 'sue_rec', 'imc']
+		target_anova_variable = target_variable # nivel_educativo' #tabac_visita1 depre_visita1
 		tests_result = run_statistical_tests(Xy_df_scaled,feature_to_test, target_anova_variable)
 		#tests_result.keys() 
-	pdb.set_trace()
+
 	######################################################################################################
 	##################  END 1.4. Statistical tests ########################################################
 
@@ -258,18 +282,17 @@ def main():
 	dimreduction = False
 	if dimreduction is True:
 		pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
-		print("The variance ratio by the {} principal compments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
+		print("The variance ratio by the {} principal compoments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
 	#Manifold learning
 	######################################################################################################
 	##################  END 1.5. Dimensionality Reduction ############################################################
 	
 	######################################################################################################
 	################## 2. PREDICTION ############################################################
-
-	formula= build_formula(explanatory_features)
+	formula = build_formula(explanatory_features)
 	# build design matrix(patsy.dmatrix) and rank the features in the formula y ~ X 
 	run_feature_ranking(Xy_df_scaled, formula)
-	pdb.set_trace()
+	#plot ranking of best features
 	
 	#Split dataset into train and test
 	y = Xy_df_scaled[target_variable].values
@@ -280,23 +303,61 @@ def main():
 	X_train, X_test, y_train, y_test = run_split_dataset_in_train_test(X, y, test_size=0.2)
 
 	learners = {}
+	print('Building a random_decision_tree.....\n')
+	learners['dt_estimator'] = run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
+	print('Building a randomforest.....\n')
+	learners['rf_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)
+	print_feature_importances(learners['rf_estimator'], explanatory_features)
+
 	print('Building a Logistic Regression Classifier.....\n')
 	learners['lr_estimator'] = run_logistic_regression(X_train, y_train, X_test, y_test, 0.5,explanatory_and_target_features[:-1])
 	learners['svm_estimator'] = run_svm(X_train, y_train, X_test, y_test, X_features)
+	#compare estimators against dummy estimators
+	dummies_score = build_dummy_scores(X_train, y_train, X_test, y_test)
+	listofestimators = [learners['svm_estimator'],learners['lr_estimator'],learners['dt_estimator'],learners['rf_estimator']]
+	estimatorlabels = ['svm', 'lr', 'dt', 'rf']
+	compare_against_dummy_estimators(listofestimators, estimatorlabels, X_test, y_test, dummies_score)
+	pdb.set_trace()
 
-	
-	
 	#####
 	# resampling data with SMOTE
 	X_resampled_train, y_resampled_train = resampling_SMOTE(X_train, y_train)
+	X_resampled_test, y_resampled_test = resampling_SMOTE(X_test, y_test)
+	X_train = X_resampled_train; y_train = y_resampled_train; X_test=X_resampled_test;y_test=y_resampled_test
+	learners = {}
+	print('Building a random_decision_tree.....\n')
+	learners['dt_estimator'] = run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
+	print('Building a randomforest.....\n')
+	learners['rf_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)
+	print_feature_importances(learners['rf_estimator'], explanatory_features)
+
+	print('Building a Logistic Regression Classifier.....\n')
+	#learners['lr_estimator'] = run_logistic_regression(X_train, y_train, X_test, y_test, 0.5,explanatory_and_target_features[:-1])
+	learners['svm_estimator'] = run_svm(X_train, y_train, X_test, y_test, X_features)
+	#compare estimators against dummy estimators
+	dummies_score = build_dummy_scores(X_train, y_train, X_test, y_test)
+	listofestimators = [learners['svm_estimator'],learners['rf_estimator'],learners['rf_estimator']]
+	estimatorlabels = ['svm',  'dt', 'rf']
+	compare_against_dummy_estimators(listofestimators, estimatorlabels, X_test, y_test, dummies_score)
+	pdb.set_trace()
 	#####
-	
-	
+
+
+
+
+
+
+
+
+
+
+
+
+	pdb.set_trace()
 	learners['random_decision_tree'] = run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
 	print_feature_importances(learners['random_decision_tree'],explanatory_features)
-	pdb.set_trace()
-	learners['rf_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)
-	print_feature_importances(learners['rf_estimator'],explanatory_features)
+	
+
 	learners['orxgbm_estimator'] = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
 	print_feature_importances(learners['orxgbm_estimator'],explanatory_features)
 	#only for XGBClassifier learner
@@ -313,7 +374,11 @@ def main():
 	learners['orxgbm_estimator'] = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
 	learners['naive_bayes_estimator'] = run_naive_Bayes(X_train, y_train, X_test, y_test, 0)
 	learners['rf_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)
-	pdb.set_trace()
+
+
+
+
+
 
 	all_results = evaluate_learners_metrics(learners, X_train, y_train, X_test, y_test)
 
@@ -449,6 +514,14 @@ def combine_features(dataset):
 	dataset.drop(['a01', 'ejfre', 'ejminut'], axis=1,  inplace=True)
 	dataset['familiar_ad'] = dataset['demmad'] | dataset['dempad']
 	dataset.drop(['edemmad', 'edempad'], axis=1,  inplace=True)
+	#fillna with mean
+	dataset['dietaketo'] = dataset['dietaproteica']*dataset['dietagrasa']
+	dataset['dietaketo'].fillna(dataset['dietaketo'].mean(), inplace=True)
+	dataset['dietaketo'] = dataset['dietaketo'].astype('int')
+	dataset['dietaglucemica'].fillna(dataset['dietaglucemica'].mean(), inplace=True)
+	dataset['dietaglucemica'] = dataset['dietaglucemica'].astype('int')
+	dataset['dietasaludable'].fillna(dataset['dietasaludable'].mean(), inplace=True)
+	dataset['dietasaludable'] = dataset['dietasaludable'].astype('int')
 
 	return dataset
 
@@ -479,6 +552,9 @@ def cleanup_column_names(df,rename_dict={},do_inplace=True):
         do_inplace (bool): flag to update existing dataframe or return a new one
     Returns: pandas dataframe if do_inplace is set to False, None otherwise
     """
+    #Rename columns eg df.rename(index=str, columns={"A": "a", "B": "c"})
+    df.rename(index=str, columns={"Edad_visita1": "edad"}, inplace=True) 
+    #df.drop('lat_visita1', inplace=True)
     if not rename_dict:
         return df.rename(columns={col: col.replace('/','').lower().replace(' ','_') 
                     for col in df.columns.values.tolist()}, inplace=do_inplace)
@@ -559,11 +635,11 @@ def plot_histograma_bygroup_categorical(df, target_variable=None):
 	# df['alverd'] = df['alverd'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
 	#Diet
 	nb_of_categories = 4
-	df['dietaproteica_cut'] = pd.cut(df['dietaproteica'],nb_of_categories)
-	df['dietagrasa_cut'] = pd.cut(df['dietagrasa'],nb_of_categories)
+	#df['dietaproteica_cut'] = pd.cut(df['dietaproteica'],nb_of_categories)
+	#df['dietagrasa_cut'] = pd.cut(df['dietagrasa'],nb_of_categories)
+	df['dietaketo_cut'] = pd.cut(df['dietaketo'],nb_of_categories)
 	df['dietaglucemica_cut'] = pd.cut(df['dietaglucemica'],nb_of_categories)
 	df['dietasaludable_cut']= pd.cut(df['dietasaludable'],nb_of_categories)
-	
 
 	#in absolute numbers
 	fig, ax = plt.subplots(1,5)
@@ -602,21 +678,21 @@ def plot_histograma_bygroup_categorical(df, target_variable=None):
 	plt.show()
 	
 	#diet in relative numbers
-	fig, ax = plt.subplots(1,4)
+	fig, ax = plt.subplots(1,3)
 	fig.set_size_inches(20,5)
 	fig.suptitle('Conversion by relative numbers, for Alimentation')
-	d = df.groupby([target_variable, 'dietaproteica_cut']).size().unstack(level=1)
+	d = df.groupby([target_variable, 'dietaketo_cut']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[0])
-	d = df.groupby([target_variable, 'dietagrasa_cut']).size().unstack(level=1)
-	d = d / d.sum()
-	p = d.plot(kind='bar', ax=ax[1])
+	#d = df.groupby([target_variable, 'dietagrasa_cut']).size().unstack(level=1)
+	#d = d / d.sum()
+	#p = d.plot(kind='bar', ax=ax[1])
 	d = df.groupby([target_variable, 'dietaglucemica_cut']).size().unstack(level=1)
 	d = d / d.sum()
-	p = d.plot(kind='bar', ax=ax[2])
+	p = d.plot(kind='bar', ax=ax[1])
 	d = df.groupby([target_variable, 'dietasaludable_cut']).size().unstack(level=1)
 	d = d / d.sum()
-	p = d.plot(kind='bar', ax=ax[3])
+	p = d.plot(kind='bar', ax=ax[2])
 
 def run_imputations(dataset, type_imput=None):
 	""" run_imputations: datasets with missign values are incompatible with scikit-learn 
@@ -696,31 +772,33 @@ def split_features_in_groups():
 	""" split_features_in_groups
 	Output: dictionaty 'group name':list of features"""
 	dict_features = {}
-	vanilla = ['sexo', 'lat_manual', 'nivel_educativo', 'apoe', 'edad']
+	vanilla = ['sexo', 'lat_manual', 'edad', 'edad_ultimodx'] #remove apoe
 	#vanilla = ['sexo', 'lat_manual', 'nivel_educativo', 'edad']
 	#sleep = ['hsnoct' , 'sue_dia' , 'sue_noc' , 'sue_con' , 'sue_man' , 'sue_suf' , 'sue_pro' , 'sue_ron' , 'sue_mov' , 'sue_rui' , 'sue_hor', 'sue_rec']
-	sleep = ['sue_noc',  'sue_hor', 'sue_rec']
+	sleep = ['sue_noc', 'sue_rec']
 	anthropometric = ['imc'] #['pabd' , 'peso' , 'talla' , 'imc']
-	sensory = ['audi', 'visu']
+	#sensory = ['audi', 'visu']
 	#intellectual = ['a01' , 'a02' , 'a03' , 'a04' , 'a05' , 'a06' , 'a07' , 'a08' , 'a09' , 'a10' , 'a11' , 'a12' , 'a13' , 'a14'] 
 	intellectual = ['a02', 'a03', 'a08', 'a11', 'a12', 'a13', 'a14']
 	#demographics = ['sdhijos' , 'numhij' , 'sdvive' , 'sdeconom' , 'sdresid' , 'sdestciv']
-	demographics = ['numhij' , 'sdvive' , 'sdeconom' , 'sdresid' , 'sdestciv']
+	offspring = ['numhij' , 'sdvive' , 'sdeconom' , 'sdresid' , 'sdestciv']
 	#professional = ['sdtrabaja' , 'sdocupac', 'sdatrb']
 	professional = [ 'sdatrb']
 	#cardiovascular = ['hta', 'hta_ini', 'glu', 'lipid', 'tabac', 'tabac_ini', 'tabac_fin', 'tabac_cant', 'sp', 'cor', 'cor_ini', 'arri', 'arri_ini', 'card', 'card_ini']
-	cardiovascular = ['hta', 'glu', 'lipid', 'tabac_cant', 'sp', 'cor', 'arri',  'card']
+	cardiovascular = ['hta', 'glu', 'lipid', 'tabac_cant', 'cor', 'arri',  'card']
 	#ictus = ['tir', 'ictus', 'ictus_num', 'ictus_ini', 'ictus_secu', 'tce', 'tce_num', 'tce_ini', 'tce_con', 'tce_secu']
 	ictus = ['ictus', 'tce', 'tce_con']
 	diet = ['alfrut', 'alcar', 'alpesblan', 'alpeszul', 'alaves', 'alaceit', 'alpast', 'alpan', 'alverd', 'alleg', 'alemb', 'allact', 'alhuev', 'aldulc']
+	diet = ['dietaketo', 'dietaglucemica', 'dietasaludable']
+	wealth = ['renta', 'nivel_educativo', 'educrenta']
 	#physical_exercise = ['a01', 'ejfre', 'ejminut']
 	physical_exercise = ['physical_exercise'] #ejfre' * 'ejminut
 	#family_history = ['dempad' , 'edempad' , 'demmad' , 'edemmad']
 	#family_history = ['dempad' , 'demmad']
 	familiar_ad = ['familiar_ad']
 	dict_features = {'vanilla':vanilla, 'sleep':sleep,'anthropometric':anthropometric, 'familiar_ad':familiar_ad, \
-	'sensory':sensory,'intellectual':intellectual,'demographics':demographics,'professional':professional, \
-	'cardiovascular':cardiovascular, 'ictus':ictus, 'diet':diet, 'physical_exercise':physical_exercise}
+	'intellectual':intellectual,'offspring':offspring,'professional':professional, \
+	'cardiovascular':cardiovascular, 'ictus':ictus, 'diet':diet, 'wealth':wealth, 'familiar_ad':familiar_ad, 'physical_exercise':physical_exercise}
 
 	return dict_features
 
@@ -730,10 +808,10 @@ def build_formula(features):
 	Outputs: formula"""
 	#formula = 'conversion ~ '; formula += 'C(sexo) + C(nivel_educativo) + C(apoe)'; 
 	#formula = 'conversion ~ '; formula += 'sexo + lat_manual + nivel_educativo + apoe '; 
-	formula = 'conversion ~ '; formula += 'sexo + lat_manual + nivel_educativo '; 
+	formula = 'conversionmci ~ '; formula += 'sexo + lat_manual + nivel_educativo  + edad_ultimodx + renta'; 
 	#sleep
 	#formula += '+ hsnoct + sue_dia + sue_noc + sue_con + sue_man + sue_suf + sue_pro +sue_ron+ sue_mov+sue_rui + sue_hor + sue_rec'
-	formula += '+ sue_noc + sue_hor + sue_rec'
+	formula += '+ sue_noc + sue_rec'
 
 	#family history
 	#formula += '+ dempad + edempad + demmad + edemmad'
@@ -743,26 +821,27 @@ def build_formula(features):
 	#formula += '+ pabd + peso + talla + imc'
 	formula += '+ imc'
 	#sensory disturbances
-	formula += '+ audi + visu'
+	#formula += '+ audi + visu'
 	#intellectual activities
 	#formula += '+ a01 + a02 + a03 + a04 + a05 + a06 + a07 + a08 + a09 + a10 + a11 + a12 + a13 + a14'
 	formula += '+ a02 + a03 + a08 + a11 + a12 + a13 + a14' 
 
 	#demographics
 	#formula += '+ sdhijos + numhij+ sdvive + sdeconom + sdresid + sdestciv'
-	formula += '+ numhij+ sdvive + sdeconom + sdresid + sdestciv'
+	formula += '+ numhij+ sdvive + sdeconom + sdresid + sdestciv + sdatrb'
 
 	#professional life
 	#formula += '+ sdtrabaja + sdocupac + sdatrb'
 	formula += '+ sdatrb'
 	#cardiovascular risk
 	#formula += '+ hta + hta_ini + glu + lipid + tabac + tabac_ini + tabac_fin + tabac_cant + sp + cor + cor_ini + arri + arri_ini + card + card_ini'
-	formula += '+ hta + glu + lipid + tabac_cant + sp + cor + arri + card'
+	formula += '+ hta + glu + lipid + tabac_cant + cor + arri + card'
 	#brain conditions that may affect cog performance
 	#formula += '+ tir + ictus + ictus_num + ictus_ini + ictus_secu + tce + tce_num + tce_ini + tce_con + tce_secu'
 	formula += '+ ictus + tce + tce_con'
 	#diet
-	formula += '+ alfrut + alcar + alpesblan + alpeszul + alaves + alaceit + alpast + alpan + alverd + alleg + alemb + allact + alhuev + aldulc'
+	#formula += '+ alfrut + alcar + alpesblan + alpeszul + alaves + alaceit + alpast + alpan + alverd + alleg + alemb + allact + alhuev + aldulc'
+	formula += '+ dietaketo + dietasaludable + dietaglucemica'
 	#physical exercise
 	#formula += ' + ' + ' + '.join(selcols('ejfre_visita',1,1));formula += ' + ' + ' + '.join(selcols('ejminut_visita',1,1));
 	formula += '+ physical_exercise'
@@ -836,7 +915,7 @@ def run_feature_ranking(df, formula, scaler=None):
 	#if scaler is None:
 	#	scaler = preprocessing.MinMaxScaler()
 	#	scaler.fit(X)
-	""" select top features and find top indices from the formula  """
+	""" select top nboffeats features and find top indices from the formula  """
 	nboffeats = 20
 	warnings.simplefilter(action='ignore', category=(UserWarning,RuntimeWarning))
 	# sklearn.feature_selection.SelectKBest, select k features according to the highest scores
@@ -850,7 +929,7 @@ def run_feature_ranking(df, formula, scaler=None):
 	selector.fit(X, y)
 	# scores_ : array-like, shape=(n_features,) pvalues_ : array-like, shape=(n_features,)
 	top_indices = np.nan_to_num(selector.scores_).argsort()[-nboffeats:][::-1]
-	print("Selector scores:",selector.scores_[top_indices])
+	print("Selector {} scores:",nboffeats, selector.scores_[top_indices])
 	print("Top features:\n", X.columns[top_indices])
 	
 	# Pipeline of transforms with a final estimator.Sequentially apply a list of transforms and a final estimator.
@@ -986,8 +1065,8 @@ def run_PCA_for_visualization(Xy_df, target_label, explained_variance=None):
 	cumvar = np.cumsum(pca.explained_variance_ratio_)
 	if explained_variance is None:
 		explained_variance = 0.7
-	optimal_comp = np.where(cumvar >explained_variance )[0][0]
-	print("With at least {} components we explain {}'%'' of the {} dimensional input data".format(optimal_comp,explained_variance,Xy_df.values.shape[1] ))
+	optimal_comp = np.where(cumvar > explained_variance )[0][0]
+	print("\n With at least {} components we explain {}'%'' of the {} dimensional input data".format(optimal_comp,explained_variance,Xy_df.values.shape[1] ))
 	plt.plot(cumvar)
 	plt.xlabel('number of components')
 	plt.ylabel('cumulative explained variance')
@@ -1002,7 +1081,7 @@ def run_PCA_for_visualization(Xy_df, target_label, explained_variance=None):
 	projected = pca.fit_transform(Xy_df.values)
 	print("Dimensions original input:{} \n".format(Xy_df.values.shape))
 	print("Dimensions projected input:{} \n".format(projected.shape))
-	print("PCA {} components_:{} \n".format(pca.n_components_, pca.components_))
+	#print("PCA {} components_:{} \n".format(pca.n_components_, pca.components_))
 	print("PCA explained variance ratio:{} \n".format(pca.explained_variance_ratio_))
 	# plot the principal components
 	targets = Xy_df[target_label].unique().astype(int)
@@ -1015,7 +1094,7 @@ def run_PCA_for_visualization(Xy_df, target_label, explained_variance=None):
 	ax.set_ylabel('PC 2', fontsize = 10)
 	if optimal_comp > 2:
 		ax.set_zlabel('PC 3', fontsize = 10)
-	msgtitle = str(pca.n_components_) + ' components PCA'
+	msgtitle = str(pca.n_components_) + ' components PCA for variance=' + str(explained_variance*100)+'%'
 	ax.set_title(msgtitle, fontsize = 10)
 	#Noise filtering https://jakevdp.github.io/PythonDataScienceHandbook/05.09-principal-component-analysis.html
 	return pca, projected
@@ -1399,7 +1478,7 @@ def run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, targe
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
-	dectree = DecisionTreeClassifier(max_depth=3, class_weight='balanced').fit(X_train, y_train)
+	dectree = DecisionTreeClassifier(max_depth=6, class_weight='balanced').fit(X_train, y_train)
 	y_train_pred = dectree.predict_proba(X_train)[:,1]
 	y_test_pred = dectree.predict_proba(X_test)[:,1]
 	y_pred = [int(a) for a in dectree.predict(X_test)]
@@ -1415,7 +1494,7 @@ def run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, targe
 	G.draw('adspy_temp.dot')
 	#print('Features importances: {}'.format(dectree.feature_importances_))
 	# indices with feature importance > 0
-	idxbools= dectree.feature_importances_ > 0;idxbools = idxbools.tolist()
+	idxbools= dectree.feature_importances_ > 0; idxbools = idxbools.tolist()
 	idxbools = np.where(idxbools)[0]
 	impfeatures = []; importances = []
 	for i in idxbools:
@@ -1436,7 +1515,7 @@ def run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, targe
 	plt.tight_layout()
 	plt.show()
 	# Visualization of Decision Trees with graphviz
-	pdb.set_trace()
+
 	labelstarget = np.unique(y_train).tolist()
 	dot_data = tree.export_graphviz(dectree, out_file=None, filled=True, rounded=True, feature_names=X_features) #, class_names=['NC', 'C'])
 	graph = pydotplus.graph_from_dot_data(dot_data)
@@ -1451,7 +1530,6 @@ def run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, targe
 			dest.set_fillcolor(colors[i])   
 	Image(graph.create_png())
 	graph.write_png("decision_tree.png")
-	pdb.set_trace()
 	return dectree
 
 def run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features, threshold=None):
@@ -1593,7 +1671,7 @@ def run_svm(X_train, y_train, X_test, y_test, X_features, threshold=None):
 	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
 	plt.tight_layout()
 	plt.show()
-	pdb.set_trace()
+
 	####
 	print("Exhaustive search for SVM parameters to improve the out-of-the-box performance of vanilla SVM.")
 	parameters = {'C':10. ** np.arange(5,10), 'gamma':2. ** np.arange(-5, -1)}
@@ -1642,7 +1720,7 @@ def run_randomforest(X_train, y_train, X_test, y_test, X_features, threshold=Non
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
-	rf = RandomForestClassifier(n_estimators=60, max_features =10,min_samples_leaf=28, class_weight='balanced').fit(X_train,y_train)
+	rf = RandomForestClassifier(n_estimators=100, max_features =10, min_samples_leaf=28, class_weight='balanced').fit(X_train,y_train)
 	y_train_pred = rf.predict_proba(X_train)[:,1]
 	y_test_pred = rf.predict_proba(X_test)[:,1]
 	y_pred = [int(a) for a in rf.predict(X_test)]
@@ -1660,6 +1738,17 @@ def run_randomforest(X_train, y_train, X_test, y_test, X_features, threshold=Non
 	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
 	plt.tight_layout()
 	plt.show()
+	# select most important features
+
+	idxbools= rf.feature_importances_ > 0; idxbools = idxbools.tolist()
+	idxbools = np.where(idxbools)[0]
+	impfeatures = []; importances = []
+	for i in idxbools:
+		print('Feature:{}, importance={}'.format(X_features[i], rf.feature_importances_[i]))
+		impfeatures.append(X_features[i])
+		importances.append(rf.feature_importances_[i])
+	plt.figure(figsize=(5,5))
+	plot_feature_importances(rf,importances, impfeatures)
 	return rf
 
 def run_logreg_Lasso(X_train, y_train, X_test, y_test,cv=None):
@@ -2176,8 +2265,9 @@ def run_load_csv(csv_path = None):
 	Output: dataset pandas dataframe"""
 	if csv_path is None:
 		csv_path = "/Users/jaime/vallecas/data/scc/SCDPlus_IM_21052018.csv"
-		csv_path = "/Users/jaime/vallecas/data/scc/socioeconomics_29052018.csv" #socioeconomics dataset
-
+		csv_path = "/Users/jaime/vallecas/data/scc/socioeconomics_29052018.csv" #socioeconomics dataset Dataset_29052018
+		csv_path = "/Users/jaime/vallecas/data/scc/Dataset_29052018.csv"
+		csv_path = "/Users/jaime/vallecas/data/BBDD_vallecas/Proyecto Vallecas_5_visitas_mayo 2018.csv"
 	dataset = pd.read_csv(csv_path) #, sep=';')
 	print('Loaded the csv file: ', csv_path, '\n')
 	#summary of data
@@ -2560,6 +2650,7 @@ def detect_multicollinearities(df, target, cols=None):
 	cols.append(target)
 	df = df[cols].dropna(axis=0)
 	# count number of obvs in each class
+
 	nonconverters, converters = df[target].value_counts()
 	print('Number of nonconverters: ', nonconverters)
 	print('Number of converters : ', converters)
@@ -2570,6 +2661,7 @@ def detect_multicollinearities(df, target, cols=None):
 	filenametosav = cols[0] + '_scatter.png'
 	g.savefig(os.path.join(dir_images, filenametosav))
 
+	#pdb.set_trace()
 	print(" Generate and visualize the correlation matrix...\n")
 	corr = df.corr().round(3)
 	# Mask for the upper triangle
@@ -2661,6 +2753,45 @@ def cross_validation_formodel(modelCV, X_train, y_train, n_splits):
 	results = model_selection.cross_val_score(modelCV, X_train, y_train, cv=kfold, scoring=scoring)
 	print("%d-fold cross validation average accuracy: %.3f" % (n_splits, results.mean()))
 	return results
+
+
+def meritxell_eda():
+	""" """
+	cvs2load = '/Users/jaime/vallecas/data/BBDD_vallecas/20180531_meritxell.csv'
+	dataframe = run_load_csv(cvs2load)
+	cleanup_column_names(dataframe, {}, True)	
+	target_variable = '5dcl'
+	explanatory_features = ['1glu',  'visita_1_sue_rec', 'visita_1_sue_noc','1ortostatismo', '1trat', '1dcl']
+	explanatory_features = ['5glu',  'visita_5_sue_rec', 'visita_5_sue_noc', '5ortostatismo', '5trat', '5dcl']
+
+	dataframe = dataframe[explanatory_features]
+	dataframe.dropna(axis=0, inplace=True)
+	#plot_histograma_bygroup_categorical(dataframe[explanatory_features], target_variable=target_variable)
+	feature_x = explanatory_features[1]
+	feature_y = target_variable
+	plot_histogram_pair_variables(dataframe, [feature_x, target_variable] )
+	plot_histograma_bygroup(dataframe, target_variable)
+	plot_histograma_bygroup_target(dataframe, target_variable)
+
+	dfjoints = dataframe[[feature_x, feature_y]].dropna()
+	plot_jointdistributions(dfjoints, feature_x, feature_y)
+	# To plot scatter feature_x and feature_x2 uncomment
+	# #feature_x2 = 'alcar' 
+	# #dfjoints = dataframe[[feature_x,feature_y, feature_x2]].dropna() 
+	# #plot_jointdistributions(dfjoints, feature_x, feature_y, feature_x2)
+	# dfjoints = dataframe[[feature_x,feature_y]].dropna()
+	#plot_jointdistributions(dfjoints, feature_x, feature_y)
+	
+	explanatory_features = [['5glu',  'visita_5_sue_noc', 'visita_5_sue_rec', '5ortostatismo', '5trat']]
+	for cols in explanatory_features:
+		print("Calculating multicolinearities for Group feature: ", cols, ' \n')
+	 	#features = dict_features[cols]
+	 	features = cols
+	 	print('Detect collinearities dcl and ', features)
+	 	#detect_multicollinearities calls to plot_jointdistributions
+	 	detect_multicollinearities(dataframe, target_variable, features)
+
+
 
 def socioeconomics_infographics():
 	""" socioeconomics_infographics: EDA for wealth, diet etc
