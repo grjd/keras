@@ -301,25 +301,85 @@ def main():
 		X_features.remove(target_variable)
 	X = Xy_df_scaled[X_features].values
 	X_train, X_test, y_train, y_test = run_split_dataset_in_train_test(X, y, test_size=0.2)
-
+	hierclust = run_hierarchical_clustering(np.concatenate((X_train, X_test), axis=0), explanatory_features)
+	pdb.set_trace()
 	learners = {}
+	print('Building a kneighbors Classifier.....\n')
+	learners['knn'] = run_kneighbors(X_train, y_train, X_test, y_test)
+	print('Building a Logistic Regression Classifier.....\n')
+	learners['lr_estimator'] = run_logistic_regression(X_train, y_train, X_test, y_test, 0.5,explanatory_and_target_features[:-1])	
+	
 	print('Building a random_decision_tree.....\n')
 	learners['dt_estimator'] = run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
+
 	print('Building a randomforest.....\n')
 	learners['rf_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)
 	print_feature_importances(learners['rf_estimator'], explanatory_features)
-
-	print('Building a Logistic Regression Classifier.....\n')
-	learners['lr_estimator'] = run_logistic_regression(X_train, y_train, X_test, y_test, 0.5,explanatory_and_target_features[:-1])
+	
+	print('Building a extreme_gradientboosting estimator.....\n')
+	#gbm_estimator = run_gradientboosting(X_train, y_train, X_test, y_test, X_features)
+	learners['orxgbm_estimator'] = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
+	print_feature_importances(learners['orxgbm_estimator'], explanatory_features)
+	#only for XGBClassifier learner
+	plot_feature_importance(learners['orxgbm_estimator'], explanatory_features)
+	
+	print('Building a naive_bayes_estimator.....\n')
+	learners['naive_bayes_estimator'] = run_naive_Bayes(X_train, y_train, X_test, y_test, 0)
+	print('Building a lasso_estimator.....\n')
+	learners['lasso_estimator'] = run_logreg_Lasso(X_train, y_train, X_test, y_test,10)
+	print('sgd.....\n')
+	learners['sgd_estimator'] = run_sgd_classifier(X_train, y_train, X_test, y_test,'hinge',10) #loss = log|hinge
+	#'SVC', Bayes etc object has no attribute 'feature_importances_
+	print('Building a svm_estimator.....\n')
 	learners['svm_estimator'] = run_svm(X_train, y_train, X_test, y_test, X_features)
+
+	#Model interpretation of the estimators, exclude SVM 
+	for learner in learners.keys():
+		if learner is 'svm_estimator' or 'lasso_estimator':
+			print('Skipping SVM has not predict_proba...\n')
+		else: 
+			print('Running model {} interpretation with Skater.....\n', learner)
+			model_interpretation(learners[learner], X_train, X_test, explanatory_features)	
+
 	#compare estimators against dummy estimators
 	dummies_score = build_dummy_scores(X_train, y_train, X_test, y_test)
-	listofestimators = [learners['svm_estimator'],learners['lr_estimator'],learners['dt_estimator'],learners['rf_estimator']]
-	estimatorlabels = ['svm', 'lr', 'dt', 'rf']
-	compare_against_dummy_estimators(listofestimators, estimatorlabels, X_test, y_test, dummies_score)
-	pdb.set_trace()
+	#listofestimators = [learners['svm_estimator'],learners['lr_estimator'],learners['dt_estimator'],learners['rf_estimator']]
+	#estimatorlabels = ['svm', 'lr', 'dt', 'rf']
+	#compare_against_dummy_estimators(listofestimators, estimatorlabels, X_test, y_test, dummies_score)
+	compare_against_dummy_estimators(learners, learners.keys(), X_test, y_test, dummies_score)
+	#del learners['lasso_estimator']
+	all_results = evaluate_learners_metrics(learners, X_train, y_train, X_test, y_test)
 
+	#Neural Networks, Deep Learning
+	learners['mlp_estimator'] = run_multi_layer_perceptron(X_train, y_train, X_test, y_test)	
+	learners['deepnetwork_res'] = run_keras_deep_learning(X_train, y_train, X_test, y_test)
+
+	#Manifold Learning
+	svd_reduced = run_truncatedSVD(X_train, y_train, X_test, y_test)
+	tSNE_reduced  = run_tSNE_manifold_learning(X_train, y_train, X_test, y_test)
+	hierclust = run_hierarchical_clustering(np.concatenate((X_train, X_test), axis=0), explanatory_features)
+	pdb.set_trace()
+	
+	# #
+	# calculate_top_features_contributing_class(sgd_estimator, X_features, 10)
+	# #compare estimators against dummy estimators
+	# dummies_score = build_dummy_scores(X_train, y_train, X_test, y_test)
+	# listofestimators = [knn, naive_bayes_estimator,lr_estimator,dectree_estimator,rf_estimator,gbm_estimator,xgbm_estimator]
+	# estimatorlabels = ['knn', 'nb', 'lr', 'dt', 'rf','gbm','xgbm']
+	# compare_against_dummy_estimators(listofestimators, estimatorlabels, X_test, y_test, dummies_score)
+	# #Evaluate a score comparing y_pred=estimator().fit(X_train)predict(X_test) from y_test
+	# metrics_estimator = compute_metrics_estimator(knn,X_test,y_test)
+	# #Evaluate a score by cross-validation
+	# metrics_estimator_with_cv = compute_metrics_estimator_with_cv(knn,X_test,y_test,5)
+	
+	# # QUICK Model selection accuracy 0 for Train test, >0 for the number of folds
+	# grid_values = {'gamma': [0.001, 0.01, 0.1, 1, 10]}
+	# #print_model_selection_metrics(X_train, y_train, X_test, y_test,0) -train/test; print_model_selection_metrics(X_train, y_train, X_test, y_test,10) KFold
+	# print_model_selection_metrics(X_train, y_train, X_test, y_test, grid_values)
+	
 	#####
+
+	####
 	# resampling data with SMOTE
 	X_resampled_train, y_resampled_train = resampling_SMOTE(X_train, y_train)
 	X_resampled_test, y_resampled_test = resampling_SMOTE(X_test, y_test)
@@ -344,87 +404,6 @@ def main():
 
 
 
-
-
-
-
-
-
-
-
-
-	pdb.set_trace()
-	learners['random_decision_tree'] = run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
-	print_feature_importances(learners['random_decision_tree'],explanatory_features)
-	
-
-	learners['orxgbm_estimator'] = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
-	print_feature_importances(learners['orxgbm_estimator'],explanatory_features)
-	#only for XGBClassifier learner
-	plot_feature_importance(learners['orxgbm_estimator'],explanatory_features)
-	all_results = evaluate_learners_metrics(learners, X_train, y_train, X_test, y_test)
-	
-	#'SVC', Bayes etc object has no attribute 'feature_importances_
-
-	learners['mlp_estimator'] = run_multi_layer_perceptron(X_train, y_train, X_test, y_test)	
-	learners['random_decision_tree'] = run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
-	print_feature_importances(learners['orxgbm_estimator'],explanatory_features)
-
-	learners['svm_estimator'] = run_svm(X_train, y_train, X_test, y_test, X_features)
-	learners['orxgbm_estimator'] = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
-	learners['naive_bayes_estimator'] = run_naive_Bayes(X_train, y_train, X_test, y_test, 0)
-	learners['rf_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)
-
-
-
-
-
-
-	all_results = evaluate_learners_metrics(learners, X_train, y_train, X_test, y_test)
-
-	#####
-	deepnetwork_res = run_keras_deep_learning(X_train, y_train, X_test, y_test)
-
-	dectree_estimator =run_random_decision_tree(X_train, y_train, X_test, y_test, X_features,target_variable)
-	
-	xgbm_estimator = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
-	
-	svd_reduced = run_truncatedSVD(X_train, y_train, X_test, y_test)
-	tSNE_reduced  = run_tSNE_manifold_learning(X_train, y_train, X_test, y_test)
-	deepnetwork_res = run_keras_deep_learning(X_train, y_train, X_test, y_test)
-	mlp_estimator = run_multi_layer_perceptron(X_train, y_train, X_test, y_test)
-	pdb.set_trace()
-	run_hierarchical_clustering(np.concatenate((X_train, X_test), axis=0))
-
-	knn = run_kneighbors(X_train, y_train, X_test, y_test)
-	svm_estimator = run_svm(X_train, y_train, X_test, y_test, X_features)
-	lasso_estimator = run_logreg_Lasso(X_train, y_train, X_test, y_test,10)
-	sgd_estimator = run_sgd_classifier(X_train, y_train, X_test, y_test,'hinge',10) #loss = log|hinge
-	#lr_estimator = run_logistic_regression(X_train, y_train, X_test, y_test, 0.5)
-	naive_bayes_estimator = run_naive_Bayes(X_train, y_train, X_test, y_test, 0)
-	
-	dectree_estimator =run_random_decision_tree(X_train, y_train, X_test, y_test, X_features,target_variable)
-	rf_estimator =run_randomforest(X_train, y_train, X_test, y_test, X_features)
-	gbm_estimator = run_gradientboosting(X_train, y_train, X_test, y_test, X_features)
-	xgbm_estimator = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
-	#
-	calculate_top_features_contributing_class(sgd_estimator, X_features, 10)
-	#compare estimators against dummy estimators
-	dummies_score = build_dummy_scores(X_train, y_train, X_test, y_test)
-	listofestimators = [knn, naive_bayes_estimator,lr_estimator,dectree_estimator,rf_estimator,gbm_estimator,xgbm_estimator]
-	estimatorlabels = ['knn', 'nb', 'lr', 'dt', 'rf','gbm','xgbm']
-	compare_against_dummy_estimators(listofestimators, estimatorlabels, X_test, y_test, dummies_score)
-	#Evaluate a score comparing y_pred=estimator().fit(X_train)predict(X_test) from y_test
-	metrics_estimator = compute_metrics_estimator(knn,X_test,y_test)
-	#Evaluate a score by cross-validation
-	metrics_estimator_with_cv = compute_metrics_estimator_with_cv(knn,X_test,y_test,5)
-	
-	# QUICK Model selection accuracy 0 for Train test, >0 for the number of folds
-	grid_values = {'gamma': [0.001, 0.01, 0.1, 1, 10]}
-	#print_model_selection_metrics(X_train, y_train, X_test, y_test,0) -train/test; print_model_selection_metrics(X_train, y_train, X_test, y_test,10) KFold
-	print_model_selection_metrics(X_train, y_train, X_test, y_test, grid_values)
-	
-	#####
 
 	# (7) Modelling. 
 
@@ -945,7 +924,7 @@ def run_feature_ranking(df, formula, scaler=None):
 	#X_train, X_test, y_train, y_test = train_test_split(X_prep, y, test_size=0.3, random_state=42)
 	#return X_prep, X_train, X_test, y_train, y_test
 
-def plot_dendogram(Z):
+def plot_dendogram(Z, explanatory_features=None):
 	"""  plot_dendogram: 
 	Args: Z linkage matrix
 	output:
@@ -964,11 +943,12 @@ def plot_dendogram(Z):
 		leaf_rotation=90.,  # rotates the x axis labels
 		leaf_font_size=8.,  # font size for the x axis labels
 		show_contracted=True,  # to get a distribution impression in truncated branches
+		labels=explanatory_features
 	)
 	plt.show()
 	# a huge jump in distance is typically what we're interested in if we want to argue for a certain number of clusters
 
-def run_hierarchical_clustering(X):
+def run_hierarchical_clustering(X, explanatory_features=None):
 	""" run_hierarchical_clustering: hierarchical clustering algorithm and plot dendogram
 	Args:X ndarray X_train and X_test concatenated
 	Output:
@@ -993,13 +973,13 @@ def run_hierarchical_clustering(X):
 	#pairwise distances of all your samples to those implied by the hierarchical clustering
 	c, coph_dists = cophenet(Z, pdist(X))
 	print("Cophenetic Correlation Coefficient ={:.3f} The closer the value is to 1,the better the clustering preserves the original distances".format(c))
-	plot_dendogram(Z)
+	plot_dendogram(Z, explanatory_features)
 	# Plot dendogram and distance matrix
 	#https://stackoverflow.com/questions/2982929/plotting-results-of-hierarchical-clustering-ontop-of-a-matrix-of-data-in-python
 	# Compute and plot first dendrogram.
 	fig = pylab.figure(figsize=(8,8))
 	ax1 = fig.add_axes([0.09,0.1,0.2,0.6])
-	Y = linkage(D, method='centroid')
+	Y = linkage(D,  method='centroid')
 	Z1 = dendrogram(Y, orientation='right')
 	print("values passed to leaf_label_func\nleaves : ", Z1["leaves"])
 	#temp = {Z1["leaves"][ii]: labels[ii] for ii in range(len(Z1["leaves"]))}
@@ -1178,6 +1158,7 @@ def evaluate_learners_metrics(learners, X_train, y_train, X_test,y_test):
 		ax[r, 6].set_title(tit_label[r]+"ROC AUC")
 		ax[r, 7].set_title(tit_label[r]+"Log Loss")
 	# Create patches for the legend
+	pdb.set_trace()
 	patches = []
 	for i, learner in enumerate(results.keys()):
 		patches.append(mpatches.Patch(color = colors[i], label = learner))
@@ -1289,15 +1270,19 @@ def compare_against_dummy_estimators(estimators, estimatorlabels, X_test, y_test
 	Output: 
 	Example: compare_against_dummy_estimators([knn], ['knn'], X_test, y_test, {'uniform':0,9})
 	"""
+
 	scores_to_compare = []
-	for estobj in estimators:
-		scores_to_compare.append(estobj.score(X_test, y_test))
+	#for estobj in estimators:
+	for key, value in estimators.iteritems():
+		scores_to_compare.append(value.score(X_test, y_test))
 	scores_to_compare = scores_to_compare + dummies_score.values()
 	estimatorlabels = estimatorlabels + dummies_score.keys()
+
 	fig, ax = plt.subplots()
-	len(estimators)
 	x = np.arange(len(estimators) + len(dummies_score.keys()))
+	#histograme with accuracy of estimators compared to dummies
 	barlist = plt.bar(x,scores_to_compare)
+	#colour red the actual estimators (dummies in blue)
 	for i in range(0,len(estimators)):
 		barlist[i].set_color('r') 
 	#plt.xticks(x, ('knn', 'dummy-uniform', 'dummy-cte0', 'dummy-cte1'))
@@ -1305,6 +1290,7 @@ def compare_against_dummy_estimators(estimators, estimatorlabels, X_test, y_test
 	plt.ylabel('score')
 	plt.ylabel('X,y test score vs dummy estimators')
 	plt.show()
+
 
 def build_dummy_scores(X_train, y_train, X_test, y_test):
 	""" build_dummy_scores: When doing supervised learning, a simple sanity check consists of 
@@ -2791,7 +2777,25 @@ def meritxell_eda():
 	 	#detect_multicollinearities calls to plot_jointdistributions
 	 	detect_multicollinearities(dataframe, target_variable, features)
 
-
+def model_interpretation(estimator, X_train, X_test, explanatory_features):
+	""" model_interpretation"""
+	from skater.core.explanations import Interpretation
+	from skater.model import InMemoryModel
+	from skater.core.local_interpretation.lime.lime_tabular import LimeTabularExplainer
+	
+	interpreter = Interpretation(X_test, feature_names=explanatory_features)
+	proba = estimator.predict_proba
+	target_names = estimator.classes_
+	model = InMemoryModel(estimator.predict_proba, examples = X_train)
+	print('Ploting importance calling to : interpreter.feature_importance.plot_feature_importance...')
+	plots = interpreter.feature_importance.plot_feature_importance(model, ascending=True)
+	interpreter.partial_dependence.plot_partial_dependence(explanatory_features[12],model, grid_resolution=50,with_variance=True, figsize = (6, 4))
+	# Partial dependence plots  of most important feature
+	# explainer = LimeTabularExplainer(X_train, feature_names=explanatory_features,discretize_continuous=True, class_names=['0', '1'])
+	# # explain prediction for data point no conversor or conversor, i.e. label 1
+	# exp = explainer.explain_instance(X_test[0], estimator.predict_proba).show_in_notebook()
+	# p = interpreter.partial_dependence.plot_partial_dependence(['a02'], model, grid_resolution=50, with_variance=True, figsize = (6, 4))
+	# fig, axs = interpreter.partial_dependence.plot_partial_dependence(estimator, X_test, 0) 
 
 def socioeconomics_infographics():
 	""" socioeconomics_infographics: EDA for wealth, diet etc
