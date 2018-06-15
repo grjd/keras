@@ -84,7 +84,7 @@ def main():
 	#df = meritxell_eda()
 	#pdb.set_trace()
 	#df = socioeconomics_infographics()
-	
+	#pdb.set_trace()
 	# get the data in csv format
 	dataframe = run_load_csv()	
 	# Feature Selection : cosmetic name changing and select input and output 
@@ -94,6 +94,8 @@ def main():
 	dataframe_orig = dataframe.copy()
 	#combine physical exercise and diet features
 	dataframe = combine_features(dataframe)
+	#income_charts(dataframe)
+
 	###########################################################################################
 	##################  3.0. EDA plot ##########################################################
 	target_variable = 'conversionmci'
@@ -105,6 +107,7 @@ def main():
 		longit_pattern3 = re.compile("^gds_+visita[1-5]+$")
 		longit_pattern4 = re.compile("^fcsrtrl1_visita[1-5]+$") 
 		longit_pattern5 = re.compile("^preocupacion_visita[1-5]+$") 
+		longit_pattern6 = re.compile("^mmse_visita[1-5]+$") 
 		
 		# longit_pattern = re.compile("^mmse_+visita[1-5]+$") 
 		# # plot N histograms one each each variable_visitai
@@ -113,6 +116,7 @@ def main():
 		plot_histograma_one_longitudinal(dataframe, longit_pattern3)
 		plot_histograma_one_longitudinal(dataframe, longit_pattern4)
 		plot_histograma_one_longitudinal(dataframe, longit_pattern5)
+		plot_histograma_one_longitudinal(dataframe, longit_pattern6)
 		# YS: this is hardcode fix
 		plot_histograma_bygroup_categorical(dataframe, target_variable=target_variable)
 		#(4) Descriptive analytics: plot scatter and histograms
@@ -122,14 +126,15 @@ def main():
 		plot_histogram_pair_variables(dataframe, ['scd_visita2', 'gds_visita2'] )
 		# #plot 1 histogram by grouping values of one continuous feature 
 		plot_histograma_bygroup(dataframe, 'glu')
+		plot_histograma_bygroup(dataframe, 'conversionmci')
 		# # plot one histogram grouping by the value of the target variable
 		plot_histograma_bygroup_target(dataframe, 'conversionmci')
-
+	
 	################################################################################################
 	##################  1.1.Detect Multicollinearity  ##############################################
 	multicollin = False
 	if multicollin is True:
-		feature_x = 'scd_visita1'
+		feature_x = 'scd_visitan'
 		feature_y = target_variable
 		dfjoints = dataframe_orig[[feature_x, feature_y]].dropna()
 		#plot_jointdistributions(dfjoints, feature_x, feature_y)
@@ -144,11 +149,13 @@ def main():
 		#cols_list = [['scd_visita1', 'gds_visita1']] to multicollinearity of a list
 		cols_list = [['scd_visita1', 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'preocupacion_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1', 'act_aten_visita1', 'act_orie_visita1', 'act_mrec_visita1', 'act_memt_visita1', 'act_visu_visita1', 'act_expr_visita1', 'act_comp_visita1', 'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'act_apat_visita1', 'gds_visita1', 'stai_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'eq5dsalud_visita1', 'eq5deva_visita1', 'relafami_visita1', 'relaamigo_visita1', 'relaocio_visita1', 'rsoled_visita1', 'valcvida_visita1', 'valsatvid_visita1', 'valfelc_visita1']]
 		cols_list = [['scd_visita1', 'gds_visita1', 'educrenta', 'nivelrenta', 'apoe']]
+		#cols_list = [['scd_visitan', 'gds_visitan', 'educrenta', 'nivelrenta', 'apoe', 'valsatvid2_visitan', 'a13', 'sue_rec','imc']]
+		cols_list = [['scd_visita1', 'gds_visita1', 'educrenta', 'nivelrenta', 'apoe', 'valsatvid2_visitan', 'a13', 'sue_rec','imc']]
 
 		#for cols in cols_list:
 		#for cols in dict_features.keys():
 		for cols in cols_list:
-		 	print("Calculating miulticolinearities for Group feature: ", cols)
+		 	print("Calculating multicolinearities for Group feature: ", cols)
 		 	#features = dict_features[cols]
 		 	features = cols
 		 	#detect_multicollinearities calls to plot_jointdistributions
@@ -161,17 +168,17 @@ def main():
 	##################  1.2. Variable Selection ##########################################################
 	# Leakage data and remove unnecessary features
 	#Remove cognitive performance features for data leakage. This can be done in colstoremove
-	features_to_remove = ['mmse_visita1','reloj_visita1','faq_visita1','fcsrtrl1_visita1','fcsrtrl2_visita1','fcsrtrl3_visita1','fcsrtlibdem_visita1','p_visita1','animales_visita1','cn_visita1','cdrsum_visita1']
-	features_to_remove = features_to_remove + [ 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1','act_memt_visita1', 'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'relaocio_visita1', 'rsoled_visita1']
-	colstoremove = ['tiempomci','tpo1.2','tpo1.3','tpo1.4','tpo1.5','dx_visita1','fecha_visita1','fecha_nacimiento','id', 'ultimodx','conversiondementia', 'tiempodementia']
-	colstoremove = colstoremove + features_to_remove
-	#colstoremove = ['dx_visita1','fecha_nacimiento','id']
-	print('Calling to leakage_data to remove features:', colstoremove, ' about the target \n')
-	dataframe = leakage_data(dataframe, colstoremove)
-	print('Removed ', dataframe_orig.shape[1] - dataframe.shape[1], ' columns in the dataframe \n' )
-	features_list = dataframe.columns.values.tolist()
-	#combine physical exercise and diet features
-	#dataframe = combine_features(dataframe)
+	# features_to_remove = ['mmse_visita1','reloj_visita1','faq_visita1','fcsrtrl1_visita1','fcsrtrl2_visita1','fcsrtrl3_visita1','fcsrtlibdem_visita1','p_visita1','animales_visita1','cn_visita1','cdrsum_visita1']
+	# features_to_remove = features_to_remove + [ 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1','act_memt_visita1', 'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'relaocio_visita1', 'rsoled_visita1']
+	# colstoremove = ['tiempomci','tpo1.2','tpo1.3','tpo1.4','tpo1.5','dx_visita1','fecha_visita1','fecha_nacimiento','id', 'ultimodx','conversiondementia', 'tiempodementia']
+	# colstoremove = colstoremove + features_to_remove
+	# #colstoremove = ['dx_visita1','fecha_nacimiento','id']
+	# print('Calling to leakage_data to remove features:', colstoremove, ' about the target \n')
+	# dataframe = leakage_data(dataframe, colstoremove)
+	# print('Removed ', dataframe_orig.shape[1] - dataframe.shape[1], ' columns in the dataframe \n' )
+	# features_list = dataframe.columns.values.tolist()
+	# #combine physical exercise and diet features
+	# #dataframe = combine_features(dataframe)
 	
 	dict_features = split_features_in_groups()
 	print("Dictionary of static features: ", dict_features)
@@ -183,18 +190,23 @@ def main():
 	dict_features['professional'] +  dict_features['cardiovascular'] + dict_features['ictus'] + \
 	dict_features['diet'] + dict_features['wealth'] + dict_features['physical_exercise'] + dict_features['familiar_ad'] 
 	
-	all_features = dataframe.keys().tolist()
-	print('Length features_static=', len(features_static), ' Length dataframe_orig=', dataframe_orig.shape[1],' Length dataframe post =', dataframe.shape[1])
 	#Remove cognitive performance features for data leakage. This can be done in colstoremove
 	#features_to_remove = ['mmse_visita1','reloj_visita1','faq_visita1','fcsrtrl1_visita1','fcsrtrl2_visita1','fcsrtrl3_visita1','fcsrtlibdem_visita1','p_visita1','animales_visita1','cn_visita1','cdrsum_visita1']
 	#features_to_remove = features_to_remove + [ 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1','act_memt_visita1', 'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'relaocio_visita1', 'rsoled_visita1']
-	selected_features = [x for x in all_features if x not in features_to_remove]
-	features_year1 = [s for s in selected_features if "visita1" in s ];
+	# selected_features = [x for x in all_features if x not in features_to_remove]
+	# features_year1 = [s for s in selected_features if "visita1" in s ];
 	#features_year2 = [s for s in dataset.keys().tolist()  if "visita2" in s]; features_year2.remove('fecha_visita2')
 	#features_year3 = [s for s in dataset.keys().tolist()  if "visita3" in s]; features_year3.remove('fecha_visita3'); features_year3.remove('act_prax_visita3'), features_year3.remove('act_comp_visita3')
 	#features_year4 = [s for s in dataset.keys().tolist()  if "visita4" in s]; features_year4.remove('fecha_visita4'); features_year4.remove('act_prax_visita4'), features_year4.remove('act_comp_visita4')
 	#features_year5 = [s for s in dataset.keys().tolist()  if "visita5" in s]; features_year5.remove('fecha_visita5'); features_year5.remove('act_prax_visita5'), features_year5.remove('act_comp_visita5')
-	explanatory_features = features_static + features_year1
+	#features_year = ['scd_visitan', 'preocupacion_visitan', 'act_aten_visitan', 'act_orie_visitan', \
+	#'act_mrec_visitan', 'act_visu_visitan', 'act_expr_visitan', 'act_comp_visitan', 'act_apat_visitan', 'gds_visitan',\
+	#'stai_visitan', 'eq5dsalud_visitan', 'eq5deva_visitan', 'valcvida2_visitan', 'valsatvid2_visitan', 'valfelc2_visitan']
+	features_year = ['scd_visita1', 'preocupacion_visita1', 'act_aten_visita1', 'act_orie_visita1', \
+	'act_mrec_visita1', 'act_visu_visita1', 'act_expr_visita1', 'act_comp_visita1', 'act_apat_visita1', 'gds_visita1',\
+	'stai_visita1', 'eq5dsalud_visita1', 'eq5deva_visita1', 'valcvida2_visita1', 'valsatvid2_visita1', 'valfelc2_visita1']
+	#explanatory_features = features_static + features_year1
+	explanatory_features = features_static + features_year
 	#explanatory_features = ['my favorite list of features']
 	#target_variable = 'conversion' # if none assigned to 'conversion'. target_variable = ['visita_1_EQ5DMOV']
 	print("Calling to run_variable_selection(dataset, explanatory_features= {}, target_variable={})".format(explanatory_features, target_variable))
@@ -205,8 +217,11 @@ def main():
 	explanatory_and_target_features = deepcopy(explanatory_features)
 	explanatory_and_target_features.append(target_variable)
 	dataframe = dataframe[explanatory_and_target_features]
+	all_features = dataframe_orig.keys().tolist()
+	print(' Features dataframe_orig=', all_features,' Features dataframe post =', dataframe.shape[1])	
 	print ("Features containing NAN values:\n {}".format(dataframe.isnull().any()))
 	print( "Number of NaN cells in original dataframe:{} / {}, total rows:{}".format(pd.isnull(dataframe.values).sum(axis=1).sum(), dataframe.size, dataframe.shape[0]))
+	
 	coluswithnans = []
 	for colu in dataframe.columns:
 		nanscount = np.sum(pd.isnull(dataframe[colu]))
@@ -224,17 +239,19 @@ def main():
 	Xy = dataframe[explanatory_and_target_features].values
 	X = Xy[:,:-1]
 	y = Xy[:,-1]
-	X_scaled, scaler = run_transformations(X) # Normalize to minmaxscale or others make input normal
-	print("X scaled dimensions:{} \n ".format(X_scaled.shape))
-	
+	X_scaled_list, scaler = run_transformations(X) # Normalize to minmaxscale or others make input normal
+	X_scaled = 	X_scaled_list[1] #0 MinMax (0,1), 1 standard (mean 0 , std 1), 2 robust
+	print("X Standard (mu=0, std=1) scaled dimensions:{} \n ".format(X_scaled.shape))
+
 	#construct a LogisticRegression model to choose the best performing features 
-	nbofRFEfeatures = 0 # how many best features you want to find
+	nbofRFEfeatures = 10 # how many best features you want to find
 	if nbofRFEfeatures > 0:
 		print('Running RFE algorithm to select the ', nbofRFEfeatures, ' most important features for Logistic Regression...\n')
 		best_logreg_features = recursive_feature_elimination(X_scaled, y, nbofRFEfeatures, explanatory_and_target_features[:-1])
+		print('The top features are:', best_logreg_features)
 		best_logreg_features.append(target_variable)
 		dataframe = dataframe[best_logreg_features]
-
+	
 	# (3.3) detect multicollinearity: Plot correlation and graphs of variables
 	#convert ndarray to pandas DataFrame
 	X_df_scaled = pd.DataFrame(X_scaled, columns=explanatory_features)
@@ -254,7 +271,7 @@ def main():
 		corr_with_target = corr_Xy_df[target_variable]
 		print("Correlations with the target:\n{}".format(corr_with_target.sort_values()))
 		#corr_with_target = calculate_correlation_with_target(Xdf_imputed_scaled, target_values) # correlation array of features with the target
-		threshold = np.mean(np.abs(corr_Xy_df.as_matrix())) + 1*np.std(np.abs(corr_Xy_df.as_matrix()))
+		threshold = np.mean(np.abs(corr_Xy_df.as_matrix())) + 3*np.std(np.abs(corr_Xy_df.as_matrix()))
 		graph = build_connectedGraph_correlation_matrix(corr_Xy_df, threshold, corr_with_target)
 		graph_metrics = calculate_network_metrics(graph)
 		# # print sumary network metrics
@@ -265,14 +282,16 @@ def main():
 	######################################################################################################
 	##################  1.4. Statistical tests ############################################################
 	# # # perform statistical tests: ANOVA
-	statstest = False
+	
+	statstest = True
 	if statstest is True:
 		feature_to_test = ['familiar_ad', 'nivel_educativo', 'tabac_cant', 'apoe'] #['scd_visita1']
 		feature_to_test = ['renta', 'hta', 'glu', 'lipid', 'tabac_cant', 'cor', 'arri', 'card', 'ictus', 'tce', 'imc','valcvida_visita1', 'physical_exercise', 'dietaketo', 'dietaglucemica', 'dietasaludable','sue_noc', 'sue_rec', 'imc']
+		feature_to_test = explanatory_features
 		target_anova_variable = target_variable # nivel_educativo' #tabac_visita1 depre_visita1
 		tests_result = run_statistical_tests(Xy_df_scaled,feature_to_test, target_anova_variable)
 		#tests_result.keys() 
-
+	pdb.set_trace()	
 	######################################################################################################
 	##################  END 1.4. Statistical tests ########################################################
 
@@ -488,6 +507,7 @@ def combine_features(dataset):
 	Args:dataset
 	Output: detaset"""
 	#diet_med = ['alfrut','alaves', 'alaceit', 'alpast', 'alpan', 'alverd','allact','alpesblan', 'alpeszul']
+	import math
 	phys_exercise = ['a01', 'ejfre', 'ejminut']
 	dataset['physical_exercise'] = dataset['ejfre']*dataset['ejminut']
 	dataset.drop(['a01', 'ejfre', 'ejminut'], axis=1,  inplace=True)
@@ -501,9 +521,34 @@ def combine_features(dataset):
 	dataset['dietaglucemica'] = dataset['dietaglucemica'].astype('int')
 	dataset['dietasaludable'].fillna(dataset['dietasaludable'].mean(), inplace=True)
 	dataset['dietasaludable'] = dataset['dietasaludable'].astype('int')
+	
+	#make last visit column
+	make_visit_N = False
+	if make_visit_N is True:  
+		visitas = ['tpo1.2', 'tpo1.3', 'tpo1.4', 'tpo1.5']
+		visitas_scores =['scd_visita1', 'preocupacion_visita1', 'act_aten_visita1', 'act_orie_visita1', 'act_mrec_visita1', 'act_visu_visita1', 'act_expr_visita1', 'act_comp_visita1', 'act_apat_visita1', 'gds_visita1', 'stai_visita1', 'eq5dsalud_visita1', 'eq5deva_visita1', 'valcvida2_visita1', 'valsatvid2_visita1', 'valfelc2_visita1'] #'relafami_visita1', 'relaamigo_visita1', valcvida(2)_visita1, valsatvid(2)_visita1, valfelc2_visita1
+		#initialize visitaN to visita1
+		for k in visitas_scores:
+			score_year = k[:-1] + '1'
+			score_N = k[:-1] + 'N'
+			dataset[score_N] = dataset[score_year]
 
+		for subject in np.arange(0, dataset.shape[0]):		
+			print('Finding last visit for subject:', subject)
+			for v in reversed(visitas):
+				if math.isnan(dataset[v][subject]) == False:
+					print('Found last visit for subject:', subject, ' visit: ', v)
+					year = v[-1]
+					for k in visitas_scores:
+						score_year = k[:-1] + year
+						score_N = k[:-1] + 'N'
+						dataset[score_N] = ""
+						dataset[score_N][subject] = dataset[score_year][subject]
+						print('Changed :', score_year, ' to :', score_N)
+					break
+			print('Out of loop s:', subject, ' v:', v)
+	dataset.to_csv('/Users/jaime/vallecas/data/BBDD_vallecas/vallecaswithvisitN.csv')		
 	return dataset
-
 
 def leakage_data(dataset, colstoremove):
 	"""leakage_data: remove attributes about the target and others we may not need
@@ -730,14 +775,20 @@ def run_transformations(dataset):
 	# the quick way to normalize : X_scaled = preprocessing.scale(X_train), fit_transform is practical if we are going to train models 
 	# To scale [-1,1] use MaxAbsScaler(). MinMaxScaler formula is std*(max-min) + min
 	print('Normalizing the dataset using MinMaxScaler (values shifted and rescaled to ranging from 0 to 1) \n')
+	
 	scaler = preprocessing.MinMaxScaler()
+	#http://scikit-learn.org/stable/auto_examples/preprocessing/plot_all_scaling.html
+	scaler_std  =StandardScaler()
+	scaler_rob = preprocessing.RobustScaler()
 	#Standarization substracts the mean and divide by std so that the new distribution has unit variance.
 	#Unlike min-max scaling, standardization does not bound values to a specific range this may be a problem
 	#standardization is much less affected by outliers
 	X_train_minmax = scaler.fit_transform(dataset)
+	X_std = scaler_std.fit_transform(dataset)
+	X_rob = scaler_rob.fit_transform(dataset)
 	print("Orignal ndarray \n {}".format(dataset))
 	#print("X_train_minmax \n {}".format(X_train_minmax))
-	return X_train_minmax, scaler
+	return [X_train_minmax, X_std, X_rob], [scaler, scaler_std, scaler_rob]
 
 
 def run_split_dataset_in_train_test(X,y,test_size=None):
@@ -751,14 +802,14 @@ def split_features_in_groups():
 	""" split_features_in_groups
 	Output: dictionaty 'group name':list of features"""
 	dict_features = {}
-	vanilla = ['sexo', 'lat_manual', 'edad', 'edad_ultimodx'] #remove apoe
+	vanilla = ['sexo', 'lat_manual', 'edad', 'edad_ultimodx'] #remove apoe , edad_ultimodx
 	#vanilla = ['sexo', 'lat_manual', 'nivel_educativo', 'edad']
 	#sleep = ['hsnoct' , 'sue_dia' , 'sue_noc' , 'sue_con' , 'sue_man' , 'sue_suf' , 'sue_pro' , 'sue_ron' , 'sue_mov' , 'sue_rui' , 'sue_hor', 'sue_rec']
 	sleep = ['sue_noc', 'sue_rec']
 	anthropometric = ['imc'] #['pabd' , 'peso' , 'talla' , 'imc']
 	#sensory = ['audi', 'visu']
 	#intellectual = ['a01' , 'a02' , 'a03' , 'a04' , 'a05' , 'a06' , 'a07' , 'a08' , 'a09' , 'a10' , 'a11' , 'a12' , 'a13' , 'a14'] 
-	intellectual = ['a02', 'a03', 'a08', 'a11', 'a12', 'a13', 'a14']
+	intellectual = ['a02', 'a03', 'a08', 'a11', 'a12', 'a13', 'a14', 'relafami', 'relaamigo'] #social activities
 	#demographics = ['sdhijos' , 'numhij' , 'sdvive' , 'sdeconom' , 'sdresid' , 'sdestciv']
 	offspring = ['numhij' , 'sdvive' , 'sdeconom' , 'sdresid' , 'sdestciv']
 	#professional = ['sdtrabaja' , 'sdocupac', 'sdatrb']
@@ -2254,6 +2305,7 @@ def run_load_csv(csv_path = None):
 		csv_path = "/Users/jaime/vallecas/data/scc/socioeconomics_29052018.csv" #socioeconomics dataset Dataset_29052018
 		csv_path = "/Users/jaime/vallecas/data/scc/Dataset_29052018.csv"
 		csv_path = "/Users/jaime/vallecas/data/BBDD_vallecas/Proyecto Vallecas_5_visitas_mayo 2018.csv"
+		csv_path = "/Users/jaime/vallecas/data/BBDD_vallecas/Proyecto Vallecas_N_visitas_14_junio_2018.csv"
 	dataset = pd.read_csv(csv_path) #, sep=';')
 	print('Loaded the csv file: ', csv_path, '\n')
 	#summary of data
@@ -2797,10 +2849,35 @@ def model_interpretation(estimator, X_train, X_test, explanatory_features):
 	# p = interpreter.partial_dependence.plot_partial_dependence(['a02'], model, grid_resolution=50, with_variance=True, figsize = (6, 4))
 	# fig, axs = interpreter.partial_dependence.plot_partial_dependence(estimator, X_test, 0) 
 
+def income_charts(dataframe):
+	#pie chart for distritos/barrios
+	plt.subplot(1, 2, 1)
+	distritos = dataframe['distrito'].dropna()
+	distritos_list = distritos.unique()
+	dist_rentas = {}
+	for distri in distritos_list:
+		dist_rentas[distri] = np.sum(distritos.str.find(distri) == 0)
+	plt.pie([v for v in dist_rentas.values()], labels=[k for k in dist_rentas.keys()],autopct=None)
+	plt.title('Home residency of volunteers')
+	
+	plt.subplot(1, 2, 2)
+	rentas = dataframe['nivelrenta'].dropna()
+	rentas_list = rentas.unique()
+	dist_nivelrentas = {}
+	for rent in rentas_list:
+		dist_nivelrentas[rent] = np.sum(rentas == rent)
+		print('level', rent, ' = ', dist_nivelrentas[rent] )
+	patches, texts = plt.pie([v for v in dist_nivelrentas.values()], labels=[k for k in dist_nivelrentas.keys()],autopct=None)
+	plt.title('Income level based in home residency')
+	labels= [ 'Low', 'Medium','High']
+	plt.legend(patches, labels, loc="best")
+	plt.show()
+
 def socioeconomics_infographics():
 	""" socioeconomics_infographics: EDA for wealth, diet etc
 	"""
 	plt.close('all')
+	
 	dataframe = run_load_csv('/Users/jaime/vallecas/data/scc/Dataset_29052018.csv')	
 	target_variable = 'conversionmci'
 	# Feature Selection : cosmetic name changing and select input and output 
@@ -2856,6 +2933,8 @@ def socioeconomics_infographics():
 	 	print('Detect collinearities conversionmci and ', features)
 	 	#detect_multicollinearities calls to plot_jointdistributions
 	 	detect_multicollinearities(dataframe, 'conversionmci', features)
+
+
 
 
 if __name__ == "__name__":
