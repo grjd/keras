@@ -147,7 +147,7 @@ def main():
 
 		#Detect multicollinearities
 		#cols_list = [['scd_visita1', 'gds_visita1']] to multicollinearity of a list
-		cols_list = [['scd_visita1', 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'preocupacion_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1', 'act_aten_visita1', 'act_orie_visita1', 'act_mrec_visita1', 'act_memt_visita1', 'act_visu_visita1', 'act_expr_visita1', 'act_comp_visita1', 'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'act_apat_visita1', 'gds_visita1', 'stai_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'eq5dsalud_visita1', 'eq5deva_visita1', 'relafami_visita1', 'relaamigo_visita1', 'relaocio_visita1', 'rsoled_visita1', 'valcvida_visita1', 'valsatvid_visita1', 'valfelc_visita1']]
+		#cols_list = [['scd_visita1', 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'preocupacion_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1', 'act_aten_visita1', 'act_orie_visita1', 'act_mrec_visita1', 'act_memt_visita1', 'act_visu_visita1', 'act_expr_visita1', 'act_comp_visita1', 'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'act_apat_visita1', 'gds_visita1', 'stai_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'eq5dsalud_visita1', 'eq5deva_visita1', 'relafami_visita1', 'relaamigo_visita1', 'relaocio_visita1', 'rsoled_visita1', 'valcvida_visita1', 'valsatvid_visita1', 'valfelc_visita1']]
 		cols_list = [['scd_visita1', 'gds_visita1', 'educrenta', 'nivelrenta', 'apoe']]
 		#cols_list = [['scd_visitan', 'gds_visitan', 'educrenta', 'nivelrenta', 'apoe', 'valsatvid2_visitan', 'a13', 'sue_rec','imc']]
 		cols_list = [['scd_visita1', 'gds_visita1', 'educrenta', 'nivelrenta', 'apoe', 'valsatvid2_visitan', 'a13', 'sue_rec','imc']]
@@ -240,7 +240,8 @@ def main():
 	X = Xy[:,:-1]
 	y = Xy[:,-1]
 	X_scaled_list, scaler = run_transformations(X) # Normalize to minmaxscale or others make input normal
-	X_scaled = 	X_scaled_list[1] #0 MinMax (0,1), 1 standard (mean 0 , std 1), 2 robust
+	#run_feature_ranking requires all positive 	X_scaled_list[0]. Use standard othrwise
+	X_scaled = 	X_scaled_list[0] #0 MinMax (0,1), 1 standard (mean 0 , std 1), 2 robust
 	print("X Standard (mu=0, std=1) scaled dimensions:{} \n ".format(X_scaled.shape))
 
 	#construct a LogisticRegression model to choose the best performing features 
@@ -282,8 +283,7 @@ def main():
 	######################################################################################################
 	##################  1.4. Statistical tests ############################################################
 	# # # perform statistical tests: ANOVA
-	
-	statstest = True
+	statstest = False
 	if statstest is True:
 		feature_to_test = ['familiar_ad', 'nivel_educativo', 'tabac_cant', 'apoe'] #['scd_visita1']
 		feature_to_test = ['renta', 'hta', 'glu', 'lipid', 'tabac_cant', 'cor', 'arri', 'card', 'ictus', 'tce', 'imc','valcvida_visita1', 'physical_exercise', 'dietaketo', 'dietaglucemica', 'dietasaludable','sue_noc', 'sue_rec', 'imc']
@@ -291,7 +291,7 @@ def main():
 		target_anova_variable = target_variable # nivel_educativo' #tabac_visita1 depre_visita1
 		tests_result = run_statistical_tests(Xy_df_scaled,feature_to_test, target_anova_variable)
 		#tests_result.keys() 
-	pdb.set_trace()	
+	
 	######################################################################################################
 	##################  END 1.4. Statistical tests ########################################################
 
@@ -308,10 +308,15 @@ def main():
 	
 	######################################################################################################
 	################## 2. PREDICTION ############################################################
+	
 	formula = build_formula(explanatory_features)
+	
 	# build design matrix(patsy.dmatrix) and rank the features in the formula y ~ X 
-	run_feature_ranking(Xy_df_scaled, formula)
-	#plot ranking of best features
+	#Xy_df_scaled must be MinMax [0,1]
+	feature_ranking = 0
+	if feature_ranking > 0:
+		run_feature_ranking(Xy_df_scaled, formula)
+		#plot ranking of best features
 	
 	#Split dataset into train and test
 	y = Xy_df_scaled[target_variable].values
@@ -320,13 +325,19 @@ def main():
 		X_features.remove(target_variable)
 	X = Xy_df_scaled[X_features].values
 	X_train, X_test, y_train, y_test = run_split_dataset_in_train_test(X, y, test_size=0.2)
+	
+	#Run Classifiers
+	learners = {}
+	print('Building a Logistic Regression Classifier.....\n')
+	learners['lr_estimator'] = run_logistic_regression(X_train, y_train, X_test, y_test, 0.5, explanatory_and_target_features[:-1])	
+	pdb.set_trace()
+
 	hierclust = run_hierarchical_clustering(np.concatenate((X_train, X_test), axis=0), explanatory_features)
 	pdb.set_trace()
-	learners = {}
+	
 	print('Building a kneighbors Classifier.....\n')
 	learners['knn'] = run_kneighbors(X_train, y_train, X_test, y_test)
-	print('Building a Logistic Regression Classifier.....\n')
-	learners['lr_estimator'] = run_logistic_regression(X_train, y_train, X_test, y_test, 0.5,explanatory_and_target_features[:-1])	
+	
 	
 	print('Building a random_decision_tree.....\n')
 	learners['dt_estimator'] = run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
@@ -778,7 +789,7 @@ def run_transformations(dataset):
 	
 	scaler = preprocessing.MinMaxScaler()
 	#http://scikit-learn.org/stable/auto_examples/preprocessing/plot_all_scaling.html
-	scaler_std  =StandardScaler()
+	scaler_std  = preprocessing.StandardScaler()
 	scaler_rob = preprocessing.RobustScaler()
 	#Standarization substracts the mean and divide by std so that the new distribution has unit variance.
 	#Unlike min-max scaling, standardization does not bound values to a specific range this may be a problem
@@ -904,12 +915,13 @@ def build_formula(features):
 	#formula += ' + ' + ' + '.join(selcols('act_ansi_visita',1,1));
 	formula += ' + ' + ' + '.join(selcols('act_apat_visita',1,1));
 	#social engagement
-	formula += ' + ' + ' + '.join(selcols('relafami_visita',1,1));formula += ' + ' + ' + '.join(selcols('relaamigo_visita',1,1));
+	#formula += ' + ' + ' + '.join(selcols('relafami_visita',1,1)); formula += ' + ' + ' + '.join(selcols('relaamigo_visita',1,1));
+	formula += ' + relaamigo + relafami'
 	#formula += ' + ' + ' + '.join(selcols('relaocio_visita',1,1));formula += ' + ' + ' + '.join(selcols('rsoled_visita',1,1));
 
 	#quality of life
-	formula += ' + ' + ' + '.join(selcols('valcvida_visita',1,1));formula += ' + ' + ' + '.join(selcols('valsatvid_visita',1,1));
-	formula += ' + ' + ' + '.join(selcols('valfelc_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('valcvida2_visita',1,1));formula += ' + ' + ' + '.join(selcols('valsatvid2_visita',1,1));
+	formula += ' + ' + ' + '.join(selcols('valfelc2_visita',1,1));
 	formula += ' + ' + ' + '.join(selcols('eq5dsalud_visita',1,1));formula += ' + ' + ' + '.join(selcols('eq5deva_visita',1,1));
 
 	#formula += ' + ' + ' + '.join(selcols('eq5dmov_visita',1,1));
@@ -933,11 +945,12 @@ def selcols(prefix, a=1, b=5):
 
 def run_feature_ranking(df, formula, scaler=None):
 	""" run_feature_ranking(X) : builds the design matrix for feature ranking (selection)
-	Args: panas dataframe scaled and normalized
+	Args: pandas dataframe scaled and MinMax. NO NEGATIVE VALUES
 	Outputs: design matrix for given formula"""
 	# Construct a single design matrix given a formula_ y ~ X
 	print("The formula is:", formula)
 	# patsy dmatrices, construct a single design matrix given a formula_like and data.
+
 	y, X = dmatrices(formula, data=df, return_type='dataframe')
 	#convert dataframe into Series
 	y = y.iloc[:, 0]
@@ -946,7 +959,7 @@ def run_feature_ranking(df, formula, scaler=None):
 	#	scaler = preprocessing.MinMaxScaler()
 	#	scaler.fit(X)
 	""" select top nboffeats features and find top indices from the formula  """
-	nboffeats = 20
+	nboffeats = 12
 	warnings.simplefilter(action='ignore', category=(UserWarning,RuntimeWarning))
 	# sklearn.feature_selection.SelectKBest, select k features according to the highest scores
 	# SelectKBest(score_func=<function f_classif>, k=10)
@@ -954,8 +967,10 @@ def run_feature_ranking(df, formula, scaler=None):
 	# mutual_info_classif: Mutual information for a discrete target.
 	# chi2: Chi-squared stats of non-negative features for classification tasks.
 	function_f_classif = ['f_classif', 'mutual_info_classif', 'chi2', 'f_regression', 'mutual_info_regression']
-	selector = SelectKBest(chi2, nboffeats)
+
+	selector = SelectKBest(mutual_info_classif, nboffeats)
 	#Run score function on (X, y) and get the appropriate features.
+
 	selector.fit(X, y)
 	# scores_ : array-like, shape=(n_features,) pvalues_ : array-like, shape=(n_features,)
 	top_indices = np.nan_to_num(selector.scores_).argsort()[-nboffeats:][::-1]
@@ -1879,7 +1894,9 @@ def run_logistic_regression(X_train, y_train, X_test, y_test, threshold=None, ex
 	print('Calling to cross_validation_formodel to see whether the model generalizes well...\n')
 	modelCV = LogisticRegression()
 	results_CV = cross_validation_formodel(modelCV, X_train, y_train, n_splits=10)
-	
+	pdb.set_trace()
+	#y_train_pred = results_CV.predict_proba(X_train)[:,1]
+	#y_test_pred = results_CV.predict_proba(X_test)[:,1]
 
 	#plot confusion matrix and AUC
 	fig,ax = plt.subplots(1,3)
@@ -2919,7 +2936,7 @@ def socioeconomics_infographics():
 
 	#Detect multicollinearities
 	#cols_list = [['scd_visita1', 'gds_visita1']] to multicollinearity of a list
-	cols_list = [['scd_visita1', 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'preocupacion_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1', 'act_aten_visita1', 'act_orie_visita1', 'act_mrec_visita1', 'act_memt_visita1', 'act_visu_visita1', 'act_expr_visita1', 'act_comp_visita1', 'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'act_apat_visita1', 'gds_visita1', 'stai_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'eq5dsalud_visita1', 'eq5deva_visita1', 'relafami_visita1', 'relaamigo_visita1', 'relaocio_visita1', 'rsoled_visita1', 'valcvida_visita1', 'valsatvid_visita1', 'valfelc_visita1']]
+	#cols_list = [['scd_visita1', 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'preocupacion_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1', 'act_aten_visita1', 'act_orie_visita1', 'act_mrec_visita1', 'act_memt_visita1', 'act_visu_visita1', 'act_expr_visita1', 'act_comp_visita1', 'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'act_apat_visita1', 'gds_visita1', 'stai_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'eq5dsalud_visita1', 'eq5deva_visita1', 'relafami_visita1', 'relaamigo_visita1', 'relaocio_visita1', 'rsoled_visita1', 'valcvida_visita1', 'valsatvid_visita1', 'valfelc_visita1']]
 	cols_list = [['scd_visita1', 'gds_visita1']]
 	cols_list = [['mmse_visita1',	'anos_escolaridad', 'renta', 'reloj_visita1','fcsrtrl1_visita1','animales_visita1', 'dietaproteica', 'dietagrasa', 'dietasaludable']]
 
