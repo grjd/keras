@@ -52,7 +52,7 @@ from sklearn.neighbors.kde import KernelDensity
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn import preprocessing, metrics
 from sklearn.preprocessing import LabelEncoder, StandardScaler
-from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier
+from sklearn.ensemble import RandomForestClassifier, GradientBoostingClassifier, AdaBoostClassifier
 from sklearn.pipeline import Pipeline
 from sklearn.datasets.mldata import fetch_mldata
 
@@ -330,8 +330,32 @@ def main():
 	
 	#Run Classifiers
 	learners = {}; dict_learners = {}
+
+	#Neural Networks, Deep Learning
+	print('Building a Keras_DL_classifier estimator.....\n')
+	learners['deepnetwork_res'] = run_keras_deep_learning(X_train, y_train, X_test, y_test)
+	pdb.set_trace()
+	print('Building a MLP_classifier estimator.....\n')
+	learners['mlp_estimator'] = run_multi_layer_perceptron(X_train, y_train, X_test, y_test)
+
+
+	boost_type = 'XGBClassifier' #'AdaBoostClassifier'
+	print('Building a run_boosting_classifier estimator.....\n')
+	learners['orxgbm_estimator'] = run_boosting_classifier(X_train, y_train, X_test, y_test, boost_type)
+	pdb.set_trace()
+	print('Building a gradientboosting estimator.....\n')
+	gbm_estimator = run_gradientboosting(X_train, y_train, X_test, y_test, X_features)
+	
+
+	print('Building a randomforest.....\n')
+	learners['rf_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)[1]
+	print_feature_importances(learners['rf_estimator'], explanatory_features)
+	
+
+	print('Building a kneighbors Classifier.....\n')
+	learners['knn'] = run_kneighbors(X_train, y_train, X_test, y_test)
 	print('Building a random_decision_tree.....\n')
-	learners['dt_estimator'] = run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
+	learners['dt_estimator'] = run_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
 	print('Building an unconstrained Logistic Regression Classifier.....\n')
 	learners['lr_estimator'] = run_logistic_regression(X_train, y_train, X_test, y_test, 0.5, explanatory_and_target_features[:-1])
 	print('Building a svm_estimator.....\n')
@@ -339,10 +363,11 @@ def main():
 	dict_learners["dt"]=learners['dt_estimator']
 	dict_learners["lr"]=learners['lr_estimator']
 	dict_learners["svm"]=learners['svm_estimator']
+	dict_learners["knn"]=learners['knn']
 
+	print('Calling to Ensemble Learner (majority vote...')
 	run_votingclassifier(dict_learners, X_train, y_train, X_test, y_test)
 	pdb.set_trace()
-
 
 	print('Saving the model .....\n')
 	save_the_model(learners['svm_estimator'], 'svm', '/Users/jaime/github/code/tensorflow/production/ML_models/')
@@ -351,24 +376,11 @@ def main():
 	learners['naive_bayes_estimator'] = run_naive_Bayes(X_train, y_train, X_test, y_test)
 	pdb.set_trace()
 
-	
-	
 	#print('Building constrained Lasso Logistic Regression Classifier.....\n')
 	#learners['lasso_estimator'] = run_logreg_Lasso(X_train, y_train, X_test, y_test,cv=7)	
 	#'SVC', Bayes etc object has no attribute 'feature_importances_
 
-
-	
-	print('Building a kneighbors Classifier.....\n')
-	learners['knn'] = run_kneighbors(X_train, y_train, X_test, y_test)
-	
-	print('Building a randomforest.....\n')
-	learners['rf_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)
-	print_feature_importances(learners['rf_estimator'], explanatory_features)
-	
-	print('Building a extreme_gradientboosting estimator.....\n')
-	#gbm_estimator = run_gradientboosting(X_train, y_train, X_test, y_test, X_features)
-	learners['orxgbm_estimator'] = run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features)
+	learners['orxgbm_estimator'] = run_boosting_classifier(X_train, y_train, X_test, y_test, X_features,'XGBClassifier' )
 	print_feature_importances(learners['orxgbm_estimator'], explanatory_features)
 	#only for XGBClassifier learner
 	plot_feature_importance(learners['orxgbm_estimator'], explanatory_features)
@@ -397,9 +409,6 @@ def main():
 	#del learners['lasso_estimator']
 	all_results = evaluate_learners_metrics(learners, X_train, y_train, X_test, y_test)
 
-	#Neural Networks, Deep Learning
-	learners['mlp_estimator'] = run_multi_layer_perceptron(X_train, y_train, X_test, y_test)	
-	learners['deepnetwork_res'] = run_keras_deep_learning(X_train, y_train, X_test, y_test)
 
 	#Manifold Learning
 	hierclust = run_hierarchical_clustering(np.concatenate((X_train, X_test), axis=0), explanatory_features)
@@ -436,8 +445,7 @@ def main():
 	X_resampled_test, y_resampled_test = resampling_SMOTE(X_test, y_test)
 	X_train = X_resampled_train; y_train = y_resampled_train; X_test=X_resampled_test;y_test=y_resampled_test
 	learners = {}
-	print('Building a random_decision_tree.....\n')
-	learners['dt_estimator'] = run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
+
 	print('Building a randomforest.....\n')
 	learners['rf_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)
 	print_feature_importances(learners['rf_estimator'], explanatory_features)
@@ -1462,6 +1470,7 @@ def run_sgd_classifier(X_train, y_train, X_test, y_test, loss,cv):
 	plot_learning_curve(clf, title, X_all, y_all, n_jobs=1)
 	print('Accuracy of sgd {} alpha={} classifier on training set {:.2f}'.format(clf.best_params_,loss, clf.score(X_train, y_train)))
 	print('Accuracy of sgd {} alpha={} classifier on test set {:.2f}'.format(clf.best_params_,loss, clf.score(X_test, y_test)))
+	print(classification_report(y_test, y_pred))
 	#plot auc
 	fig,ax = plt.subplots(1,3)
 	fig.set_size_inches(15,5)
@@ -1473,17 +1482,10 @@ def run_sgd_classifier(X_train, y_train, X_test, y_test, loss,cv):
 	return clf
 
 def run_kneighbors(X_train, y_train, X_test, y_test, kneighbors=None):
-	""" kneighbors_classifier : KNN is non-parametric, instance-based and used in a supervised learning setting. Minimal training but expensive testing.
+	""" kneighbors_classifier : KNN is non-parametric, instance-based and used in a supervised learning setting. 
+	Minimal training but expensive testing.
 	Args:  X_train, y_train, X_test, y_test, kneighbors
 	Output: knn estimator"""
-
-	#Randomly dividing the training set into k groups (k and k_hyper are nothinmg to do with each other), or folds, of approximately equal size.
-	#The first fold is treated as a validation set, and the method is fit on the remaining k−1 folds.
-	#The misclassification rate is computed on the observations in the held-out fold. 
-	#This procedure is repeated k times; each time, a different group of observations is treated as a validation set. 
-	#This process results in k estimates of the test error which are then averaged out
-	#performing a 10-fold cross validation on our dataset using a generated list of odd K’s ranging from 1 to 50.
-	# creating odd list of K for KNN
 	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
 	X_all = np.concatenate((X_train, X_test), axis=0)
@@ -1493,16 +1495,19 @@ def run_kneighbors(X_train, y_train, X_test, y_test, kneighbors=None):
 	neighbors = filter(lambda x: x % 2 != 0, myList)
 	# perform 10-fold cross validation
 	cv_scores = [] # list with x validation scores
+	cv = 5
 	for k in neighbors:
 		knn = KNeighborsClassifier(n_neighbors=k)
-		scores = cross_val_score(knn, X_train, y_train, cv=10, scoring='accuracy')
+		scores = cross_val_score(knn, X_train, y_train, cv=cv, scoring='accuracy')
 		cv_scores.append(scores.mean())
 	MSE = [1 - x for x in cv_scores]
 	# determining best k
 	optimal_k = neighbors[MSE.index(min(MSE))]
-	print('The optimal for k-NN algorithm cv=10 is k-neighbors={}'.format(optimal_k))
+	print('The optimal for k-NN algorithm cv={} is k-neighbors={}'.format(cv, optimal_k))
+	
 	# instantiate learning model
-	knn = KNeighborsClassifier(n_neighbors=optimal_k).fit(X_train, y_train)
+	optimal_k = 3
+	knn = KNeighborsClassifier(n_neighbors=optimal_k, weights='distance').fit(X_train, y_train)
 	y_train_pred = knn.predict_proba(X_train)[:,1]
 	y_test_pred = knn.predict_proba(X_test)[:,1]
 	y_pred = [int(a) for a in knn.predict(X_test)]
@@ -1511,9 +1516,11 @@ def run_kneighbors(X_train, y_train, X_test, y_test, kneighbors=None):
 	# predict the response
 	y_pred = knn.predict(X_test)
 	# plot learning curve
-	plot_learning_curve(knn, 'kNN learning curve', X_all, y_all, n_jobs=1)
+	plot_learning_curve(knn, 'kNN learning curve', X_all, y_all, cv = cv, n_jobs=1)
 	print('Accuracy of kNN classifier on training set {:.2f}'.format(knn.score(X_train, y_train)))
 	print('Accuracy of kNN classifier on test set {:.2f}'.format(knn.score(X_test, y_test)))
+	print(classification_report(y_test, y_pred))
+	
 	#plot auc
 	fig,ax = plt.subplots(1,3)
 	fig.set_size_inches(15,5)
@@ -1533,8 +1540,8 @@ def run_kneighbors(X_train, y_train, X_test, y_test, kneighbors=None):
 	plt.show()
 	return knn
 
-def run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable):
-	""" run_random_decision_tree : Bagging algorithm 
+def run_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable):
+	""" run_decision_tree : Bagging algorithm 
 	Args:
 	Output"""
 	import pygraphviz as pgv
@@ -1608,9 +1615,12 @@ def run_random_decision_tree(X_train, y_train, X_test, y_test, X_features, targe
 	graph.write_png(modelname)
 	return dectree
 
-def run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features, threshold=None):
-	""" run_extreme_gradientboosting: XGBoost algorithm """
-	# vanilla XGBooster classifie
+
+def run_boosting_classifier(X_train, y_train, X_test, y_test, type_of_algo=None):
+	""" run_boosting_classifier
+	Args:X_train, y_train, X_test, y_test, type_of_algo=AdaBoostClassifier,GradientBoostingClassifier,XGBClassifier
+	Output:
+	"""
 	import xgboost as xgb
 	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
@@ -1618,90 +1628,50 @@ def run_extreme_gradientboosting(X_train, y_train, X_test, y_test, X_features, t
 	y_all = np.concatenate((y_train, y_test), axis=0)
 	ratio01s= int(sum(y_train==0)/sum(y_train==1))
 	sample_weight = np.array([2 if i == 1 else 0 for i in y_train])
-	XGBmodel = XGBClassifier(class_weight='balanced').fit(X_train, y_train,sample_weight=None)
-	y_train_pred = XGBmodel.predict_proba(X_train)[:,1]
-	y_test_pred = XGBmodel.predict_proba(X_test)[:,1]
-	y_pred = [int(a) for a in XGBmodel.predict(X_test)]
-	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
-	print("Baseline classifier using eXtremeGradientBossting: %s of %s values correct." % (num_correct, len(y_test)))
-	# plot learning curve
-	plot_learning_curve(XGBmodel, 'XGBmodel learning curve', X_all, y_all, n_jobs=1)
-	print('Accuracy of XGBmodel classifier on training set {:.2f}'.format(XGBmodel.score(X_train, y_train)))
-	print('Accuracy of XGBmodel classifier on test set {:.2f}'.format(XGBmodel.score(X_test, y_test)))
-	#plot confusion matrix and AUC
-	fig,ax = plt.subplots(1,3)
-	fig.set_size_inches(15,5)
-	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'XGBmodel CM (TRAIN)', 0.5)
-	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'XGBmodel CM (TEST)', 0.5)
-	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
-	plt.tight_layout()
-	plt.show()
-	
-	dtrain = xgb.DMatrix(X_train, label=y_train)
-	dtest = xgb.DMatrix(X_test, label=y_test)
-	num_round = 5
-	evallist  = [(dtest,'eval'), (dtrain,'train')]
-	param = {'objective':'binary:logistic', 'silent':1, 'eval_metric': ['error', 'logloss']}
-	bst = xgb.train( param, dtrain, num_round, evallist)
-	y_train_pred = bst.predict(dtrain)
-	y_test_pred = bst.predict(dtest)
-	return XGBmodel
-	#y_pred = [int(a) for a in bst.predict(X_test)]
-	#num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
-	# same but using predcit rather than predict_proba almost identical results, but better CM (2,1) above
-	# print(" Baseline classifier using eXtremeGradientBossting: %s of %s values correct." % (num_correct, len(y_test)))
-	# # plot learning curve
-	# plot_learning_curve(XGBmodel, '**XGBmodel', X_all, y_all, n_jobs=1)
-	# print(' Accuracy of XGBmodel classifier on training set {:.2f}'.format(XGBmodel.score(X_train, y_train)))
-	# print(' Accuracy of XGBmodel classifier on test set {:.2f}'.format(XGBmodel.score(X_test, y_test)))
-	# #plot confusion matrix and AUC
-	# fig,ax = plt.subplots(1,3)
-	# fig.set_size_inches(15,5)
-	# plot_cm(ax[0],  y_train, y_train_pred, [0,1], ' XGBmodel CM  (TRAIN)', 0.5)
-	# plot_cm(ax[1],  y_test, y_test_pred,   [0,1], ' XGBmodel CM  (TEST)', 0.5)
-	# plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
-	# plt.tight_layout()
-	# plt.show()
-	
-def run_gradientboosting(X_train, y_train, X_test, y_test, X_features, threshold=None):
-	""" run_gradientboosting: tree based ensemble method use lots of shallow trees (weak learners) 
-	built in a nonrandom way, to create a model that makes fewer and fewer mistakes as more trees are added.
-	Args:X_train, y_train, X_test, y_test, X_features
-	Output:
-	"""
-	# default setting are 0.1, 3 (larger learnign rate more complex trees more overfitting)
+	n_estimators = 20; learn_r = 1; max_depth=5;
+	# By default do GradientBoostingClassifier
+	clf = GradientBoostingClassifier(n_estimators=n_estimators, learning_rate =learn_r, max_depth=max_depth, random_state=0).fit(X_train, y_train, sample_weight=None)
+	if type_of_algo is 'XGBClassifier':
+		clf = XGBClassifier(class_weight='balanced').fit(X_train, y_train,sample_weight=None)
+	elif type_of_algo is 'AdaBoostClassifier':
+			clf = AdaBoostClassifier(DecisionTreeClassifier(max_depth=max_depth), n_estimators=n_estimators,algorithm="SAMME.R", learning_rate=learn_r).fit(X_train, y_train,sample_weight=None)		
+	elif type_of_algo is 'GradientBoostingClassifier':
+		#by default
+		type_of_algo = 'GradientBoostingClassifier' #clf= GradientBoostingClassifier(n_estimators=n_estimators, learning_rate =learn_r, max_depth=max_depth, random_state=0).fit(X_train, y_train, sample_weight=sample_weight)
 
-	X_all = np.concatenate((X_train, X_test), axis=0)
-	y_all = np.concatenate((y_train, y_test), axis=0)
-	ratio01s= int(sum(y_train==0)/sum(y_train==1))
-	sample_weight = np.array([ratio01s if i == 1 else 1 for i in y_train])
-	learn_r = .001; max_depth=6;
-	clf = GradientBoostingClassifier(learning_rate =learn_r, max_depth=3, random_state=0).fit(X_train, y_train, sample_weight=sample_weight)
+	#XGBmodel = XGBClassifier(class_weight='balanced').fit(X_train, y_train,sample_weight=None)
+	#XGBmodel = XGBClassifier(class_weight=np.array((1,2))).fit(X_train, y_train,sample_weight=None)
+	#XGBmodel = AdaBoostClassifier(DecisionTreeClassifier(max_depth=2), n_estimators=n_estimators,algorithm="SAMME.R", learning_rate=learn_r).fit(X_train, y_train,sample_weight=None)
 	y_train_pred = clf.predict_proba(X_train)[:,1]
 	y_test_pred = clf.predict_proba(X_test)[:,1]
 	y_pred = [int(a) for a in clf.predict(X_test)]
 	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
-	print("Baseline classifier using GradientBoostingClassifier: %s of %s values correct." % (num_correct, len(y_test)))
+	print("Baseline classifier using Boosting_classifier: %s:. %s of %s  values correct." % (type_of_algo, num_correct, len(y_test)))
 	# plot learning curve
-	plot_learning_curve(clf, 'GradientBoostingClassifier learning curve', X_all, y_all, n_jobs=1) #cv =3 by default
-	print('GradientBoostingClassifier learningrate={} max depth= {}'.format(learn_r,max_depth))
-	print('Accuracy of GradientBoostingClassifier on training set {:.2f}'.format(clf.score(X_train, y_train)))
-	print('Accuracy of GradientBoostingClassifier on test set {:.2f}'.format(clf.score(X_test, y_test)))
+	plot_learning_curve(clf, 'Boosting learning curve', X_all, y_all, cv=7, n_jobs=2)
+	print('Accuracy of {} classifier on training set {:.2f}'.format(type_of_algo, clf.score(X_train, y_train)))
+	print('Accuracy of {} classifier on test set {:.2f}'.format(type_of_algo, clf.score(X_test, y_test)))
+	print(classification_report(y_test, y_pred))
+	
 	#plot confusion matrix and AUC
 	fig,ax = plt.subplots(1,3)
 	fig.set_size_inches(15,5)
-	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'GradientBoostingClassifier CM (TRAIN) learning_rate=' +str(learn_r), 0.5)
-	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'GradientBoostingClassifier CM (TEST) learning_rate=' +str(learn_r), 0.5)
+	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'Boosting CM (TRAIN)', 0.5)
+	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'Boosting CM (TEST)', 0.5)
 	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
 	plt.tight_layout()
 	plt.show()
-
+	
+	if type_of_algo is 'XGBClassifier':
+		dtrain = xgb.DMatrix(X_train, label=y_train)
+		dtest = xgb.DMatrix(X_test, label=y_test)
+		num_round = 5
+		evallist  = [(dtest,'eval'), (dtrain,'train')]
+		param = {'objective':'binary:logistic', 'silent':1, 'eval_metric': ['error', 'logloss']}
+		bst = xgb.train( param, dtrain, num_round, evallist)
+		y_train_pred = bst.predict(dtrain)
+		y_test_pred = bst.predict(dtest)
 	return clf
-	# fig, subaxes = plt.subplots(1,1, figsize=(6,6))
-	# titleplot='GBDT, default settings'
-	# pdb.set_trace()
-	# #plot_class_regions_for_classifier_subplot(clf, X_train, y_train, X_test, y_test,titleplot,subaxes)
-	# plt.show()
 
 def run_svm_classifier(X_train, y_train, X_test, y_test, X_features=None):
 	""" run_svm_classifier: is the linear classifier with the maximum margin
@@ -1838,23 +1808,32 @@ def run_votingclassifier(classifiers, X_train, y_train, X_test, y_test):
 		print(clf[1].__class__.__name__, accuracy_score(y_test, y_pred))
 	y_pred = voting_clf.predict(X_test)
 	print(voting_clf.__class__.__name__, accuracy_score(y_test, y_pred))
+	print(classification_report(y_test, y_pred))
+	#YS: plot results 
+	#http://scikit-learn.org/stable/auto_examples/ensemble/plot_voting_probas.html
+	return voting_clf
 
 def run_randomforest(X_train, y_train, X_test, y_test, X_features, threshold=None):
-	""" run_randomforest: """
+	""" run_randomforest: select most imp features
+	Args:
+	Output: rf object"""
 	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
-	rf = RandomForestClassifier(n_estimators=100, max_features =10, min_samples_leaf=28, class_weight='balanced').fit(X_train,y_train)
+	n_estimators = 500; max_features= 10; min_samples_leaf=28; max_leaf_nodes=16
+	rf = RandomForestClassifier(n_estimators=n_estimators, max_features =max_features, max_leaf_nodes=max_leaf_nodes, min_samples_leaf=min_samples_leaf, class_weight='balanced').fit(X_train,y_train)
 	y_train_pred = rf.predict_proba(X_train)[:,1]
 	y_test_pred = rf.predict_proba(X_test)[:,1]
 	y_pred = [int(a) for a in rf.predict(X_test)]
 	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
-	print("Baseline classifier using RandomForestClassifier: %s of %s values correct." % (num_correct, len(y_test)))
+	print("Baseline classifier using RandomForestClassifier: n_estimators = %s, %s of %s values correct." % (n_estimators, num_correct, len(y_test)))
 	# plot learning curve
-	plot_learning_curve(rf, 'RandomForestClassifier learning curve', X_all, y_all, n_jobs=1)	
+	plot_learning_curve(rf, 'RandomForestClassifier learning curve', X_all, y_all, cv=3, n_jobs=1)	
 	print('Accuracy of RandomForestClassifier classifier on training set {:.2f}'.format(rf.score(X_train, y_train)))
 	print('Accuracy of RandomForestClassifier classifier on test set {:.2f}'.format(rf.score(X_test, y_test)))
+	print(classification_report(y_test, y_pred))
+	
 	#plot confusion matrix and AUC
 	fig,ax = plt.subplots(1,3)
 	fig.set_size_inches(15,5)
@@ -1874,7 +1853,33 @@ def run_randomforest(X_train, y_train, X_test, y_test, X_features, threshold=Non
 		importances.append(rf.feature_importances_[i])
 	plt.figure(figsize=(5,5))
 	plot_feature_importances(rf,importances, impfeatures)
-	return rf
+	# Finding the Optimal hyperparameters
+	#
+	print("Exhaustive search for RF parameters to improve the out-of-the-box performance of vanilla RF.")
+	#n_estimators = 500; max_features= 10; min_samples_leaf=28; max_leaf_nodes=16
+	parameters = {'n_estimators':10 ** np.arange(1,4), 'max_features':2 ** np.arange(1, 5), 'min_samples_leaf':[8,18,28]}
+	
+	grid_rf = GridSearchCV(rf, parameters, cv=3, verbose=3, n_jobs=2).fit(X_train, y_train)
+	y_train_pred = grid_rf.predict_proba(X_train)[:,1]
+	y_test_pred = grid_rf.predict_proba(X_test)[:,1]
+	y_pred = [int(a) for a in grid_rf.predict(X_test)]
+	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
+	print("Baseline classifier using Grid RandomForestClassifier with optimal hyperparameters: %s of %s values correct." % (num_correct, len(y_test)))
+	# plot learning curve
+	plot_learning_curve(grid_rf, 'RandomForestClassifier learning curve', X_all, y_all, n_jobs=1)	
+	print('Accuracy of Grid-RandomForestClassifier classifier on training set {:.2f}'.format(grid_rf.score(X_train, y_train)))
+	print('Accuracy of Grid-RandomForestClassifier classifier on test set {:.2f}'.format(grid_rf.score(X_test, y_test)))
+	print(classification_report(y_test, y_pred))
+	#plot confusion matrix and AUC
+	fig,ax = plt.subplots(1,3)
+	fig.set_size_inches(15,5)
+	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'Grid-RandomForestClassifier Confusion matrix (TRAIN)', 0.5)
+	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'Grid-RandomForestClassifier Confusion matrix (TEST)', 0.5)
+	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
+	plt.tight_layout()
+	plt.show()
+
+	return rf, grid_rf
 
 def run_logreg_Lasso(X_train, y_train, X_test, y_test,cv=None):
 	"""run_logreg_Lasso: Lasso normal linear regression with L1 regularization (minimize the number of features or predictors int he model)
@@ -1989,34 +1994,84 @@ def run_multi_layer_perceptron(X_train, y_train, X_test, y_test):
 	# solver is the algorithm to learn the weights of the network
 	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
-	fig, subaxes = plt.subplots(1,3, figsize=(5,15))	
+	#fig, subaxes = plt.subplots(1,3, figsize=(5,15))	
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
 	# class_weight is not implemented in MLP, call it with balanced datasets
-	for units, axis in zip([1,10,100],subaxes):
-		mlp = MLPClassifier(hidden_layer_sizes = [units], solver = 'lbfgs', random_state = 0).fit(X_train, y_train)
-		#title = 'MultiLayerPerceptron layer with {} units'.format(units)
+	threshold = 0.5
+	for units in [1,10,100]:
+		#slphs is regulariztion by default 0.001, solver = 'lbfgs' ‘sgd’ adam 
+		mlp = MLPClassifier(hidden_layer_sizes = [units], alpha = 0.01, solver = 'sgd', random_state = 0).fit(X_train, y_train)
+		y_train_pred = mlp.predict_proba(X_train)[:,1]
+		y_test_pred = mlp.predict_proba(X_test)[:,1]
+		y_pred = [int(a) for a in mlp.predict(X_test)]
+		num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
+		print("Baseline classifier using mlp: %s of %s values correct." % (num_correct, len(y_test)))
+		#confusion matrix on the test data
+		conf_matrix = confusion_matrix(y_test, y_pred)
+		print(conf_matrix)
+
+		title = 'MLP 1 layer: {} units'.format(units)
 		print('Accuracy MLP 1 hidden layer units = {}, score= {:.2f} on training'.format(units, mlp.score(X_train, y_train)))
 		print('Accuracy MLP 1 hidden layer units = {}, score= {:.2f} on test'.format(units, mlp.score(X_test, y_test)))
+		print(classification_report(y_test, y_pred))
+		plot_learning_curve(mlp, title, X_all, y_all, cv= 7, n_jobs=1)
+		#plot confusion matrix and AUC
+		fig,ax = plt.subplots(1,3)
+		fig.set_size_inches(15,5)
+		plot_cm(ax[0],  y_train, y_train_pred, [0,1], title +' Confusion matrix (TRAIN)', threshold)
+		plot_cm(ax[1],  y_test, y_test_pred,   [0,1], title + ' Confusion matrix (TEST)', threshold)
+		plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, threshold)
+		plt.tight_layout()
+		plt.show()	
+	pdb.set_trace()
 	#fig, subaxes = plt.subplots(1,3, figsize=(5,15))	
 	#plot_class_regions_for_classifier_subplot(mlp, X_train, y_train, X_test, y_test, title, axis)
 	#plt.tight_layout()
-	#create MLP with 2 hidden layers with 100 units each
-	unitsperlayer = [10,10, 10,10]
-	mlp_layers = MLPClassifier(hidden_layer_sizes = unitsperlayer, alpha = 5.0, solver = 'lbfgs', random_state = 0).fit(X_train, y_train)
-	print('Accuracy MLP hidden layer size = {} on training set {:.2f}'.format(unitsperlayer, mlp_layers.score(X_train, y_train)))
-	print('Accuracy MLP hidden layer size = {} on test set {:.2f}'.format(unitsperlayer, mlp_layers.score(X_test, y_test)))
-	y_train_pred = mlp_layers.predict_proba(X_train)[:,1]
-	y_test_pred = mlp_layers.predict_proba(X_test)[:,1]
+	
+	print('\n **** Building N layers M hidden units {} **** \n ')
+	#create MLP with n hidden layers with m units each
+	unitsperlayer = [16, 16, 12]
+	title = 'MLP NxM: {} '.format(unitsperlayer)
+
+	mlp_layers = MLPClassifier(hidden_layer_sizes = unitsperlayer, alpha = 0.1, solver = 'lbfgs', random_state = 0).fit(X_train, y_train)
+	
+	print("Exhaustive search for regularization parameter alpha.")
+	#http://scikit-learn.org/stable/modules/neural_networks_supervised.html
+	parameters = {'alpha':10.0 ** -np.arange(1, 4)}
+	grid = GridSearchCV(mlp_layers, parameters, cv=3, verbose=3, n_jobs=1).fit(X_train, y_train)
+	print(grid.best_estimator_)
+	print("MLPClassifier GridSearchCV. The best alpha is:{}".format(grid.best_params_)) 
+	print("MLPClassifier of the given test data and labels={} ", grid.score(X_test, y_test))
+
+	print('Accuracy MLP hidden layer size = {} on training set {:.2f}'.format(unitsperlayer, grid.score(X_train, y_train)))
+	print('Accuracy MLP hidden layer size = {} on test set {:.2f}'.format(unitsperlayer, grid.score(X_test, y_test)))
+	y_train_pred = grid.predict_proba(X_train)[:,1]
+	y_test_pred = grid.predict_proba(X_test)[:,1]
+	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
+	print("Baseline classifier using mlp NxM: %s of %s values correct." % (num_correct, len(y_test)))
+	conf_matrix = confusion_matrix(y_test, y_pred)
+	print(conf_matrix)
+	print(classification_report(y_test, y_pred))
+
+	# plot learning curve
+	plot_learning_curve(grid, title, X_all, y_all, cv= 7, n_jobs=1)
+	
+	#plot confusion matrix and AUC
+	fig,ax = plt.subplots(1,3)
+	fig.set_size_inches(15,5)
+	plot_cm(ax[0],  y_train, y_train_pred, [0,1], title +' Confusion matrix (TRAIN)', threshold)
+	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], title + ' Confusion matrix (TEST)', threshold)
+	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, threshold)
+	plt.tight_layout()
+	plt.show()	
+	pdb.set_trace()
+	
 	print("Compute PSI(population stability index or relative entropy \n")
 	psi = psi_relative_entropy(y_test_pred, y_train_pred, 10)
 	print("Compute kolmogorov test\n")
 	ks_two_samples_goodness_of_fit(y_test_pred,y_train_pred[:len(y_test_pred)])
-	y_pred = [int(a) for a in mlp_layers.predict(X_test)]
-	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
-	print("Baseline classifier using MLP: %s of %s values correct." % (num_correct, len(y_test)))
-	# plot learning curve
-	plot_learning_curve(mlp_layers, 'MLP learning curve', X_all, y_all, n_jobs=1)
+
 	return mlp_layers #return mlp
 
 def plot_scatter_target_cond(df, preffix_longit_xandy, target_variable=None):	
@@ -2118,11 +2173,11 @@ class BatchLogger(Callback):
         return d.rolling(window,center=False).mean()
 
 def build_model_with_keras(X_train):
-	""" build_model_with_keras
+	""" build_model_with_keras. function called in run_keras_deep_learning
 	Args:
 	Outoput:compiled keras model""" 
 	
-	activation = 'relu'; optimizer = 'rmsprop'; loss = 'binary_crossentropy'; metrics=['accuracy'];
+	activation = 'relu'; optimizer = 'adam'; loss = 'binary_crossentropy'; metrics=['accuracy'];
 	model = Sequential() 
 	model.add(Dense(8, activation=activation,  kernel_initializer='uniform', kernel_regularizer=regularizers.l2(0.001), input_shape=(X_train.shape[1],)))
 	model.add(Dropout(0.5))
@@ -2139,6 +2194,7 @@ def run_keras_deep_learning(X_train, y_train, X_test, y_test):
 	Output:
 	Remember to activate the virtual environment source ~/git...code/tensorflow/bin/activate"""
  	from keras import callbacks
+
 	####  run_keras_dn(dataset, X_train, X_test, y_train, y_test):
 	input_samples = X_train.shape[0]
 	input_dim = X_train.shape[1]
@@ -2152,12 +2208,13 @@ def run_keras_deep_learning(X_train, y_train, X_test, y_test):
 	# Evaluating model (no K-fold xvalidation) 
 	#bl = BatchLogger() oibluy for GPU, training way too long in cpu, only for .fit with validation_split
 	callbacks = [callbacks.TensorBoard(log_dir='logs_tensorboard',histogram_freq=1, embeddings_freq=1,)]  
-	num_epochs = 200
+	num_epochs = 64
+	batch_size = 32
 	#history = model.fit(X_train, y_train, epochs=num_epochs, batch_size=16, \
 	#	verbose=2, validation_split=0.2, callbacks=callbacks)
 	class_weight = {0:1., 1:8.}
-	history = model.fit(partial_x_train, partial_y_train, epochs=num_epochs, batch_size=16, \
-		verbose=2, validation_data=(x_val, y_val), class_weight = class_weight)
+	history = model.fit(partial_x_train, partial_y_train, epochs=num_epochs, batch_size=batch_size, \
+		verbose=2, validation_data=(x_val, y_val), class_weight = 'auto')
 	model_loss, model_acc = model.evaluate(X_test, y_test)
 	print("Deep Network Loss={}, accuracy={}".format(model_loss, model_acc))
 	#compare accuraccy with  a purely random classifier 
@@ -2193,7 +2250,7 @@ def run_keras_deep_learning(X_train, y_train, X_test, y_test):
 	plt.legend()
 	plt.show()
 	# K-fold cross-validation
-	k = 4
+	k = 0
 	num_val_samples = X_train.shape[0] // 4
 	all_scores = [];acc_history = [];loss_history= []
 	for i in range(k):
@@ -2206,7 +2263,7 @@ def run_keras_deep_learning(X_train, y_train, X_test, y_test):
 		model = build_model_with_keras(X_train)
 		plot_model(model, show_shapes=True, to_file='dn_model_cv.png')
 		#evaluate the network (trains the model)
-		history = model.fit(partial_train_data,partial_train_targets, validation_data=(val_data, val_targets), epochs=num_epochs, batch_size=16, verbose=1,class_weight = class_weight)
+		history = model.fit(partial_train_data,partial_train_targets, validation_data=(val_data, val_targets), epochs=num_epochs, batch_size=batch_size, verbose=1,class_weight = class_weight)
  		#evaluates model in validation data
 		eval_loss, eval_acc = model.evaluate(val_data, val_targets, verbose=0)
 		all_scores.append(eval_acc)
@@ -2240,7 +2297,7 @@ def run_keras_deep_learning(X_train, y_train, X_test, y_test):
 	# Training the final model
 	print("Training the final model with the best parameters")
 	model = build_model_with_keras(X_train)
-	model.fit(X_train, y_train, epochs=20, batch_size=16, verbose=0,class_weight = class_weight)
+	model.fit(X_train, y_train, epochs=num_epochs, batch_size=batch_size, verbose=2,class_weight = 'auto')
 	model_loss, model_acc = model.evaluate(X_test, y_test)
 	#compare accuraccy with  a purely random classifier 
 	y_test_copy = np.copy(y_test)
