@@ -300,7 +300,7 @@ def main():
 	######################################################################################################
 	##################  1.5. Dimensionality Reduction ############################################################
 	# # # (5) Dimensionality Reduction
-	dimreduction = False
+	dimreduction = True
 	if dimreduction is True:
 		pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
 		print("The variance ratio by the {} principal compoments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
@@ -310,7 +310,7 @@ def main():
 	
 	######################################################################################################
 	################## 2. PREDICTION ############################################################
-	
+
 	formula = build_formula(explanatory_features)
 	
 	# build design matrix(patsy.dmatrix) and rank the features in the formula y ~ X 
@@ -327,6 +327,16 @@ def main():
 		X_features.remove(target_variable)
 	X = Xy_df_scaled[X_features].values
 	X_train, X_test, y_train, y_test = run_split_dataset_in_train_test(X, y, test_size=0.2)
+	
+	
+
+	######################################################################################################
+	
+	#clustering
+	tSNE_reduced  = run_tSNE_manifold_learning(X_train, y_train, X_test, y_test)
+	pdb.set_trace()
+	svd_reduced = run_truncatedSVD(X_train, y_train, X_test, y_test)
+	hierclust = run_hierarchical_clustering(np.concatenate((X_train, X_test), axis=0), explanatory_features)
 	
 	#Run Classifiers
 	learners = {}; dict_learners = {}
@@ -410,13 +420,6 @@ def main():
 	all_results = evaluate_learners_metrics(learners, X_train, y_train, X_test, y_test)
 
 
-	#Manifold Learning
-	hierclust = run_hierarchical_clustering(np.concatenate((X_train, X_test), axis=0), explanatory_features)
-	pdb.set_trace()
-	svd_reduced = run_truncatedSVD(X_train, y_train, X_test, y_test)
-	tSNE_reduced  = run_tSNE_manifold_learning(X_train, y_train, X_test, y_test)
-	hierclust = run_hierarchical_clustering(np.concatenate((X_train, X_test), axis=0), explanatory_features)
-	pdb.set_trace()
 	#Algebraic topology
 	run_TDA_with_Kepler(samples, activations)
 	
@@ -460,32 +463,6 @@ def main():
 	compare_against_dummy_estimators(listofestimators, estimatorlabels, X_test, y_test, dummies_score)
 	pdb.set_trace()
 	#####
-
-
-
-
-	# (7) Modelling. 
-
-	# (7.1) Linear Classifiers
-	# 7.1.1 Regression with Lasso normalization. NOT good method for binary classification
-	# 7.1.2  (vanilla) Logistic Regression, SVM
-	# 7.1.3 Logistic Regression, SVM with SGD training setting the SGD loss parameter to 'log' for Logistic Regression or 'hinge' for SVM SGD
-	
-	# (7.1.1)
-
-	# (7.1.2)a vanilla logistic regression
-	# (7.1.2)b LinearSVM
-	#calculate_top_features_contributing_class(lsvm_estimator_vanilla, X_features, 10) error
-	# (7.1.3) SGD classifier better for binary classification and can go both Log Reg and SVM
-	
-	# (7.2) NON Linear Classifiers RandomForest and XGBooster http://xgboost.readthedocs.io/en/latest/tutorials/index.html
-	## (7.2.1) RandomForestClassifier
-
-	#run_model_evaluation(y_test,y_pred)
-	#how to evaluate random forest??? 
-	# (7.2.2) XGBoost is an implementation of gradient boosted decision trees designed for speed and performance
-	# (7.2.3) Kneighbors classifier
-	#knn = run_kneighbors_classifier(X_train, y_train, X_test, y_test)
 
 
 
@@ -1039,7 +1016,7 @@ def plot_dendogram(Z, explanatory_features=None):
 	# a huge jump in distance is typically what we're interested in if we want to argue for a certain number of clusters
 
 def run_hierarchical_clustering(X, explanatory_features=None):
-	""" run_hierarchical_clustering: hierarchical clustering algorithm and plot dendogram
+	""" run_hierarchical_clustering: hierarchical clustering algorithm and plot dendrogram
 	Args:X ndarray X_train and X_test concatenated
 	Output:
 	Exxample: run_hierarchical_clustering(X) # X is the dataset (without the labels)
@@ -1058,11 +1035,11 @@ def run_hierarchical_clustering(X, explanatory_features=None):
 	D = euclidean_distances(X, X)
 	if sum(np.diagonal(D)) > 0:
 		raise SomethingError("The distance matrix is not diagonal!!!!")
-	Z = linkage(D, 'ward') #method='centroid'
+	Z = linkage(D, 'centroid') #method='centroid'
 	# Cophenetic Correlation Coefficient compares (correlates) the actual 
-	#pairwise distances of all your samples to those implied by the hierarchical clustering
+	# pairwise distances of all your samples to those implied by the hierarchical clustering
 	c, coph_dists = cophenet(Z, pdist(X))
-	print("Cophenetic Correlation Coefficient ={:.3f} The closer the value is to 1,the better the clustering preserves the original distances".format(c))
+	print("Cophenetic Correlation Coefficient ={:.3f} The closer the value is to 1, the better the clustering preserves the original distances".format(c))
 	plot_dendogram(Z, explanatory_features)
 	# Plot dendogram and distance matrix
 	#https://stackoverflow.com/questions/2982929/plotting-results-of-hierarchical-clustering-ontop-of-a-matrix-of-data-in-python
@@ -1070,19 +1047,19 @@ def run_hierarchical_clustering(X, explanatory_features=None):
 	fig = pylab.figure(figsize=(8,8))
 	ax1 = fig.add_axes([0.09,0.1,0.2,0.6])
 	Y = linkage(D,  method='centroid')
-	Z1 = dendrogram(Y, orientation='right')
+	Z1 = dendrogram(Y, orientation='right', labels=explanatory_features)
 	print("values passed to leaf_label_func\nleaves : ", Z1["leaves"])
 	#temp = {Z1["leaves"][ii]: labels[ii] for ii in range(len(Z1["leaves"]))}
 	ax1.set_xticks([])
-	ax1.set_yticks([])
-	ax1.set_title('Centroid linkage)')
+	#ax1.set_yticks([])
+	ax1.set_title('Centroid linkage')
 	# Compute and plot second dendrogram.
 	ax2 = fig.add_axes([0.3,0.71,0.6,0.2])
 	Y = linkage(D, method='ward')
-	Z2 = dendrogram(Y)
-	ax2.set_xticks([])
-	ax2.set_yticks([])
-	ax2.set_title('Ward linkage)')
+	Z2 = dendrogram(Y, labels=explanatory_features)
+	#ax2.set_xticks([])
+	#ax2.set_yticks([])
+	ax2.set_title('Ward linkage')
 	# Plot distance matrix.
 	axmatrix = fig.add_axes([0.3,0.1,0.6,0.6])
 	idx1 = Z1['leaves']
@@ -1097,7 +1074,8 @@ def run_hierarchical_clustering(X, explanatory_features=None):
 	axcolor = fig.add_axes([0.91,0.1,0.02,0.6])
 	pylab.colorbar(im, cax=axcolor)
 	fig.show()
-	fig.savefig('images/dendrogram.png')
+	fig.savefig('/Users/jaime/github/papers/vallecas5years/figures/dendrogram.png')
+	pdb.set_trace()
 
 def run_truncatedSVD(X_train, y_train, X_test, y_test):
 	""" run_truncatedSVD: dimensionality reduction for sparse matrices (Single Value decompotitoion)
@@ -1113,13 +1091,16 @@ def run_truncatedSVD(X_train, y_train, X_test, y_test):
 	svd = TruncatedSVD(n_components=2)
 	X_reduced = svd.fit_transform(X_all)
 	# scatter plot of original and reduced data
-	fig = plt.figure(figsize=(9, 8))
+	fig = plt.figure(figsize=(5, 5))
 	plt.scatter(X_reduced[:, 0], X_reduced[:, 1], c=y_all, s=50, edgecolor='k')
 	plt.title("truncated SVD reduction (2D) of N="+ str(datadimension) +" dimensions")
 	plt.axis('off')
 	yellow_patch = mpatches.Patch(color='gold', label='converters')
 	brown_patch = mpatches.Patch(color='indigo', label='Non converters')
 	plt.legend(handles=[yellow_patch, brown_patch])
+	print('svd.explained_variance_ratio_={}', svd.explained_variance_ratio_)  
+	print('svd.explained_variance_ratio_.sum()={}', svd.explained_variance_ratio_.sum())  
+	print('svd.singular_values_={}', svd.singular_values_) 
 	return X_reduced
 
 def run_PCA_for_visualization(Xy_df, target_label, explained_variance=None):
@@ -1132,15 +1113,20 @@ def run_PCA_for_visualization(Xy_df, target_label, explained_variance=None):
 	fig = plt.figure(figsize = (8,8))
 	ax = fig.add_subplot(1,1,1)
 	pca = PCA().fit(Xy_df.values)
+
 	cumvar = np.cumsum(pca.explained_variance_ratio_)
 	if explained_variance is None:
 		explained_variance = 0.7
+	explained_variance = 0.95
 	optimal_comp = np.where(cumvar > explained_variance )[0][0]
-	print("\n With at least {} components we explain {}'%'' of the {} dimensional input data".format(optimal_comp,explained_variance,Xy_df.values.shape[1] ))
-	plt.plot(cumvar)
+	print("\nWith at least {} components we explain {}'%'' of the {} dimensional input data".format(optimal_comp,explained_variance,Xy_df.values.shape[1] ))
+	plt.plot(cumvar)     # ditto, but with red plusses)
+	horline = np.repeat(explained_variance, len(cumvar))
+	plt.plot(np.arange(0,len(cumvar)), horline, 'r--')
 	plt.xlabel('number of components')
 	plt.ylabel('cumulative explained variance')
-	
+	plt.title('PCA explained variance')
+
 	#Visualize
 	fig = plt.figure(figsize = (8,8))
 	ax = fig.add_subplot(1,1,1)
@@ -1156,7 +1142,7 @@ def run_PCA_for_visualization(Xy_df, target_label, explained_variance=None):
 	# plot the principal components
 	targets = Xy_df[target_label].unique().astype(int)
 	if optimal_comp > 2:
-		plt.scatter(projected[:, 0], projected[:, 1],projected[:, 2], c=Xy_df[target_label].astype(int), edgecolor='none', alpha=0.6)
+		plt.scatter(projected[:, 0], projected[:, 1], projected[:, 2], c=Xy_df[target_label].astype(int), edgecolor='none', alpha=0.6)
 	else:
 		plt.scatter(projected[:, 0], projected[:, 1], c=Xy_df[target_label].astype(int), edgecolor='none', alpha=0.6)
 	ax.grid()
@@ -1168,6 +1154,7 @@ def run_PCA_for_visualization(Xy_df, target_label, explained_variance=None):
 	ax.set_title(msgtitle, fontsize = 10)
 	#Noise filtering https://jakevdp.github.io/PythonDataScienceHandbook/05.09-principal-component-analysis.html
 	return pca, projected
+	
 
 def compute_metrics_estimator(estimator, X_train, y_train, X_test,y_test):
 	""" compute_metrics_estimator compute metrics between a pair of arrays y_pred and y_test
@@ -2172,21 +2159,87 @@ class BatchLogger(Callback):
         d =  pd.Series(self.log_values[metric_name])
         return d.rolling(window,center=False).mean()
 
-def build_model_with_keras(X_train):
+def as_keras_metric(method):
+    import functools
+    from keras import backend as K
+    import tensorflow as tf
+    @functools.wraps(method)
+    def wrapper(self, args, **kwargs):
+        """ Wrapper for turning tensorflow metrics into keras metrics """
+        value, update_op = method(self, args, **kwargs)
+        K.get_session().run(tf.local_variables_initializer())
+        with tf.control_dependencies([update_op]):
+            value = tf.identity(value)
+        return value
+    return wrapper
+
+def build_model_with_keras(X_train, metrics):
 	""" build_model_with_keras. function called in run_keras_deep_learning
 	Args:
 	Outoput:compiled keras model""" 
-	
-	activation = 'relu'; optimizer = 'adam'; loss = 'binary_crossentropy'; metrics=['accuracy'];
+
+	activation = 'relu'; optimizer = 'adam'; loss = 'binary_crossentropy'; metrics= metrics; #
 	model = Sequential() 
-	model.add(Dense(8, activation=activation,  kernel_initializer='uniform', kernel_regularizer=regularizers.l2(0.001), input_shape=(X_train.shape[1],)))
+	model.add(Dense(16, activation=activation,  kernel_initializer='uniform', kernel_regularizer=regularizers.l2(0.001), input_shape=(X_train.shape[1],)))
 	model.add(Dropout(0.5))
-	model.add(Dense(8,  kernel_initializer='uniform', kernel_regularizer=regularizers.l2(0.001), activation=activation))
+	model.add(Dense(16,  kernel_initializer='uniform', kernel_regularizer=regularizers.l2(0.001), activation=activation))
 	model.add(Dropout(0.5))
 	model.add(Dense(1,  kernel_initializer='uniform', activation='sigmoid'))
 	model.compile(optimizer=optimizer, loss=loss, metrics=metrics)
 	print ("Model created! activation:{}, optimizer:{}, loss:{}, metrics:{}".format(activation,optimizer,loss,metrics))
 	return model
+def plot_keras_metrics(history, msgtitle):
+	""" plot_keras_metrics
+	Args:history, 
+	Output:
+	"""
+	#plot training and validation loss/accuracy
+	acc = history.history['acc']
+	val_acc = history.history['val_acc']
+	loss = history.history['loss']
+	val_loss = history.history['val_loss']
+	recall = history.history['recall']
+	val_recall = history.history['val_recall']
+	precision = history.history['precision']
+	val_precision = history.history['val_precision']
+
+	plt.figure(figsize=(15,5))
+	#msgtitle ='Learning metrics Deep Network (no k-fold)'
+	plt.suptitle(msgtitle)
+	plt.subplot(2, 2, 2)
+	epochs = range(1, len(loss) + 1)
+	plt.plot(epochs, loss, 'bo', label='Training loss')
+	plt.plot(epochs, val_loss, 'b', label='Validation loss')
+	plt.title('Training and validation loss')
+	#plt.xlabel('Epochs')
+	plt.ylabel('Loss')
+	plt.legend()
+
+	plt.subplot(2, 2, 1)
+	plt.plot(epochs, acc, 'bo', label='Training acc')
+	plt.plot(epochs, val_acc, 'b', label='Validation acc')
+	plt.title('Training and validation accuracy')
+	#plt.xlabel('Epochs')
+	plt.ylabel('Accuracy')
+	plt.legend()
+
+	plt.subplot(2, 2, 3)
+	plt.plot(epochs, recall, 'bo', label='Training recall')
+	plt.plot(epochs, val_recall, 'b', label='Validation recall')
+	plt.title('Training and validation recall')
+	plt.xlabel('Epochs')
+	plt.ylabel('recall')
+	plt.legend()
+	plt.show()
+
+	plt.subplot(2, 2, 4)
+	plt.plot(epochs, precision, 'bo', label='Training precision')
+	plt.plot(epochs, val_precision, 'b', label='Validation precision')
+	plt.title('Training and validation precision')
+	plt.xlabel('Epochs')
+	plt.ylabel('precision')
+	plt.legend()
+	plt.show()
 
 def run_keras_deep_learning(X_train, y_train, X_test, y_test):
 	""" run_keras_deep_learning: deep network classifier using keras
@@ -2194,8 +2247,11 @@ def run_keras_deep_learning(X_train, y_train, X_test, y_test):
 	Output:
 	Remember to activate the virtual environment source ~/git...code/tensorflow/bin/activate"""
  	from keras import callbacks
+	import tensorflow as tf
+	precision = as_keras_metric(tf.metrics.precision)
+	recall = as_keras_metric(tf.metrics.recall)
+	#https://stackoverflow.com/questions/43076609/how-to-calculate-precision-and-recall-in-keras
 
-	####  run_keras_dn(dataset, X_train, X_test, y_train, y_test):
 	input_samples = X_train.shape[0]
 	input_dim = X_train.shape[1]
 	# set apart the 10 % of the training set for validation
@@ -2204,19 +2260,30 @@ def run_keras_deep_learning(X_train, y_train, X_test, y_test):
 	y_val = y_train[:int(input_samples*0.1)]
 	partial_y_train = y_train[int(input_samples*0.1):]
 	# Deep network model run_keras_deep_learning
-	model = build_model_with_keras(X_train)
+	metrics=['accuracy', precision, recall]
+	model = build_model_with_keras(X_train, metrics)
 	# Evaluating model (no K-fold xvalidation) 
 	#bl = BatchLogger() oibluy for GPU, training way too long in cpu, only for .fit with validation_split
 	callbacks = [callbacks.TensorBoard(log_dir='logs_tensorboard',histogram_freq=1, embeddings_freq=1,)]  
-	num_epochs = 64
-	batch_size = 32
+	num_epochs = 200
+	# the more batch size more meory used
+	batch_size = 48 
+	number_of_iterations = input_samples/batch_size 
+	print('Number of iterations:{}', number_of_iterations, ' for {} epochs:',num_epochs, ' .Total: {}', num_epochs*number_of_iterations )
 	#history = model.fit(X_train, y_train, epochs=num_epochs, batch_size=16, \
 	#	verbose=2, validation_split=0.2, callbacks=callbacks)
-	class_weight = {0:1., 1:8.}
+	class_weight = {0:1., 1:7.} #to treat every instance of class 1 as 10 instances of class 0
 	history = model.fit(partial_x_train, partial_y_train, epochs=num_epochs, batch_size=batch_size, \
-		verbose=2, validation_data=(x_val, y_val), class_weight = 'auto')
-	model_loss, model_acc = model.evaluate(X_test, y_test)
-	print("Deep Network Loss={}, accuracy={}".format(model_loss, model_acc))
+		verbose=2, validation_data=(x_val, y_val), class_weight = class_weight) #'auto'
+	evaluationmodel = model.evaluate(X_test, y_test)
+	model_loss = evaluationmodel[0]; model_acc = evaluationmodel[1]; model_prec = evaluationmodel[2]; model_recall = evaluationmodel[3]
+	metricsused = history.history.keys()
+	print('Metrics used:{}',metricsused )
+	#['acc', 'loss', 'recall', 'precision', 'val_acc', 'val_recall', 'val_precision', 'val_loss']
+	predictions = model.predict(X_test)
+	converters = np.sum(predictions >0.5)
+	print('Number of converters : {} / {} ', np.sum(converters), predictions.shape[0])
+	print("Deep Network Loss={}, accuracy={}, precision={} ".format(model_loss, model_acc, model_prec))
 	#compare accuraccy with  a purely random classifier 
 	y_test_copy = np.copy(y_test)
 	np.random.shuffle(y_test_copy)
@@ -2225,86 +2292,62 @@ def run_keras_deep_learning(X_train, y_train, X_test, y_test):
 	print("\nModel accuracy ={:.3f} Dummy model accuracy={:.3f}".format(model_acc,chance_acc))
 	#print("Model predictions ={}".format(model.predict(X_test).ravel()))
 	plot_model(model, show_shapes=True, to_file='dn_model_nocv.png')
-	#plot training and validation loss/accuracy
-	plt.figure(figsize=(15,5))
-	msgtitle ='Deep Network (no k-fold)'
-	plt.suptitle(msgtitle)
-	plt.subplot(1, 2, 2)
-	loss = history.history['loss']
-	val_loss = history.history['val_loss']
-	epochs = range(1, len(loss) + 1)
-	plt.plot(epochs, loss, 'bo', label='Training loss')
-	plt.plot(epochs, val_loss, 'b', label='Validation loss')
-	plt.title('Training and validation loss')
-	plt.xlabel('Epochs')
-	plt.ylabel('Loss')
-	plt.legend()	
-	plt.subplot(1, 2, 1)
-	acc = history.history['acc']
-	val_acc = history.history['val_acc']
-	plt.plot(epochs, acc, 'bo', label='Training acc')
-	plt.plot(epochs, val_acc, 'b', label='Validation acc')
-	plt.title('Training and validation accuracy')
-	plt.xlabel('Epochs')
-	plt.ylabel('Accuracy')
-	plt.legend()
-	plt.show()
-	# K-fold cross-validation
-	k = 0
-	num_val_samples = X_train.shape[0] // 4
-	all_scores = [];acc_history = [];loss_history= []
+	plot_keras_metrics(history, msgtitle ='Learning metrics Deep Network (no k-fold)')
+	#K-fold
+	k = 4
+	print('Running Network lerarning for  K={}-fold cross-validation', k)
+	num_val_samples = X_train.shape[0] // k
+	all_scores = []; acc_history = []; loss_history= []; precision_history = []; recall_history = []
 	for i in range(k):
 		print("Processing fold #",i)
 		val_data = X_train[i * num_val_samples: (i + 1) * num_val_samples]
 		val_targets = y_train[i * num_val_samples: (i + 1) * num_val_samples]
-		partial_train_data = np.concatenate([X_train[:i * num_val_samples],X_train[(i + 1) * num_val_samples:]],axis=0)
-		partial_train_targets = np.concatenate([y_train[:i * num_val_samples],y_train[(i + 1) * num_val_samples:]],axis=0)  
+		partial_train_data = np.concatenate([X_train[:i * num_val_samples], X_train[(i + 1) * num_val_samples:]],axis=0)
+		partial_train_targets = np.concatenate([y_train[:i * num_val_samples], y_train[(i + 1) * num_val_samples:]],axis=0)  
 		#build model, returns a compiled model
-		model = build_model_with_keras(X_train)
+		model = build_model_with_keras(X_train, metrics)
 		plot_model(model, show_shapes=True, to_file='dn_model_cv.png')
 		#evaluate the network (trains the model)
-		history = model.fit(partial_train_data,partial_train_targets, validation_data=(val_data, val_targets), epochs=num_epochs, batch_size=batch_size, verbose=1,class_weight = class_weight)
+		history = model.fit(partial_train_data,partial_train_targets, validation_data=(val_data, val_targets), epochs=num_epochs, batch_size=1, verbose=1,class_weight = class_weight)
  		#evaluates model in validation data
-		eval_loss, eval_acc = model.evaluate(val_data, val_targets, verbose=0)
-		all_scores.append(eval_acc)
+		evaluationFolds = model.evaluate(val_data, val_targets, verbose=0)
+		model_loss = evaluationFolds[0]; model_acc = evaluationFolds[1]; model_prec = evaluationFolds[2]; model_recall = evaluationFolds[3]
+		all_scores.append(evaluationFolds)
 		#keep a record of how well the model does at each epoch, save the per-epoch validation score log.
-		#history.history.keys()
-		accu = history.history['val_acc'] #one value for each epoch (epocs,1)
-		lo = history.history['val_loss']
-		acc_history.append(accu)
-		loss_history.append(lo)
+		history.history.keys() # metrics being monitored during validation [u'acc', u'loss', u'val_acc', u'val_loss']
+		acc_history.append(history.history['val_acc'])
+		loss_history.append(history.history['val_loss'])
+		precision_history.append(history.history['val_precision'])
+		recall_history.append(history.history['val_recall'])
 	
 	print("all_scores validation, mean={} std=({})".format(np.mean(all_scores),np.std(all_scores)))	
 	average_accuracy_history = [np.mean([x[i] for x in acc_history]) for i in range(num_epochs)]
 	average_loss_history = [np.mean([x[i] for x in loss_history]) for i in range(num_epochs)]
+	average_precision_history = [np.mean([x[i] for x in precision_history]) for i in range(num_epochs)]
+	average_recall_history = [np.mean([x[i] for x in recall_history]) for i in range(num_epochs)]
 	#plot k-fold cross validation loss/accuracy
 	plt.figure(figsize=(15,5))
 	msgtitle = str(k) + '-fold cross validation Deep Network'
 	plt.suptitle(msgtitle)
-	plt.subplot(1, 2, 1)
+	plt.subplot(2, 2, 1)
 	plt.plot(range(1, len(average_accuracy_history) + 1), average_accuracy_history)
-	plt.xlabel('Epochs')
 	plt.ylabel('Validation Acc')
-	plt.show()
-	plt.subplot(1, 2, 2)
+	plt.subplot(2, 2, 2)
 	plt.plot(range(1, len(average_loss_history) + 1), average_loss_history)
-	plt.xlabel('Epochs')
 	plt.ylabel('Validation Loss')
+	plt.subplot(2, 2, 3)
+	plt.plot(range(1, len(average_precision_history) + 1), average_precision_history)
+	plt.xlabel('Epochs')
+	plt.ylabel('Validation Precision')
+	plt.subplot(2, 2, 4)
+	plt.plot(range(1, len(average_recall_history) + 1), average_recall_history)
+	plt.xlabel('Epochs')
+	plt.ylabel('Validation Recall')
 	plt.show()
-	#Once you’re finished tuning other parameters of the model (in addition to the number of epochs, whne starts overfiting,beyond that we dont need more epochs
-	#you could also adjust the size of the hidden layers), you can train a final production model
-	#on all of the training data, with the best parameters, and then look at its performance on the test data.
-	# Training the final model
-	print("Training the final model with the best parameters")
-	model = build_model_with_keras(X_train)
-	model.fit(X_train, y_train, epochs=num_epochs, batch_size=batch_size, verbose=2,class_weight = 'auto')
-	model_loss, model_acc = model.evaluate(X_test, y_test)
-	#compare accuraccy with  a purely random classifier 
-	y_test_copy = np.copy(y_test)
-	np.random.shuffle(y_test_copy)
-	hits_array = np.array(y_test) == np.array(y_test_copy)
-	chance_acc = float(np.sum(hits_array)) / len(y_test)
-	print("\n**** Final Model accuracy ={:.3f} Dummy model accuracy={:.3f}".format(model_acc,chance_acc))
+
+
+	test_score = history.evaluate(X_test, y_test)
+
 	return model
 
 def _joint_probabilities_constant_sigma(D, sigma):
@@ -2391,9 +2434,9 @@ def run_tSNE_manifold_learning(X_train, y_train, X_test, y_test):
 			update = momentum * update - learning_rate * grad
 			p += update
 		return p, error, i
-		
+
 	sklearn.manifold.t_sne._gradient_descent = _gradient_descent
-	X_proj =TSNE(random_state=0).fit_transform(X_all)
+	X_proj =TSNE(perplexity=5, random_state=0).fit_transform(X_all)
 	plt.figure(figsize=(9,9))
 	
 	for i in range(X_proj.shape[0]):
