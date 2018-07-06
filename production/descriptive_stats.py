@@ -97,7 +97,7 @@ def main():
 	#combine physical exercise and diet features
 	dataframe = combine_features(dataframe)
 	#income_charts(dataframe)
-
+	pdb.set_trace()
 	###########################################################################################
 	##################  3.0. EDA plot ##########################################################
 	target_variable = 'conversionmci'
