@@ -24,6 +24,7 @@ Data Pipeline:
 from __future__ import print_function
 import os, sys, pdb, operator
 import datetime
+import time
 import numpy as np
 import pandas as pd
 import importlib
@@ -97,7 +98,7 @@ def main():
 	#combine physical exercise and diet features
 	dataframe = combine_features(dataframe)
 	#income_charts(dataframe)
-	pdb.set_trace()
+
 	###########################################################################################
 	##################  3.0. EDA plot ##########################################################
 	target_variable = 'conversionmci'
@@ -300,7 +301,7 @@ def main():
 	######################################################################################################
 	##################  1.5. Dimensionality Reduction ############################################################
 	# # # (5) Dimensionality Reduction
-	dimreduction = True
+	dimreduction = False
 	if dimreduction is True:
 		pca, projected_data = run_PCA_for_visualization(Xy_df_scaled,target_variable, explained_variance=0.7)
 		print("The variance ratio by the {} principal compoments is:{}, singular values:{}".format(pca.n_components_, pca.explained_variance_ratio_,pca.singular_values_ ))
@@ -327,88 +328,133 @@ def main():
 		X_features.remove(target_variable)
 	X = Xy_df_scaled[X_features].values
 	X_train, X_test, y_train, y_test = run_split_dataset_in_train_test(X, y, test_size=0.2)
-	
-	
 
 	######################################################################################################
-	
-	#clustering
-	tSNE_reduced  = run_tSNE_manifold_learning(X_train, y_train, X_test, y_test)
-	pdb.set_trace()
-	svd_reduced = run_truncatedSVD(X_train, y_train, X_test, y_test)
-	hierclust = run_hierarchical_clustering(np.concatenate((X_train, X_test), axis=0), explanatory_features)
-	
+	##### resampling data with SMOTE #####################################################################
+	######################################################################################################
+	from sklearn.utils import shuffle
+	smote_algo = True
+	if smote_algo is True:
+		X_resampled_train, y_resampled_train = resampling_SMOTE(X_train, y_train)
+		X_shuf, Y_shuf = shuffle(X_resampled_train, y_resampled_train)
+		X_resampled_test, y_resampled_test = resampling_SMOTE(X_test, y_test)
+		X_shuf_test, Y_shuf_test = shuffle(X_resampled_test, y_resampled_test)
+		X_train = X_resampled_train; y_train = y_resampled_train; X_test=X_resampled_test;y_test=y_resampled_test
+		X_train = X_shuf; y_train = Y_shuf; X_test=X_shuf_test; y_test=Y_shuf_test
+
+	################## Build List of Classifers/Learners ############################################################
 	#Run Classifiers
 	learners = {}; dict_learners = {}
-
-	#Neural Networks, Deep Learning
-	print('Building a Keras_DL_classifier estimator.....\n')
-	learners['deepnetwork_res'] = run_keras_deep_learning(X_train, y_train, X_test, y_test)
-	pdb.set_trace()
-	print('Building a MLP_classifier estimator.....\n')
-	learners['mlp_estimator'] = run_multi_layer_perceptron(X_train, y_train, X_test, y_test)
-
-
-	boost_type = 'XGBClassifier' #'AdaBoostClassifier'
-	print('Building a run_boosting_classifier estimator.....\n')
-	learners['orxgbm_estimator'] = run_boosting_classifier(X_train, y_train, X_test, y_test, boost_type)
-	pdb.set_trace()
-	print('Building a gradientboosting estimator.....\n')
-	gbm_estimator = run_gradientboosting(X_train, y_train, X_test, y_test, X_features)
-	
-
-	print('Building a randomforest.....\n')
-	learners['rf_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)[1]
-	print_feature_importances(learners['rf_estimator'], explanatory_features)
-	
-
-	print('Building a kneighbors Classifier.....\n')
-	learners['knn'] = run_kneighbors(X_train, y_train, X_test, y_test)
-	print('Building a random_decision_tree.....\n')
-	learners['dt_estimator'] = run_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
 	print('Building an unconstrained Logistic Regression Classifier.....\n')
 	learners['lr_estimator'] = run_logistic_regression(X_train, y_train, X_test, y_test, 0.5, explanatory_and_target_features[:-1])
-	print('Building a svm_estimator.....\n')
-	learners['svm_estimator'] = run_svm_classifier(X_train, y_train, X_test, y_test)
-	dict_learners["dt"]=learners['dt_estimator']
 	dict_learners["lr"]=learners['lr_estimator']
-	dict_learners["svm"]=learners['svm_estimator']
-	dict_learners["knn"]=learners['knn']
 
-	print('Calling to Ensemble Learner (majority vote...')
-	run_votingclassifier(dict_learners, X_train, y_train, X_test, y_test)
-	pdb.set_trace()
+	print('Building a k-neighbors Classifier.....\n')
+	learners['knn_estimator'] = run_kneighbors(X_train, y_train, X_test, y_test)
+	dict_learners["knn"]=learners['knn_estimator']
 
-	print('Saving the model .....\n')
-	save_the_model(learners['svm_estimator'], 'svm', '/Users/jaime/github/code/tensorflow/production/ML_models/')
-	pdb.set_trace()
+	#SVM for both linear and non linear kernel
+	#print('Building a Sigmoid (Linear) svm_estimator.....\n')
+	#learners['svm_sigmoid_estimator'] = run_svm_classifier(X_train, y_train, X_test, y_test, kernel='sigmoid')
+	#dict_learners["svm_sigmoid"]=learners['svm_sigmoid_estimator']
+	print('Building a RBF svm_estimator.....\n')
+	learners['svm_rbf_estimator'] = run_svm_classifier(X_train, y_train, X_test, y_test, kernel='rbf')
+	dict_learners["svm_rbf"]=learners['svm_rbf_estimator']
+
 	print('Building a naive_bayes_estimator.....\n')
 	learners['naive_bayes_estimator'] = run_naive_Bayes(X_train, y_train, X_test, y_test)
+	dict_learners["nb"]=learners['naive_bayes_estimator']
+	
+	#compare estimators against dummy estimators
+	dummies_score = build_dummy_scores(X_train, y_train, X_test, y_test)
+	#listofestimators = [learners['svm_estimator'],learners['lr_estimator'],learners['dt_estimator'],learners['rf_estimator']]
+	#estimatorlabels = ['svm', 'lr', 'dt', 'rf']
+	#compare_against_dummy_estimators(listofestimators, estimatorlabels, X_test, y_test, dummies_score)
+	compare_against_dummy_estimators(learners, learners.keys(), X_test, y_test, dummies_score)
+	#del learners['lasso_estimator']
+	#selct some lements of the dict
+	#learners_metrics = {'dt_estimator':learners['dt_estimator'], 'voting_estimator':learners['voting_estimator'], 'rfgrid_estimator':learners['rfgrid_estimator'],'adaboost_estimator':learners['adaboost_estimator'], 'xgbcboost_estimator':learners['xgbcboost_estimator']}
+	all_results = evaluate_learners_metrics(learners, X_train, y_train, X_test, y_test)
 	pdb.set_trace()
 
-	#print('Building constrained Lasso Logistic Regression Classifier.....\n')
-	#learners['lasso_estimator'] = run_logreg_Lasso(X_train, y_train, X_test, y_test,cv=7)	
-	#'SVC', Bayes etc object has no attribute 'feature_importances_
-
-	learners['orxgbm_estimator'] = run_boosting_classifier(X_train, y_train, X_test, y_test, X_features,'XGBClassifier' )
-	print_feature_importances(learners['orxgbm_estimator'], explanatory_features)
-	#only for XGBClassifier learner
-	plot_feature_importance(learners['orxgbm_estimator'], explanatory_features)
+	print('Building a random_decision_tree.....\n')
+	learners['dt_estimator'] = run_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
+	dict_learners["dt"]=learners['dt_estimator']
 	
+	print('Calling to Ensemble Learner with majority vote...')
+	learners['voting_estimator'] = run_votingclassifier(dict_learners, X_train, y_train, X_test, y_test)
+	dict_learners["voting"]=learners['voting_estimator']
 
-	print('Building a lasso_estimator.....\n')
-	learners['lasso_estimator'] = run_logreg_Lasso(X_train, y_train, X_test, y_test,10)
-	print('sgd.....\n')
-	learners['sgd_estimator'] = run_sgd_classifier(X_train, y_train, X_test, y_test,'hinge',10) #loss = log|hinge
+	print('Building a (Bagging) randomforest estimator.....\n')
+	#learners['rf_estimator'], learners['rfgrid_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)
+	learners['rfgrid_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)[1]
+	#print_feature_importances ONLY for RF no for GridseearchCV
+	#print_feature_importances(learners['rf_estimator'], explanatory_features)
+	#dict_learners["rf"]=learners['rf_estimator']
+	dict_learners["rfgrid"]=learners['rfgrid_estimator']
+	print('Best parameters for RF is:{}', dict_learners["rfgrid"].best_params_)
 
+	print('Building a (Boosting) run_boosting_classifier:AdaBoostClassifier,GradientBoostingClassifier,XGBClassifier.....\n')
+	boost_type = 'AdaBoostClassifier' #AdaBoostClassifier,GradientBoostingClassifier,XGBClassifier
+	learners['adaboost_estimator'] = run_gradient_boosting_classifier(X_train, y_train, X_test, y_test, boost_type)
+	print_feature_importances(learners['adaboost_estimator'], explanatory_features)
+	dict_learners["ada"]=learners['adaboost_estimator']
+
+	boost_type = 'XGBClassifier'
+	learners['xgbcboost_estimator'] = run_gradient_boosting_classifier(X_train, y_train, X_test, y_test, boost_type)
+	print_feature_importances(learners['xgbcboost_estimator'], explanatory_features)
+	#only for XGBClassifier learner
+	plot_feature_importance(learners['xgbcboost_estimator'], explanatory_features)
+	dict_learners["xgbc"]=learners['xgbcboost_estimator']
+
+	#compare estimators against dummy estimators
+	dummies_score = build_dummy_scores(X_train, y_train, X_test, y_test)
+	#listofestimators = [learners['svm_estimator'],learners['lr_estimator'],learners['dt_estimator'],learners['rf_estimator']]
+	#estimatorlabels = ['svm', 'lr', 'dt', 'rf']
+	#compare_against_dummy_estimators(listofestimators, estimatorlabels, X_test, y_test, dummies_score)
+	compare_against_dummy_estimators(learners, learners.keys(), X_test, y_test, dummies_score)
+	#del learners['lasso_estimator']
+	#selct some lements of the dict
+	learners_metrics = {'dt_estimator':learners['dt_estimator'], 'voting_estimator':learners['voting_estimator'], 'rfgrid_estimator':learners['rfgrid_estimator'],'adaboost_estimator':learners['adaboost_estimator'], 'xgbcboost_estimator':learners['xgbcboost_estimator']}
+	all_results = evaluate_learners_metrics(learners_metrics, X_train, y_train, X_test, y_test)
+	pdb.set_trace()
+	
+	##### Deep Networks #####################################################################
+	#########################################################################################
+	print('Building a MLP_classifier estimator.....\n')
+	learners['mlp_estimator'] = run_multi_layer_perceptron(X_train, y_train, X_test, y_test)
+	dict_learners["mlp"]=learners['mlp_estimator']
+
+	print('Building a Keras_DL_classifier estimator.....\n')
+	learners['deepnetwork_res'] = run_keras_deep_learning(X_train, y_train, X_test, y_test)
+	dict_learners["deep"]=learners['deepnetwork_res']
+
+	# print('Building a lasso_estimator.....\n')
+	# learners['lasso_estimator'] = run_logreg_Lasso(X_train, y_train, X_test, y_test,10)
+	# dict_learners["log_reg_lasso"]=learners['lr_estimator']
+	
+	# print('Building a sgd.....\n')
+	# learners['sgd_estimator'] = run_sgd_classifier(X_train, y_train, X_test, y_test,'hinge',10) #loss = log|hinge
+	# dict_learners["og_reg_sgd"]=learners['sgd_estimator']
+	################## Save the List of Classifers/Learners ############################################################
+	save_models = False
+	if save_models is True:
+		for learner in learners.keys():
+			print('Saving the model {}.....\n', learner)
+			save_the_model(learners[learner], learner, '/Users/jaime/github/code/tensorflow/production/ML_models/')	
+	######################################################################################################
+	################## MODEL EVALUATION ############################################################
 
 	#Model interpretation of the estimators, exclude SVM 
-	for learner in learners.keys():
-		if learner is 'svm_estimator' or 'lasso_estimator':
-			print('Skipping SVM has not predict_proba...\n')
-		else: 
-			print('Running model {} interpretation with Skater.....\n', learner)
-			model_interpretation(learners[learner], X_train, X_test, explanatory_features)	
+	skater_interpretation = False
+	if skater_interpretation is True:
+		for learner in learners.keys():
+			if learner is 'svm_estimator' or 'svm_sigmoid' or 'svm_rbf' or 'lasso_estimator' or 'knn_estimator':
+				print('Skipping SVM has not predict_proba...\n')
+			else: 
+				print('\n ***** Running model {} interpretation with Skater..... **** \n', learner)
+				time.sleep(3)
+				model_interpretation(learners[learner], X_train, X_test, explanatory_features)	
 
 	#compare estimators against dummy estimators
 	dummies_score = build_dummy_scores(X_train, y_train, X_test, y_test)
@@ -418,10 +464,21 @@ def main():
 	compare_against_dummy_estimators(learners, learners.keys(), X_test, y_test, dummies_score)
 	#del learners['lasso_estimator']
 	all_results = evaluate_learners_metrics(learners, X_train, y_train, X_test, y_test)
+	pdb.set_trace()
+	
+	######################################################################################################
+	##### Unsupervised Learning ##########################################################################
+	######################################################################################################
+	clustering_analysis = False
+	if clustering_analysis is True:
+		tSNE_reduced  = run_tSNE_manifold_learning(X_train, y_train, X_test, y_test)
+		svd_reduced = run_truncatedSVD(X_train, y_train, X_test, y_test)
+		hierclust = run_hierarchical_clustering(np.concatenate((X_train, X_test), axis=0), explanatory_features)
 
-
-	#Algebraic topology
-	run_TDA_with_Kepler(samples, activations)
+	TDA_analysis = False
+	if TDA_analysis is True:
+		#Algebraic topology
+		run_TDA_with_Kepler(samples, activations)
 	
 	# #
 	# calculate_top_features_contributing_class(sgd_estimator, X_features, 10)
@@ -440,31 +497,11 @@ def main():
 	# #print_model_selection_metrics(X_train, y_train, X_test, y_test,0) -train/test; print_model_selection_metrics(X_train, y_train, X_test, y_test,10) KFold
 	# print_model_selection_metrics(X_train, y_train, X_test, y_test, grid_values)
 	
-	#####
-
-	####
-	# resampling data with SMOTE
-	X_resampled_train, y_resampled_train = resampling_SMOTE(X_train, y_train)
-	X_resampled_test, y_resampled_test = resampling_SMOTE(X_test, y_test)
-	X_train = X_resampled_train; y_train = y_resampled_train; X_test=X_resampled_test;y_test=y_resampled_test
-	learners = {}
-
-	print('Building a randomforest.....\n')
-	learners['rf_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)
-	print_feature_importances(learners['rf_estimator'], explanatory_features)
-
-	print('Building a Logistic Regression Classifier.....\n')
-	#learners['lr_estimator'] = run_logistic_regression(X_train, y_train, X_test, y_test, 0.5,explanatory_and_target_features[:-1])
-	learners['svm_estimator'] = run_svm_classifier(X_train, y_train, X_test, y_test)
-	#compare estimators against dummy estimators
-	dummies_score = build_dummy_scores(X_train, y_train, X_test, y_test)
-	listofestimators = [learners['svm_estimator'],learners['rf_estimator'],learners['rf_estimator']]
-	estimatorlabels = ['svm',  'dt', 'rf']
-	compare_against_dummy_estimators(listofestimators, estimatorlabels, X_test, y_test, dummies_score)
-	pdb.set_trace()
-	#####
 
 
+		
+
+	print('Program Finished!! Yay!! \n\n\n')
 
 	
 def run_print_dataset(dataset):
@@ -1182,6 +1219,7 @@ def evaluate_learners_metrics(learners, X_train, y_train, X_test,y_test):
 	Args:learners list of learners fit, results array each element is the metric for a learner eg results
 	https://www.kaggle.com/ganakar/using-ensemble-methods-and-smote-sampling
 	"""
+	import random
 	import matplotlib.patches as mpatches
 	results = {}; appended_results = []
 	for key, value in learners.iteritems():
@@ -1191,8 +1229,10 @@ def evaluate_learners_metrics(learners, X_train, y_train, X_test,y_test):
 		#plot most important features
 		
 	#plot results
+	#fig, ax = plt.subplots(2, 8, figsize = (18,12))
 	fig, ax = plt.subplots(2, 8, figsize = (12,7))
 	tit_label={0:'Training ',1:'Testing '}
+	#bar_width = 0.1
 	bar_width = 0.2
 	plt.tick_params(
 	axis='x',          # changes apply to the x-axis
@@ -1201,21 +1241,27 @@ def evaluate_learners_metrics(learners, X_train, y_train, X_test,y_test):
 	top='off',         # ticks along the top edge are off
 	labelbottom='off') # labels along the bottom edge are off
 	#len(colors) = len(learners)
-	colors = ['#5F9EA0','#6495ED','#90EE90','#9ACD32','#90AC32','#40AC32' ]
+	colors = ['#5F9EA0','#6495ED','#90EE90','#9ACD32','#90AC32','#40AC32', '#FFFF00','#800000','#000000','#0000FF']
+	random.shuffle(colors)
+	colors = colors[:len(learners)]
 	for k, learner in enumerate(results.keys()):
 		for j, metric in enumerate(['accuracy_train','matthews_corrcoef_train',\
 			'cohen_kappa_train','recall_train','precision_train','f1_train','roc_auc_train','log_loss_train']):
+			
 			ax[0, j].bar(k*bar_width, results[learner][metric], width = bar_width, color = colors[k])
 			ax[0, j].set_xlim((-0.1, .9))
 			ax[0,j].set_facecolor('white')
 			plt.setp(ax[0,j].get_xticklabels(),visible=False)
+			ax[0,j].set_xticks([])
 		for j, metric in enumerate(['accuracy_test','matthews_corrcoef_test',\
 			'cohen_kappa_test','recall_test','precision_test','f1_test','roc_auc_test','log_loss_test']):
 			ax[1, j].bar(k*bar_width, results[learner][metric], width = bar_width, color = colors[k])
 			ax[1, j].set_xlim((-0.1, .9))
 			ax[1,j].set_facecolor('white')
+			ax[1,j].set_xticks([])
+
 	for r in range(2):
-		# Add unique y-labels
+		#Add unique y-labels
 		ax[r, 0].set_ylabel("Accuracy")
 		ax[r, 1].set_ylabel("Matthews")
 		ax[r, 2].set_ylabel("Cohen kappa")
@@ -1224,25 +1270,27 @@ def evaluate_learners_metrics(learners, X_train, y_train, X_test,y_test):
 		ax[r, 5].set_ylabel("F1")
 		ax[r, 6].set_ylabel("ROC AUC")
 		ax[r, 7].set_ylabel("Log Loss")
-
 		# Add titles
-		ax[r, 0].set_title(tit_label[r]+"Accuracy ")
-		ax[r, 1].set_title(tit_label[r]+"Matthews ")
-		ax[r, 2].set_title(tit_label[r]+"Cohen ")
-		ax[r, 3].set_title(tit_label[r]+"Recall")
-		ax[r, 4].set_title(tit_label[r]+"Precision")
-		ax[r, 5].set_title(tit_label[r]+"F1 ")
-		ax[r, 6].set_title(tit_label[r]+"ROC AUC")
-		ax[r, 7].set_title(tit_label[r]+"Log Loss")
+		# ax[r, 0].set_title(tit_label[r]+"Accuracy ")
+		# ax[r, 1].set_title(tit_label[r]+"Matthews ")
+		# ax[r, 2].set_title(tit_label[r]+"Cohen ")
+		# ax[r, 3].set_title(tit_label[r]+"Recall")
+		# ax[r, 4].set_title(tit_label[r]+"Precision")
+		# ax[r, 5].set_title(tit_label[r]+"F1 ")
+		# ax[r, 6].set_title(tit_label[r]+"ROC AUC")
+		# ax[r, 7].set_title(tit_label[r]+"Log Loss")
+	# Add titles
+	ax[0, 3].set_title("Training metrics")
+	ax[1, 3].set_title("Testing metrics")
 	# Create patches for the legend
-	pdb.set_trace()
+	
 	patches = []
 	for i, learner in enumerate(results.keys()):
 		patches.append(mpatches.Patch(color = colors[i], label = learner))
 		#plt.legend(handles = patches, bbox_to_anchor = (-2, 2.4), \
 		#	loc = 'upper center', borderaxespad = 0., ncol = 4, fontsize = 'x-large')
-	plt.legend(handles = patches,loc = 2 , fontsize = 'x-large')
-	plt.suptitle("Performance Metrics for Four Supervised Learning Models", fontsize = 12)
+	plt.legend(handles = patches,loc = 1 , fontsize = 6, borderaxespad=0.)
+	#plt.suptitle("Performance Metrics for Four Supervised Learning Models", fontsize = 8)
 	plt.tight_layout()
 	plt.show()
 
@@ -1351,7 +1399,8 @@ def compare_against_dummy_estimators(estimators, estimatorlabels, X_test, y_test
 	scores_to_compare = []
 	#for estobj in estimators:
 	for key, value in estimators.iteritems():
-		scores_to_compare.append(value.score(X_test, y_test))
+		if key is not 'deepnetwork_res':
+			scores_to_compare.append(value.score(X_test, y_test))
 	scores_to_compare = scores_to_compare + dummies_score.values()
 	estimatorlabels = estimatorlabels + dummies_score.keys()
 
@@ -1367,7 +1416,6 @@ def compare_against_dummy_estimators(estimators, estimatorlabels, X_test, y_test
 	plt.ylabel('score')
 	plt.ylabel('X,y test score vs dummy estimators')
 	plt.show()
-
 
 def build_dummy_scores(X_train, y_train, X_test, y_test):
 	""" build_dummy_scores: When doing supervised learning, a simple sanity check consists of 
@@ -1400,7 +1448,7 @@ def build_dummy_scores(X_train, y_train, X_test, y_test):
 def resampling_SMOTE(X_train, y_train):
 	""" resampling_SMOTE: """
 	from imblearn.over_sampling import SMOTE
-	sm = SMOTE(ratio='minority',random_state=1234,kind='svm')
+	sm = SMOTE(ratio='minority',random_state=1234)
 	X_resampled_train, y_resampled_train = sm.fit_sample(X_train, y_train)
 	print('---------------Resampled data statistics---------------')
 	converters = sum(y_resampled_train)
@@ -1603,19 +1651,21 @@ def run_decision_tree(X_train, y_train, X_test, y_test, X_features, target_varia
 	return dectree
 
 
-def run_boosting_classifier(X_train, y_train, X_test, y_test, type_of_algo=None):
-	""" run_boosting_classifier
+def run_gradient_boosting_classifier(X_train, y_train, X_test, y_test, type_of_algo=None):
+	""" run_gradient_boosting_classifier: GB builds an additive model in a forward stage-wise fashion; it allows for the optimization of arbitrary differentiable loss functions
 	Args:X_train, y_train, X_test, y_test, type_of_algo=AdaBoostClassifier,GradientBoostingClassifier,XGBClassifier
 	Output:
 	"""
 	import xgboost as xgb
+
 	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
 	ratio01s= int(sum(y_train==0)/sum(y_train==1))
 	sample_weight = np.array([2 if i == 1 else 0 for i in y_train])
-	n_estimators = 20; learn_r = 1; max_depth=5;
+	#https://machinelearningmastery.com/configure-gradient-boosting-algorithm/
+	n_estimators = 100; learn_r = 0.001; max_depth=5;
 	# By default do GradientBoostingClassifier
 	clf = GradientBoostingClassifier(n_estimators=n_estimators, learning_rate =learn_r, max_depth=max_depth, random_state=0).fit(X_train, y_train, sample_weight=None)
 	if type_of_algo is 'XGBClassifier':
@@ -1660,25 +1710,29 @@ def run_boosting_classifier(X_train, y_train, X_test, y_test, type_of_algo=None)
 		y_test_pred = bst.predict(dtest)
 	return clf
 
-def run_svm_classifier(X_train, y_train, X_test, y_test, X_features=None):
+def run_svm_classifier(X_train, y_train, X_test, y_test, kernel=None):
 	""" run_svm_classifier: is the linear classifier with the maximum margin
-	Args:X_train, y_train, X_test, y_test, X_features
+	Args:X_train, y_train, X_test, y_test, kernel
 	Output: svm object classifier """
 	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
 	# SVM model, cost and gamma parameters for RBF kernel. out of the box
-	#, class_weight='balanced' kernel poly is horrible
-	svm = SVC(cache_size=1000, kernel='sigmoid',class_weight='balanced').fit(X_train, y_train)
-	#SVC with RBF kernel and optimal C and gamma parameters calculated 
-	svm = SVC(C=10.0, cache_size=1000, class_weight='balanced', coef0=0.0,
-    decision_function_shape='ovr', degree=3, gamma=0.03125, kernel='rbf',
-    max_iter=-1, probability=False, random_state=None, shrinking=True,
-    tol=0.001, verbose=False).fit(X_train, y_train)
-
+	# class_weight='balanced' kernel poly is horrible
 	# ROC in SVM with explicit weights works horribly use balanced
 	#svm = SVC(cache_size=1000, kernel='rbf',class_weight={0:.4, 1:.6}).fit(X_train, y_train)
+	if kernel is 'rbf':
+		print('Building SVC non linear Kernel...\n')
+		#SVC with RBF kernel and optimal C and gamma parameters calculated 
+		svm = SVC(C=10.0, cache_size=1000, class_weight='balanced', coef0=0.0,
+		decision_function_shape='ovr', degree=3, gamma=0.03125, kernel=kernel,
+    	max_iter=-1, probability=False, random_state=None, shrinking=True,
+    	tol=0.001, verbose=False).fit(X_train, y_train)
+	else:
+		print('Building SVC with linear kernel...\n')
+		svm = SVC(cache_size=1000, kernel='sigmoid',class_weight='balanced').fit(X_train, y_train)
+	
 	y_train_pred = svm.predict(X_train)
 	y_test_pred = svm.predict(X_test)
 	y_pred = [int(a) for a in svm.predict(X_test)]
@@ -1844,9 +1898,11 @@ def run_randomforest(X_train, y_train, X_test, y_test, X_features, threshold=Non
 	#
 	print("Exhaustive search for RF parameters to improve the out-of-the-box performance of vanilla RF.")
 	#n_estimators = 500; max_features= 10; min_samples_leaf=28; max_leaf_nodes=16
-	parameters = {'n_estimators':10 ** np.arange(1,4), 'max_features':2 ** np.arange(1, 5), 'min_samples_leaf':[8,18,28]}
-	
-	grid_rf = GridSearchCV(rf, parameters, cv=3, verbose=3, n_jobs=2).fit(X_train, y_train)
+	parameters = {'n_estimators':10 ** np.arange(1,3), 'max_features':2 ** np.arange(1, 5), 'min_samples_leaf':[8,16,32]}
+	#max_features (default=”auto”)If “auto”, then max_features=sqrt(n_features).
+	parameters = {'n_estimators':10 ** np.arange(1,4), 'min_samples_leaf':[8,16,32]} 
+
+	grid_rf = GridSearchCV(rf, parameters, cv=5, verbose=3, n_jobs=-1).fit(X_train, y_train)
 	y_train_pred = grid_rf.predict_proba(X_train)[:,1]
 	y_test_pred = grid_rf.predict_proba(X_test)[:,1]
 	y_pred = [int(a) for a in grid_rf.predict(X_test)]
@@ -1986,9 +2042,11 @@ def run_multi_layer_perceptron(X_train, y_train, X_test, y_test):
 	y_all = np.concatenate((y_train, y_test), axis=0)
 	# class_weight is not implemented in MLP, call it with balanced datasets
 	threshold = 0.5
+	list_of_mlps = []
 	for units in [1,10,100]:
 		#slphs is regulariztion by default 0.001, solver = 'lbfgs' ‘sgd’ adam 
 		mlp = MLPClassifier(hidden_layer_sizes = [units], alpha = 0.01, solver = 'sgd', random_state = 0).fit(X_train, y_train)
+		#list_of_mlps.append(mlp)
 		y_train_pred = mlp.predict_proba(X_train)[:,1]
 		y_test_pred = mlp.predict_proba(X_test)[:,1]
 		y_pred = [int(a) for a in mlp.predict(X_test)]
@@ -2011,7 +2069,7 @@ def run_multi_layer_perceptron(X_train, y_train, X_test, y_test):
 		plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, threshold)
 		plt.tight_layout()
 		plt.show()	
-	pdb.set_trace()
+
 	#fig, subaxes = plt.subplots(1,3, figsize=(5,15))	
 	#plot_class_regions_for_classifier_subplot(mlp, X_train, y_train, X_test, y_test, title, axis)
 	#plt.tight_layout()
@@ -2022,11 +2080,12 @@ def run_multi_layer_perceptron(X_train, y_train, X_test, y_test):
 	title = 'MLP NxM: {} '.format(unitsperlayer)
 
 	mlp_layers = MLPClassifier(hidden_layer_sizes = unitsperlayer, alpha = 0.1, solver = 'lbfgs', random_state = 0).fit(X_train, y_train)
-	
+	#list_of_mlps.append(mlp_layers)
 	print("Exhaustive search for regularization parameter alpha.")
 	#http://scikit-learn.org/stable/modules/neural_networks_supervised.html
-	parameters = {'alpha':10.0 ** -np.arange(1, 4)}
-	grid = GridSearchCV(mlp_layers, parameters, cv=3, verbose=3, n_jobs=1).fit(X_train, y_train)
+	parameters = {'alpha':10.0 ** -np.arange(1, 3)}
+	#crashes!!
+	grid = GridSearchCV(mlp_layers, parameters, cv=5, verbose=3, n_jobs=-1).fit(X_train, y_train)
 	print(grid.best_estimator_)
 	print("MLPClassifier GridSearchCV. The best alpha is:{}".format(grid.best_params_)) 
 	print("MLPClassifier of the given test data and labels={} ", grid.score(X_test, y_test))
@@ -2052,14 +2111,13 @@ def run_multi_layer_perceptron(X_train, y_train, X_test, y_test):
 	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, threshold)
 	plt.tight_layout()
 	plt.show()	
-	pdb.set_trace()
 	
 	print("Compute PSI(population stability index or relative entropy \n")
 	psi = psi_relative_entropy(y_test_pred, y_train_pred, 10)
 	print("Compute kolmogorov test\n")
 	ks_two_samples_goodness_of_fit(y_test_pred,y_train_pred[:len(y_test_pred)])
-
-	return mlp_layers #return mlp
+	return mlp_layers
+	#return list_of_mlps  #return list of MLPs
 
 def plot_scatter_target_cond(df, preffix_longit_xandy, target_variable=None):	
 	"""scatter_plot_pair_variables_target: scatter dataframe features and coloured based on target variable values
@@ -2265,7 +2323,7 @@ def run_keras_deep_learning(X_train, y_train, X_test, y_test):
 	# Evaluating model (no K-fold xvalidation) 
 	#bl = BatchLogger() oibluy for GPU, training way too long in cpu, only for .fit with validation_split
 	callbacks = [callbacks.TensorBoard(log_dir='logs_tensorboard',histogram_freq=1, embeddings_freq=1,)]  
-	num_epochs = 200
+	num_epochs = 20
 	# the more batch size more meory used
 	batch_size = 48 
 	number_of_iterations = input_samples/batch_size 
@@ -2344,10 +2402,7 @@ def run_keras_deep_learning(X_train, y_train, X_test, y_test):
 	plt.xlabel('Epochs')
 	plt.ylabel('Validation Recall')
 	plt.show()
-
-
-	test_score = history.evaluate(X_test, y_test)
-
+	#test_score = history.evaluate(X_test, y_test)
 	return model
 
 def _joint_probabilities_constant_sigma(D, sigma):
@@ -2864,7 +2919,7 @@ def t_test(dataset, feature1, feature2):
 
 def print_feature_importances(learner, features):
 	""" print_fearure_importances only for elarners that take feature_importances_
-	XGB, random forest, decision tree (NO SVC, mlp_estimator, Bayes, Keras)"""
+	XGB, random forest, decision tree (NO SVC, GridSearchCV, mlp_estimator, Bayes, Keras)"""
 	features_imp = pd.DataFrame(learner.feature_importances_, index=features)
 	features_imp  = features_imp.sort_values(by=0, ascending=False)
 	print("The most important features are {}".format(features_imp.head(20)))
@@ -3042,7 +3097,7 @@ def model_interpretation(estimator, X_train, X_test, explanatory_features):
 	proba = estimator.predict_proba
 	target_names = estimator.classes_
 	model = InMemoryModel(estimator.predict_proba, examples = X_train)
-	print('Ploting importance calling to : interpreter.feature_importance.plot_feature_importance...')
+	print('Ploting importance calling to: interpreter.feature_importance.plot_feature_importance...')
 	plots = interpreter.feature_importance.plot_feature_importance(model, ascending=True)
 	interpreter.partial_dependence.plot_partial_dependence(explanatory_features[12],model, grid_resolution=50,with_variance=True, figsize = (6, 4))
 	# Partial dependence plots  of most important feature
@@ -3088,7 +3143,6 @@ def save_the_model(clf, clf_name, path=None):
 	print('Saving the model with joblib...')
 	joblib.dump(clf, modelname)
 	print('To load the model: my_model_loaded = joblib.load("my_model.pkl") ')
-	pdb.set_trace()
 
 def socioeconomics_infographics():
 	""" socioeconomics_infographics: EDA for wealth, diet etc
