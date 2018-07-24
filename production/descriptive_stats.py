@@ -85,6 +85,8 @@ def main():
 	plt.close('all')
 	#Particular EDAs
 	#df = meritxell_eda()
+	
+	
 	#pdb.set_trace()
 	#df = socioeconomics_infographics()
 	#pdb.set_trace()
@@ -135,6 +137,15 @@ def main():
 	
 	################################################################################################
 	##################  1.1.Detect Multicollinearity  ##############################################
+
+	gaussian_test = False
+	if gaussian_test is True:
+		print('Test for Gaussian using Shapiro and Kolmogorov tests...\n')
+		#visual ispection better than p-valñue, if some ouliers p ~0 reject 
+		#null hyp is gaussian but it fits the line so it is gaussian
+		colname = ['imc', 'a13', 'scd_visita1', 'a08', 'renta']
+		for colix in colname:
+			normal_gaussian_test(dataframe[colix],colix, method=None)
 	multicollin = False
 	if multicollin is True:
 		feature_x = 'scd_visitan'
@@ -243,12 +254,12 @@ def main():
 	X = Xy[:,:-1]
 	y = Xy[:,-1]
 	X_scaled_list, scaler = run_transformations(X) # Normalize to minmaxscale or others make input normal
-	#run_feature_ranking requires all positive 	X_scaled_list[0]. Use standard othrwise
+	#run_feature_ranking requires all positive 	X_scaled_list[0]. Use standard otherwise
 	X_scaled = 	X_scaled_list[0] #0 MinMax (0,1), 1 standard (mean 0 , std 1), 2 robust
 	print("X Standard (mu=0, std=1) scaled dimensions:{} \n ".format(X_scaled.shape))
 
 	#construct a LogisticRegression model to choose the best performing features 
-	nbofRFEfeatures = 10 # how many best features you want to find
+	nbofRFEfeatures = 0 # how many best features you want to find
 	if nbofRFEfeatures > 0:
 		print('Running RFE algorithm to select the ', nbofRFEfeatures, ' most important features for Logistic Regression...\n')
 		best_logreg_features = recursive_feature_elimination(X_scaled, y, nbofRFEfeatures, explanatory_and_target_features[:-1])
@@ -318,9 +329,10 @@ def main():
 	#Xy_df_scaled must be MinMax [0,1]
 	feature_ranking = 1
 	if feature_ranking > 0:
-		run_feature_ranking(Xy_df_scaled, formula)
+		#run_feature_ranking requires all positive 	X_scaled_list[0]. Use standard otherwise
+		run_feature_ranking(Xy_df_scaled, formula, nboffeats=12)
 		#plot ranking of best features
-
+	
 	#Split dataset into train and test
 	y = Xy_df_scaled[target_variable].values
 	X_features = explanatory_features
@@ -333,7 +345,7 @@ def main():
 	##### resampling data with SMOTE #####################################################################
 	######################################################################################################
 	from sklearn.utils import shuffle
-	smote_algo = True
+	smote_algo = False
 	if smote_algo is True:
 		X_resampled_train, y_resampled_train = resampling_SMOTE(X_train, y_train)
 		X_shuf, Y_shuf = shuffle(X_resampled_train, y_resampled_train)
@@ -345,6 +357,20 @@ def main():
 	################## Build List of Classifers/Learners ############################################################
 	#Run Classifiers
 	learners = {}; dict_learners = {}
+
+	#TEST
+	print('Building an unconstrained Logistic Regression Classifier.....\n')
+	learners['lr_estimator'] = run_logistic_regression(X_train, y_train, X_test, y_test, 0.5, explanatory_and_target_features[:-1])
+
+
+	boost_type = 'XGBClassifier'
+	learners['xgbcboost_estimator'] = run_gradient_boosting_classifier(X_train, y_train, X_test, y_test, boost_type)
+	print_feature_importances(learners['xgbcboost_estimator'], explanatory_features)
+	#only for XGBClassifier learner
+	plot_feature_importance(learners['xgbcboost_estimator'], explanatory_features)
+	dict_learners["xgbc"]=learners['xgbcboost_estimator']
+	pdb.set_trace()
+
 	print('Building an unconstrained Logistic Regression Classifier.....\n')
 	learners['lr_estimator'] = run_logistic_regression(X_train, y_train, X_test, y_test, 0.5, explanatory_and_target_features[:-1])
 	dict_learners["lr"]=learners['lr_estimator']
@@ -361,6 +387,7 @@ def main():
 	learners['svm_rbf_estimator'] = run_svm_classifier(X_train, y_train, X_test, y_test, kernel='rbf')
 	dict_learners["svm_rbf"]=learners['svm_rbf_estimator']
 
+
 	print('Building a naive_bayes_estimator.....\n')
 	learners['naive_bayes_estimator'] = run_naive_Bayes(X_train, y_train, X_test, y_test)
 	dict_learners["nb"]=learners['naive_bayes_estimator']
@@ -375,7 +402,7 @@ def main():
 	#selct some lements of the dict
 	#learners_metrics = {'dt_estimator':learners['dt_estimator'], 'voting_estimator':learners['voting_estimator'], 'rfgrid_estimator':learners['rfgrid_estimator'],'adaboost_estimator':learners['adaboost_estimator'], 'xgbcboost_estimator':learners['xgbcboost_estimator']}
 	all_results = evaluate_learners_metrics(learners, X_train, y_train, X_test, y_test)
-	pdb.set_trace()
+	
 
 	print('Building a random_decision_tree.....\n')
 	learners['dt_estimator'] = run_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
@@ -393,6 +420,7 @@ def main():
 	#dict_learners["rf"]=learners['rf_estimator']
 	dict_learners["rfgrid"]=learners['rfgrid_estimator']
 	print('Best parameters for RF is:{}', dict_learners["rfgrid"].best_params_)
+	pdb.set_trace()
 
 	print('Building a (Boosting) run_boosting_classifier:AdaBoostClassifier,GradientBoostingClassifier,XGBClassifier.....\n')
 	boost_type = 'AdaBoostClassifier' #AdaBoostClassifier,GradientBoostingClassifier,XGBClassifier
@@ -406,7 +434,7 @@ def main():
 	#only for XGBClassifier learner
 	plot_feature_importance(learners['xgbcboost_estimator'], explanatory_features)
 	dict_learners["xgbc"]=learners['xgbcboost_estimator']
-
+	pdb.set_trace()
 	#compare estimators against dummy estimators
 	dummies_score = build_dummy_scores(X_train, y_train, X_test, y_test)
 	#listofestimators = [learners['svm_estimator'],learners['lr_estimator'],learners['dt_estimator'],learners['rf_estimator']]
@@ -982,7 +1010,7 @@ def selcols(prefix, a=1, b=5):
 	Example: selcols('scd_visita',1,3) returns [scd_visita,scd_visita2,scd_visita3] """
 	return [prefix+str(i) for i in np.arange(a,b+1)]
 
-def run_feature_ranking(df, formula, scaler=None):
+def run_feature_ranking(df, formula, nboffeats=12, scaler=None):
 	""" run_feature_ranking(X) : builds the design matrix for feature ranking (selection)
 	Args: pandas dataframe scaled and MinMax. NO NEGATIVE VALUES
 	Outputs: design matrix for given formula"""
@@ -998,7 +1026,7 @@ def run_feature_ranking(df, formula, scaler=None):
 	#	scaler = preprocessing.MinMaxScaler()
 	#	scaler.fit(X)
 	""" select top nboffeats features and find top indices from the formula  """
-	nboffeats = 12
+	#nboffeats = 12
 	warnings.simplefilter(action='ignore', category=(UserWarning,RuntimeWarning))
 	# sklearn.feature_selection.SelectKBest, select k features according to the highest scores
 	# SelectKBest(score_func=<function f_classif>, k=10)
@@ -1006,7 +1034,9 @@ def run_feature_ranking(df, formula, scaler=None):
 	# mutual_info_classif: Mutual information for a discrete target.
 	# chi2: Chi-squared stats of non-negative features for classification tasks.
 	function_f_classif = ['f_classif', 'mutual_info_classif', 'chi2', 'f_regression', 'mutual_info_regression']
-	selector = SelectKBest(chi2, nboffeats)
+	#selector = SelectKBest(chi2, nboffeats)
+	selector = SelectKBest(f_classif, nboffeats)
+
 	#Run score function on (X, y) and get the appropriate features.
 
 	selector.fit(X, y)
@@ -1014,7 +1044,7 @@ def run_feature_ranking(df, formula, scaler=None):
 	top_indices = np.nan_to_num(selector.scores_).argsort()[-nboffeats:][::-1]
 	print("Selector {} scores:",nboffeats, selector.scores_[top_indices])
 	print("Top features:\n", X.columns[top_indices])
-	
+
 	# Pipeline of transforms with a final estimator.Sequentially apply a list of transforms and a final estimator.
 	# sklearn.pipeline.Pipeline
 	#preprocess = Pipeline([('anova', selector), ('scale', scaler)])
@@ -1242,7 +1272,7 @@ def evaluate_learners_metrics(learners, X_train, y_train, X_test,y_test):
 	labelbottom='off') # labels along the bottom edge are off
 	#len(colors) = len(learners)
 	colors = ['#5F9EA0','#6495ED','#90EE90','#9ACD32','#90AC32','#40AC32', '#FFFF00','#800000','#000000','#0000FF']
-	random.shuffle(colors)
+	#random.shuffle(colors)
 	colors = colors[:len(learners)]
 	for k, learner in enumerate(results.keys()):
 		for j, metric in enumerate(['accuracy_train','matthews_corrcoef_train',\
@@ -1541,7 +1571,7 @@ def run_kneighbors(X_train, y_train, X_test, y_test, kneighbors=None):
 	print('The optimal for k-NN algorithm cv={} is k-neighbors={}'.format(cv, optimal_k))
 	
 	# instantiate learning model
-	optimal_k = 3
+	optimal_k = 5
 	knn = KNeighborsClassifier(n_neighbors=optimal_k, weights='distance').fit(X_train, y_train)
 	y_train_pred = knn.predict_proba(X_train)[:,1]
 	y_test_pred = knn.predict_proba(X_test)[:,1]
@@ -1598,7 +1628,13 @@ def run_decision_tree(X_train, y_train, X_test, y_test, X_features, target_varia
 	plot_learning_curve(dectree, 'dectree learning curve', X_all, y_all,  cv= 7, n_jobs=1)
 	print('Accuracy of DecisionTreeClassifier classifier on training set {:.2f}'.format(dectree.score(X_train, y_train)))
 	print('Accuracy of DecisionTreeClassifier classifier on test set {:.2f}'.format(dectree.score(X_test, y_test)))
-		
+	#confusion matrix on the test data
+	conf_matrix = confusion_matrix(y_test, y_pred)
+	print(conf_matrix)
+	print('Accuracy of DT classifier on training set {:.2f}'.format(dectree.score(X_train, y_train)))
+	print('Accuracy of DT classifier on test set {:.2f}'.format(dectree.score(X_test, y_test)))
+	print(classification_report(y_test, y_pred))
+
 	#print('Features importances: {}'.format(dectree.feature_importances_))
 	# indices with feature importance > 0
 	idxbools= dectree.feature_importances_ > 0; idxbools = idxbools.tolist()
@@ -1992,8 +2028,15 @@ def run_logistic_regression(X_train, y_train, X_test, y_test, threshold=None, ex
 		threshold = 0.5
 	# Create logistic regression object, class_weight='balanced':replicating the smaller class until you have 
 	#as many samples as in the larger one, but in an implicit way.
+	#penalty default is l2, C : default: 1.0
 	#Explicit weight , more emphasis with more weight on the less populated class e.g class_weight={0:.8, 1:1}
-	logreg = LogisticRegression(class_weight='balanced').fit(X_train, y_train)
+	parameters = {'C':10.0 ** -np.arange(-7, 7)}
+	#parameters = {'C':1.0 ** -np.arange(0, 1)}
+	#logreg = LogisticRegression(class_weight='balanced').fit(X_train, y_train)
+	logbalanced = LogisticRegression(class_weight='balanced')
+	logreg = GridSearchCV(logbalanced, parameters, cv=5, verbose=3, n_jobs=2).fit(X_train, y_train)
+
+	
 	#logreg = LogisticRegression(class_weight={0:.2, 1:.8}).fit(X_train, y_train)
 	# Train the model using the training sets
 	# model prediction
@@ -2009,14 +2052,14 @@ def run_logistic_regression(X_train, y_train, X_test, y_test, threshold=None, ex
 	print('Accuracy of LogReg classifier on training set {:.2f}'.format(logreg.score(X_train, y_train)))
 	print('Accuracy of LogReg classifier on test set {:.2f}'.format(logreg.score(X_test, y_test)))
 	print(classification_report(y_test, y_pred))
-
+	pdb.set_trace()
+	
 	#Check if the model generalizes well.
 	print('Calling to cross_validation_formodel to see whether the model generalizes well...\n')
 	modelCV = LogisticRegression()
 	results_CV = cross_validation_formodel(modelCV, X_train, y_train, n_splits=10)
 	print('CV score is:', results_CV)
 	
-
 	# plot learning curve with cv = number of KFOlds 1 leave out
 	plot_learning_curve(logreg, 'LogReg', X_all, y_all, cv= 7, n_jobs=1)	
 	#plot confusion matrix and AUC
@@ -2027,6 +2070,7 @@ def run_logistic_regression(X_train, y_train, X_test, y_test, threshold=None, ex
 	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, threshold)
 	plt.tight_layout()
 	plt.show()
+
 	return logreg
 
 def run_multi_layer_perceptron(X_train, y_train, X_test, y_test):
@@ -2819,6 +2863,53 @@ def chi_square(df, col1):
 	from scipy.stats import chisquare
 	res_chi =  chisquare([df[col1]])
 
+
+def normal_gaussian_test(rv, rv_name =None, method=None):
+	""" normal_gaussian_test: Test isf a dfistribution fllows a Normal Gaussian fistribution 
+	Args: rv: random variable we need to know its distribution. 
+	'shapiro' Shapiro-Wilk tests if a random sample came from a normal distribution (null hypothesis: data 
+	is normally distributed). Use shapiro only if size < 5000
+	'kolmogorov': Kolmogorov–Smirnov tests if a sample distribution fits the CDF of another distribution (eg Gaussian).
+	As for shapiro, null hypothesis is the sample distribution is identical to the other distribution (Gaussian). 
+	If p < .05 we can reject the null
+	"""
+	#It is completely possible that for p > 0.05 and the data does not come from a normal population. 
+	#Failure to reject could be from the sample size being too small to detect the non-normality
+	#With a large sample size of 1000 samples or more, a small deviation from normality (some noise in the sample) may be concluded as significant and reject the null.
+	# The two best tools are the histogram and Q-Q plot. Potentially using the tests as additional indicators.
+	import pylab
+	p_threshold = 0.05
+	[t_shap, p_shap] = stats.shapiro(rv)
+	
+	if p_shap < p_threshold:
+		print('Shapiro-Wilk test: Reject null hypothesis that sample comes from Gaussian distribution \n')
+	else:
+		print('Shapiro-Wilk test:DO NOT Reject null hypothesis that sample comes from Gaussian distribution \n')
+		print('Likely sample comes from Normal distribution. But the failure to reject could be because of the sample size:{}\n', rv.shape[0])
+	print('Shapiro-Wilk test: t statistic:{} and p-value:{}',t_shap, p_shap)
+	#quantile-quantile (QQ) plot
+	#If the two distributions being compared are from a common distribution, the points in from QQ plot the points in 
+	#the plot will approximately lie on a line, but not necessarily on the line y = x		
+	sm.qqplot(rv, loc = rv.mean(), scale = rv.std(), line='s')
+	plt.title('Shapiro-Wilk: '+ rv_name+ ' . Shapiro p-value='+ str(p_shap))
+	pylab.show()
+	#The Kolmogorov–Smirnov tests if a sample distribution fits a cumulative distribution function (CDF) of are referenced distribution
+	[t_kol, p_kol] = stats.kstest(rv, 'norm', args=(rv.mean(), rv.std()))
+	if p_kol < p_threshold:
+		print('Kolmogorov–Smirnov: Reject null hypothesis that sample comes from Gaussian distribution \n')
+	else:
+		print('Kolmogorov–Smirnov: DO NOT Reject null hypothesis that sample comes from Gaussian distribution \n')
+		print('Likely sample comes from Normal distribution. But the failure to reject could be because of the sample size:{}\n', rv.shape[0])
+	#Comparing CDF for KS test
+	print('Kolmogorov test: t statistic:{} and p-value:{}',t_kol, p_kol)
+	length = len(rv)
+	plt.figure(figsize=(12, 7))
+	plt.plot(np.sort(rv), np.linspace(0, 1, len(rv), endpoint=False))
+	plt.plot(np.sort(stats.norm.rvs(loc=rv.mean(), scale=rv.std(), size=len(rv))), np.linspace(0, 1, len(rv), endpoint=False))
+	plt.legend('top right')
+	plt.legend(['Data', 'Theoretical Gaussian Values'])
+	plt.title('Comparing CDFs for KS-Test: '+ rv_name + ' . KS p-value='+str(p_kol))
+		
 
 def ks_two_samples_goodness_of_fit(sample1, sample2):
 	"""ks_two_samples_goodness_of_fit: Perform a Kolmogorov-Smirnov two sample test that two data samples come from the same distribution. 
