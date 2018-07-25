@@ -359,9 +359,15 @@ def main():
 	learners = {}; dict_learners = {}
 
 	#TEST
-	print('Building an unconstrained Logistic Regression Classifier.....\n')
-	learners['lr_estimator'] = run_logistic_regression(X_train, y_train, X_test, y_test, 0.5, explanatory_and_target_features[:-1])
-
+	#SVM for both linear and non linear kernel
+	#print('Building a Sigmoid (Linear) svm_estimator.....\n')
+	#learners['svm_sigmoid_estimator'] = run_svm_classifier(X_train, y_train, X_test, y_test, kernel='sigmoid')
+	#dict_learners["svm_sigmoid"]=learners['svm_sigmoid_estimator']
+	#pdb.set_trace()
+	print('Building a RBF svm_estimator.....\n')
+	learners['svm_rbf_estimator'] = run_svm_classifier(X_train, y_train, X_test, y_test, kernel='rbf')
+	dict_learners["svm_rbf"]=learners['svm_rbf_estimator']
+	pdb.set_trace()
 
 	boost_type = 'XGBClassifier'
 	learners['xgbcboost_estimator'] = run_gradient_boosting_classifier(X_train, y_train, X_test, y_test, boost_type)
@@ -1760,65 +1766,87 @@ def run_svm_classifier(X_train, y_train, X_test, y_test, kernel=None):
 	#svm = SVC(cache_size=1000, kernel='rbf',class_weight={0:.4, 1:.6}).fit(X_train, y_train)
 	if kernel is 'rbf':
 		print('Building SVC non linear Kernel...\n')
-		#SVC with RBF kernel and optimal C and gamma parameters calculated 
-		svm = SVC(C=10.0, cache_size=1000, class_weight='balanced', coef0=0.0,
-		decision_function_shape='ovr', degree=3, gamma=0.03125, kernel=kernel,
+		#SVC with RBF kernel and optimal C and gamma parameters calculated
+		#kernel  ‘rbf’, ‘poly’ and ‘sigmoid’. If gamma is ‘auto’ then 1/n_features will be used instead. 
+		#gamma Kernel coefficient for ‘rbf’, ‘poly’ and ‘sigmoid’. If gamma is ‘auto’ then 1/n_features will be used instead.
+		#C= default 1.0,(10)gamma default ’auto’= 1/n_features=1/57=0.017 (0.03125) 
+		svm = SVC(C=10.0, gamma= 0.03125, cache_size=1000, class_weight='balanced', coef0=0.0,
+		decision_function_shape='ovr', degree=3, kernel=kernel,
     	max_iter=-1, probability=False, random_state=None, shrinking=True,
     	tol=0.001, verbose=False).fit(X_train, y_train)
 	else:
-		print('Building SVC with linear kernel...\n')
-		svm = SVC(cache_size=1000, kernel='sigmoid',class_weight='balanced').fit(X_train, y_train)
+		#C : (default=1.0)
+		#‘linear’, ‘poly’, ‘rbf’(default), ‘sigmoid’, ‘precomputed’ or a callable
+		kernel = 'linear' #'sigmoid'
+		print('Building SVC with {} kernel...\n',kernel )
+		svm = SVC(cache_size=1000, kernel=kernel,class_weight='balanced').fit(X_train, y_train)
+	#Plot report CM+ROC and learning curves 	
+	score_svm = svm.score(X_test, y_test)
+	plot_CM_classificationreport_and_learningcurve(svm, 'SVM', X_train, X_test, y_train, y_test)
+	#Check if the model generalizes well.
+	# print('Calling to cross_validation_formodel to see whether the model generalizes well...\n')
+	# modelCV = SVC()
+	# n_splits = 7
+	# results_CV = cross_validation_formodel(modelCV, X_train, y_train, n_splits=n_splits)
+
+	# print('Plotting learning curve for CV...\n')
+	# kfolds = StratifiedKFold(n_splits=7)
+	# #Generate indices to split data into training and test set.
+	# cv = kfolds.split(X_all,y_all)
+	# title ='SVM CV Learning Curve'
+	# plot_learning_curve(svm, title, X_all, y_all, cv=cv, n_jobs=1)
+	pdb.set_trace()
+	n_splits = 7
+	print("Exhaustive search for SVM parameters to improve the out-of-the-box performance of vanilla SVM.")
+	if kernel is 'linear':
+		parameters = {'C':10. ** np.arange(-2,3)}
+	else:
+		parameters = {'C':10. ** np.arange(-2,3), 'gamma':2. ** np.arange(-5, 1)}
+	grid_SVM = GridSearchCV(svm, parameters, cv=n_splits, verbose=3, n_jobs=2).fit(X_train, y_train)
+	print(grid_SVM.best_estimator_)
+	if kernel is 'linear':
+		print("\n LVSM GridSearchCV. The best C:{} \n".format(grid_SVM.best_params_.values()[0])) 
+	else:
+		print("\n LVSM GridSearchCV. The best C:{}, gamma:{} \n".format(grid_SVM.best_params_.values()[0], grid_SVM.best_params_.values()[1])) 
 	
-	y_train_pred = svm.predict(X_train)
-	y_test_pred = svm.predict(X_test)
-	y_pred = [int(a) for a in svm.predict(X_test)]
+	print(" SVM accuracy score with default:{} and optimal hyperparameters C, gamma):{} \n", score_svm, grid_SVM.score(X_test, y_test))
+	#Plot again 
+	plot_CM_classificationreport_and_learningcurve(grid_SVM, 'SVM', X_train, X_test, y_train, y_test)
+	pdb.set_trace()
+	# load the m odel with : my_model_loaded = joblib.load("my_model.pkl")
+	return svm
+
+def plot_CM_classificationreport_and_learningcurve(clf, clf_name, X_train, X_test, y_train, y_test):
+	""" plot_CM_classificationreport_and_learningcurve: plot two figures: CM + ROC and learning curve for CV"""
+	y_train_pred = clf.predict(X_train)
+	y_test_pred = clf.predict(X_test)
+	y_pred = [int(a) for a in clf.predict(X_test)]
 	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
-	print("Baseline classifier using SVM: %s of %s values correct." % (num_correct, len(y_test)))
+	print("Baseline classifier using %s: %s of %s values correct." % (clf_name, num_correct, len(y_test)))
 	#confusion matrix on the test data
 	conf_matrix = confusion_matrix(y_test, y_pred)
 	print(conf_matrix)
-	print('Accuracy of SVM classifier on training set {:.2f}'.format(svm.score(X_train, y_train)))
-	print('Accuracy of SVM classifier on test set {:.2f}'.format(svm.score(X_test, y_test)))
+	print('Accuracy of {:s} classifier on training set {:.2f}'.format(clf_name, clf.score(X_train, y_train)))
+	score_svm = clf.score(X_test, y_test)
+	print('Accuracy of {:s} classifier on test set {:.2f}'.format(clf_name, score_svm))
 	print(classification_report(y_test, y_pred))
 	
 	# plot learning curves
-	title ='SVM Learning Curve'
-	plot_learning_curve(svm, title, X_all, y_all, cv= 7, n_jobs=1)
+	title = str(clf_name) + ' Learning Curve'
+	cv = 7
+	X_all = np.concatenate((X_train, X_test), axis=0)
+	y_all = np.concatenate((y_train, y_test), axis=0)
+	plot_learning_curve(clf, title, X_all, y_all, cv= cv, n_jobs=1)
 	
 	#plot confusion matrix and AUC
 	fig,ax = plt.subplots(1,3)
 	fig.set_size_inches(15,5)
-	plot_cm(ax[0], y_train, y_train_pred, [0,1], 'SVM Confusion matrix (TRAIN)', 0.5)
-	plot_cm(ax[1], y_test, y_test_pred, [0,1], 'SVM Confusion matrix (TEST)', 0.5)
+	plot_cm(ax[0], y_train, y_train_pred, [0,1], str(clf_name) + ' Confusion matrix (TRAIN)', 0.5)
+	plot_cm(ax[1], y_test, y_test_pred, [0,1], str(clf_name) + ' Confusion matrix (TEST)', 0.5)
 	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
 	plt.tight_layout()
 	plt.show()
 
-	#Check if the model generalizes well.
-	print('Calling to cross_validation_formodel to see whether the model generalizes well...\n')
-	modelCV = SVC()
-	n_splits = 7
-	results_CV = cross_validation_formodel(modelCV, X_train, y_train, n_splits=n_splits)
-
-	print('Plotting learning curve for CV...\n')
-	kfolds = StratifiedKFold(n_splits)
-	#Generate indices to split data into training and test set.
-	cv = kfolds.split(X_all,y_all)
-	title ='SVM CV Learning Curve'
-	plot_learning_curve(svm, title, X_all, y_all, cv=cv, n_jobs=1)
-
-	####
-	print("Exhaustive search for SVM parameters to improve the out-of-the-box performance of vanilla SVM.")
-	parameters = {'C':10. ** np.arange(1,10), 'gamma':2. ** np.arange(-5, -1)}
-	grid = GridSearchCV(svm, parameters, cv=n_splits, verbose=3, n_jobs=2).fit(X_train, y_train)
-	print(grid.best_estimator_)
-	print("LVSM GridSearchCV. The best alpha is:{}".format(grid.best_params_)) 
-	print("Linear SVM accuracy of the given test data and labels={} ", grid.score(X_test, y_test))
-	#save the model
-	#save_the_model(svm, 'svm')
-
-	# load the m odel with : my_model_loaded = joblib.load("my_model.pkl")
-	return svm
 
 def run_naive_Bayes(X_train, y_train, X_test, y_test):
 	""" run_naive_Bayes
@@ -2030,16 +2058,15 @@ def run_logistic_regression(X_train, y_train, X_test, y_test, threshold=None, ex
 	#as many samples as in the larger one, but in an implicit way.
 	#penalty default is l2, C : default: 1.0
 	#Explicit weight , more emphasis with more weight on the less populated class e.g class_weight={0:.8, 1:1}
-	parameters = {'C':10.0 ** -np.arange(-7, 7)}
+	parameters = {'C':10.0 ** -np.arange(-5, 5)}
 	#parameters = {'C':1.0 ** -np.arange(0, 1)}
 	#logreg = LogisticRegression(class_weight='balanced').fit(X_train, y_train)
 	logbalanced = LogisticRegression(class_weight='balanced')
 	logreg = GridSearchCV(logbalanced, parameters, cv=5, verbose=3, n_jobs=2).fit(X_train, y_train)
+	C_optimal = logreg.best_params_
+	print('The optimal C (inverse of strength of regularization is:{}', C_optimal)
 
-	
 	#logreg = LogisticRegression(class_weight={0:.2, 1:.8}).fit(X_train, y_train)
-	# Train the model using the training sets
-	# model prediction
 	y_train_pred = logreg.predict_proba(X_train)[:,1]
 	y_test_pred = logreg.predict_proba(X_test)[:,1]
 	#print("Y test predict proba:{}".format(y_test_pred))
@@ -2052,14 +2079,7 @@ def run_logistic_regression(X_train, y_train, X_test, y_test, threshold=None, ex
 	print('Accuracy of LogReg classifier on training set {:.2f}'.format(logreg.score(X_train, y_train)))
 	print('Accuracy of LogReg classifier on test set {:.2f}'.format(logreg.score(X_test, y_test)))
 	print(classification_report(y_test, y_pred))
-	pdb.set_trace()
-	
-	#Check if the model generalizes well.
-	print('Calling to cross_validation_formodel to see whether the model generalizes well...\n')
-	modelCV = LogisticRegression()
-	results_CV = cross_validation_formodel(modelCV, X_train, y_train, n_splits=10)
-	print('CV score is:', results_CV)
-	
+
 	# plot learning curve with cv = number of KFOlds 1 leave out
 	plot_learning_curve(logreg, 'LogReg', X_all, y_all, cv= 7, n_jobs=1)	
 	#plot confusion matrix and AUC
@@ -2070,7 +2090,14 @@ def run_logistic_regression(X_train, y_train, X_test, y_test, threshold=None, ex
 	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, threshold)
 	plt.tight_layout()
 	plt.show()
-
+	pdb.set_trace()
+	
+	#Check if the model generalizes well.
+	print('Calling to cross_validation_formodel to see whether the model generalizes well...\n')
+	modelCV = LogisticRegression(class_weight='balanced', C=C_optimal.values()[0])
+	results_CV = cross_validation_formodel(modelCV, X_train, y_train, n_splits=7)
+	print('CV score is:', results_CV)
+	
 	return logreg
 
 def run_multi_layer_perceptron(X_train, y_train, X_test, y_test):
