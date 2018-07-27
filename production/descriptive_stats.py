@@ -245,6 +245,9 @@ def main():
 	
 	dataframe.dropna(axis=0, how='any', inplace=True)
 	print( "Number of NaN cells in the imputed dataframe: {} / {}, total rows:{}".format(pd.isnull(dataframe.values).sum(axis=1).sum(), dataframe.size, dataframe.shape[0]))
+	# print('Plot pair plot of the explanatory variables...\n')
+	# plot_grid_pairs(dataframe,explanatory_and_target_features)
+	# pdb.set_trace()
 	######################################################################################################
 	##################  END 1.2. Variable Selection ##########################################################
 
@@ -345,8 +348,9 @@ def main():
 	##### resampling data with SMOTE #####################################################################
 	######################################################################################################
 	from sklearn.utils import shuffle
-	smote_algo = False
+	smote_algo = True
 	if smote_algo is True:
+		#IMPORTANT cv ==3 , otherwise ERROR in  logreg!!!
 		X_resampled_train, y_resampled_train = resampling_SMOTE(X_train, y_train)
 		X_shuf, Y_shuf = shuffle(X_resampled_train, y_resampled_train)
 		X_resampled_test, y_resampled_test = resampling_SMOTE(X_test, y_test)
@@ -359,44 +363,57 @@ def main():
 	learners = {}; dict_learners = {}
 
 	#TEST
-	#SVM for both linear and non linear kernel
-	#print('Building a Sigmoid (Linear) svm_estimator.....\n')
-	#learners['svm_sigmoid_estimator'] = run_svm_classifier(X_train, y_train, X_test, y_test, kernel='sigmoid')
-	#dict_learners["svm_sigmoid"]=learners['svm_sigmoid_estimator']
-	#pdb.set_trace()
+	#################################################################################################################
+	#################################################################################################################
+	print('Building an unconstrained Logistic Regression Classifier.....\n')
+	learners['lr_estimator'] = run_logistic_regression(X_train, y_train, X_test, y_test, 0.5, explanatory_and_target_features[:-1])
+	dict_learners["lr"]=learners['lr_estimator']
+
 	print('Building a RBF svm_estimator.....\n')
 	learners['svm_rbf_estimator'] = run_svm_classifier(X_train, y_train, X_test, y_test, kernel='rbf')
 	dict_learners["svm_rbf"]=learners['svm_rbf_estimator']
-	pdb.set_trace()
 
+	print('Building a naive_bayes_estimator.....\n')
+	learners['naive_bayes_estimator'] = run_naive_Bayes(X_train, y_train, X_test, y_test)
+	dict_learners["nb"]=learners['naive_bayes_estimator']
+
+	print('Building a k-neighbors Classifier.....\n')
+	learners['knn_estimator'] = run_kneighbors(X_train, y_train, X_test, y_test)
+	dict_learners["knn"]=learners['knn_estimator']
+	
+	print('Building a random_decision_tree.....\n')
+	learners['dt_estimator'] = run_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
+	dict_learners["dt"]=learners['dt_estimator']
+	#Ensemble methods
+	## Majority vote
+	# print('Calling to Ensemble Learner with majority vote...')
+	# learners['voting_estimator'] = run_votingclassifier(dict_learners, X_train, y_train, X_test, y_test)
+	# dict_learners["voting"]=learners['voting_estimator']
+	# pdb.set_trace()
+	##Bagging
+	print('Building a (Bagging) randomforest estimator.....\n')
+	#learners['rf_estimator'], learners['rfgrid_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)
+	learners['rfgrid_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)[1]
+	#print_feature_importances ONLY for RF no for GridsearchCV
+	#print_feature_importances(learners['rf_estimator'], explanatory_features)
+	#dict_learners["rf"]=learners['rf_estimator']
+	dict_learners["rfgrid"]=learners['rfgrid_estimator']
+	# only for gridsearch
+	#print('Best parameters for RF is:{}', dict_learners["rfgrid"].best_params_)
+
+	#Boosting Ada and Extreme Gradient
 	boost_type = 'XGBClassifier'
 	learners['xgbcboost_estimator'] = run_gradient_boosting_classifier(X_train, y_train, X_test, y_test, boost_type)
 	print_feature_importances(learners['xgbcboost_estimator'], explanatory_features)
 	#only for XGBClassifier learner
 	plot_feature_importance(learners['xgbcboost_estimator'], explanatory_features)
 	dict_learners["xgbc"]=learners['xgbcboost_estimator']
-	pdb.set_trace()
-
-	print('Building an unconstrained Logistic Regression Classifier.....\n')
-	learners['lr_estimator'] = run_logistic_regression(X_train, y_train, X_test, y_test, 0.5, explanatory_and_target_features[:-1])
-	dict_learners["lr"]=learners['lr_estimator']
-
-	print('Building a k-neighbors Classifier.....\n')
-	learners['knn_estimator'] = run_kneighbors(X_train, y_train, X_test, y_test)
-	dict_learners["knn"]=learners['knn_estimator']
-
-	#SVM for both linear and non linear kernel
-	#print('Building a Sigmoid (Linear) svm_estimator.....\n')
-	#learners['svm_sigmoid_estimator'] = run_svm_classifier(X_train, y_train, X_test, y_test, kernel='sigmoid')
-	#dict_learners["svm_sigmoid"]=learners['svm_sigmoid_estimator']
-	print('Building a RBF svm_estimator.....\n')
-	learners['svm_rbf_estimator'] = run_svm_classifier(X_train, y_train, X_test, y_test, kernel='rbf')
-	dict_learners["svm_rbf"]=learners['svm_rbf_estimator']
-
-
-	print('Building a naive_bayes_estimator.....\n')
-	learners['naive_bayes_estimator'] = run_naive_Bayes(X_train, y_train, X_test, y_test)
-	dict_learners["nb"]=learners['naive_bayes_estimator']
+	
+	print('Building a (Boosting) run_boosting_classifier:AdaBoostClassifier,GradientBoostingClassifier,XGBClassifier.....\n')
+	boost_type = 'AdaBoostClassifier' #AdaBoostClassifier,GradientBoostingClassifier,XGBClassifier
+	learners['adaboost_estimator'] = run_gradient_boosting_classifier(X_train, y_train, X_test, y_test, boost_type)
+	print_feature_importances(learners['adaboost_estimator'], explanatory_features)
+	dict_learners["ada"]=learners['adaboost_estimator']
 	
 	#compare estimators against dummy estimators
 	dummies_score = build_dummy_scores(X_train, y_train, X_test, y_test)
@@ -408,51 +425,12 @@ def main():
 	#selct some lements of the dict
 	#learners_metrics = {'dt_estimator':learners['dt_estimator'], 'voting_estimator':learners['voting_estimator'], 'rfgrid_estimator':learners['rfgrid_estimator'],'adaboost_estimator':learners['adaboost_estimator'], 'xgbcboost_estimator':learners['xgbcboost_estimator']}
 	all_results = evaluate_learners_metrics(learners, X_train, y_train, X_test, y_test)
-	
-
-	print('Building a random_decision_tree.....\n')
-	learners['dt_estimator'] = run_decision_tree(X_train, y_train, X_test, y_test, X_features, target_variable)
-	dict_learners["dt"]=learners['dt_estimator']
-	
-	print('Calling to Ensemble Learner with majority vote...')
-	learners['voting_estimator'] = run_votingclassifier(dict_learners, X_train, y_train, X_test, y_test)
-	dict_learners["voting"]=learners['voting_estimator']
-
-	print('Building a (Bagging) randomforest estimator.....\n')
-	#learners['rf_estimator'], learners['rfgrid_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)
-	learners['rfgrid_estimator'] = run_randomforest(X_train, y_train, X_test, y_test, X_features)[1]
-	#print_feature_importances ONLY for RF no for GridseearchCV
-	#print_feature_importances(learners['rf_estimator'], explanatory_features)
-	#dict_learners["rf"]=learners['rf_estimator']
-	dict_learners["rfgrid"]=learners['rfgrid_estimator']
-	print('Best parameters for RF is:{}', dict_learners["rfgrid"].best_params_)
 	pdb.set_trace()
+	#################################################################################################################
+	#################################################################################################################
 
-	print('Building a (Boosting) run_boosting_classifier:AdaBoostClassifier,GradientBoostingClassifier,XGBClassifier.....\n')
-	boost_type = 'AdaBoostClassifier' #AdaBoostClassifier,GradientBoostingClassifier,XGBClassifier
-	learners['adaboost_estimator'] = run_gradient_boosting_classifier(X_train, y_train, X_test, y_test, boost_type)
-	print_feature_importances(learners['adaboost_estimator'], explanatory_features)
-	dict_learners["ada"]=learners['adaboost_estimator']
 
-	boost_type = 'XGBClassifier'
-	learners['xgbcboost_estimator'] = run_gradient_boosting_classifier(X_train, y_train, X_test, y_test, boost_type)
-	print_feature_importances(learners['xgbcboost_estimator'], explanatory_features)
-	#only for XGBClassifier learner
-	plot_feature_importance(learners['xgbcboost_estimator'], explanatory_features)
-	dict_learners["xgbc"]=learners['xgbcboost_estimator']
-	pdb.set_trace()
-	#compare estimators against dummy estimators
-	dummies_score = build_dummy_scores(X_train, y_train, X_test, y_test)
-	#listofestimators = [learners['svm_estimator'],learners['lr_estimator'],learners['dt_estimator'],learners['rf_estimator']]
-	#estimatorlabels = ['svm', 'lr', 'dt', 'rf']
-	#compare_against_dummy_estimators(listofestimators, estimatorlabels, X_test, y_test, dummies_score)
-	compare_against_dummy_estimators(learners, learners.keys(), X_test, y_test, dummies_score)
-	#del learners['lasso_estimator']
-	#selct some lements of the dict
-	learners_metrics = {'dt_estimator':learners['dt_estimator'], 'voting_estimator':learners['voting_estimator'], 'rfgrid_estimator':learners['rfgrid_estimator'],'adaboost_estimator':learners['adaboost_estimator'], 'xgbcboost_estimator':learners['xgbcboost_estimator']}
-	all_results = evaluate_learners_metrics(learners_metrics, X_train, y_train, X_test, y_test)
-	pdb.set_trace()
-	
+
 	##### Deep Networks #####################################################################
 	#########################################################################################
 	print('Building a MLP_classifier estimator.....\n')
@@ -1266,10 +1244,10 @@ def evaluate_learners_metrics(learners, X_train, y_train, X_test,y_test):
 		
 	#plot results
 	#fig, ax = plt.subplots(2, 8, figsize = (18,12))
-	fig, ax = plt.subplots(2, 8, figsize = (12,7))
+	fig, ax = plt.subplots(2, 8, figsize = (18,12))
 	tit_label={0:'Training ',1:'Testing '}
-	#bar_width = 0.1
-	bar_width = 0.2
+	bar_width = 0.12
+	#bar_width = 0.2
 	plt.tick_params(
 	axis='x',          # changes apply to the x-axis
 	which='both',      # both major and minor ticks are affected
@@ -1524,7 +1502,7 @@ def run_sgd_classifier(X_train, y_train, X_test, y_test, loss,cv):
 	#class_weight='balanced' addresses the skewness of the dataset in terms of labels
 	# loss='hinge' LSVM,  loss='log' gives logistic regression, a probabilistic classifier
 	# ‘l1’ and ‘elasticnet’ might bring sparsity to the model (feature selection) not achievable with ‘l2’.
-	clf = GridSearchCV(SGDClassifier(loss=loss, penalty='elasticnet',l1_ratio=0.15, n_iter=5, shuffle=True, verbose=False, n_jobs=1, \
+	clf = GridSearchCV(SGDClassifier(loss=loss, penalty='elasticnet',l1_ratio=0.15, n_iter=5, shuffle=True, verbose=False, n_jobs=4, \
 		average=False, class_weight='balanced',random_state=0),tuned_parameters, cv=cv, scoring='f1_macro').fit(X_train, y_train)
 	if loss is 'log':
 		y_train_pred = clf.predict_proba(X_train)[:,1]
@@ -1538,7 +1516,7 @@ def run_sgd_classifier(X_train, y_train, X_test, y_test, loss,cv):
 	print("SGDClassifier. The best alpha is:{}".format(clf.best_params_)) 
 	# plot learning curve
 	title='SGD learning curve'+loss
-	plot_learning_curve(clf, title, X_all, y_all, n_jobs=1)
+	plot_learning_curve(clf, title, X_all, y_all, n_jobs=4)
 	print('Accuracy of sgd {} alpha={} classifier on training set {:.2f}'.format(clf.best_params_,loss, clf.score(X_train, y_train)))
 	print('Accuracy of sgd {} alpha={} classifier on test set {:.2f}'.format(clf.best_params_,loss, clf.score(X_test, y_test)))
 	print(classification_report(y_test, y_pred))
@@ -1566,42 +1544,25 @@ def run_kneighbors(X_train, y_train, X_test, y_test, kneighbors=None):
 	neighbors = filter(lambda x: x % 2 != 0, myList)
 	# perform 10-fold cross validation
 	cv_scores = [] # list with x validation scores
-	cv = 5
+	cv = 3
+	scoring = ['recall', 'accuracy'][0]
 	for k in neighbors:
 		knn = KNeighborsClassifier(n_neighbors=k)
-		scores = cross_val_score(knn, X_train, y_train, cv=cv, scoring='accuracy')
+		scores = cross_val_score(knn, X_train, y_train, cv=cv, scoring=scoring)
 		cv_scores.append(scores.mean())
 	MSE = [1 - x for x in cv_scores]
 	# determining best k
 	optimal_k = neighbors[MSE.index(min(MSE))]
-	print('The optimal for k-NN algorithm cv={} is k-neighbors={}'.format(cv, optimal_k))
+	print('\n The optimal for k-NN algorithm cv={} is k-neighbors={}'.format(cv, optimal_k))
 	
 	# instantiate learning model
-	optimal_k = 5
+	#optimal_k = 5
 	knn = KNeighborsClassifier(n_neighbors=optimal_k, weights='distance').fit(X_train, y_train)
-	y_train_pred = knn.predict_proba(X_train)[:,1]
-	y_test_pred = knn.predict_proba(X_test)[:,1]
-	y_pred = [int(a) for a in knn.predict(X_test)]
-	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
-	print("Baseline classifier using %s-NN: %s of %s values correct." % (optimal_k, num_correct, len(y_test)))
-	# predict the response
-	y_pred = knn.predict(X_test)
-	# plot learning curve
-	plot_learning_curve(knn, 'kNN learning curve', X_all, y_all, cv = cv, n_jobs=1)
-	print('Accuracy of kNN classifier on training set {:.2f}'.format(knn.score(X_train, y_train)))
-	print('Accuracy of kNN classifier on test set {:.2f}'.format(knn.score(X_test, y_test)))
-	print(classification_report(y_test, y_pred))
-	
-	#plot auc
-	fig,ax = plt.subplots(1,3)
-	fig.set_size_inches(15,5)
-	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'kNN Confusion matrix (TRAIN) k='+str(optimal_k), 0.5)
-	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'kNN Confusion matrix (TEST) k='+str(optimal_k), 0.5)
-	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
-	plt.tight_layout()
-	plt.show()
+	score_knn = knn.score(X_test, y_test)
+	plot_CM_classificationreport_and_learningcurve(knn, 'knn', X_train, X_test, y_train, y_test)
+
 	# evaluate accuracy
-	print("KNN classifier with optimal k={}, accuracy={}".format(optimal_k, accuracy_score(y_test, y_pred)))
+	#print("KNN classifier with optimal k={}, accuracy={}".format(optimal_k, accuracy_score(y_test, y_pred)))
 	fig, ax = plt.subplots(1, 1, figsize=(6,9))
 	# plot misclassification error vs k
 	ax.plot(neighbors, MSE)
@@ -1620,29 +1581,29 @@ def run_decision_tree(X_train, y_train, X_test, y_test, X_features, target_varia
 	import collections
 	from IPython.display import Image
 
+	n_splits = 5
 	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
 	dectree = DecisionTreeClassifier(max_depth=5, random_state=42, class_weight='balanced').fit(X_train, y_train)
-	y_train_pred = dectree.predict_proba(X_train)[:,1]
-	y_test_pred = dectree.predict_proba(X_test)[:,1]
-	y_pred = [int(a) for a in dectree.predict(X_test)]
-	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
-	print("Baseline classifier using DecisionTree: %s of %s values correct." % (num_correct, len(y_test)))
-	# plot learning curve
-	plot_learning_curve(dectree, 'dectree learning curve', X_all, y_all,  cv= 7, n_jobs=1)
-	print('Accuracy of DecisionTreeClassifier classifier on training set {:.2f}'.format(dectree.score(X_train, y_train)))
-	print('Accuracy of DecisionTreeClassifier classifier on test set {:.2f}'.format(dectree.score(X_test, y_test)))
-	#confusion matrix on the test data
-	conf_matrix = confusion_matrix(y_test, y_pred)
-	print(conf_matrix)
-	print('Accuracy of DT classifier on training set {:.2f}'.format(dectree.score(X_train, y_train)))
-	print('Accuracy of DT classifier on test set {:.2f}'.format(dectree.score(X_test, y_test)))
-	print(classification_report(y_test, y_pred))
+	score_dectree = cross_val_score(dectree, X_all, y_all, cv=n_splits, scoring='accuracy')
+	score = dectree.score(X_test, y_test)
+	print("Accuracy: %0.2f (+/- %0.2f)" % (score_dectree.mean(), score_dectree.std() * 2))
+	plot_CM_classificationreport_and_learningcurve(dectree, 'dectree', X_train, X_test, y_train, y_test, cv=n_splits)
+	
+	print("Exhaustive search for DT parameters to improve the out-of-the-box performance of vanilla DT.")
+	parameters = {'max_depth':np.arange(1,9)}
+	grid_dectree = GridSearchCV(dectree, parameters, cv=n_splits, verbose=1, n_jobs=2).fit(X_train, y_train)
+	print(grid_dectree.best_estimator_)
+	score_dectree = cross_val_score(grid_dectree, X_all, y_all, cv=n_splits, scoring='recall')
+	score = grid_dectree.score(X_test, y_test)
+	optimal_parameters =  grid_dectree.best_params_.values()[0]
+	print('\n The optimal parameter {} is {} \n', grid_dectree.best_params_.keys()[0], grid_dectree.best_params_.values()[0])
+	print("Accuracy: %0.2f (+/- %0.2f)" % (score_dectree.mean(), score_dectree.std() * 2))
+	plot_CM_classificationreport_and_learningcurve(grid_dectree, 'dectree', X_train, X_test, y_train, y_test, cv=5)
 
-	#print('Features importances: {}'.format(dectree.feature_importances_))
-	# indices with feature importance > 0
+	# indices importance
 	idxbools= dectree.feature_importances_ > 0; idxbools = idxbools.tolist()
 	idxbools = np.where(idxbools)[0]
 	impfeatures = []; importances = []
@@ -1654,15 +1615,6 @@ def run_decision_tree(X_train, y_train, X_test, y_test, X_features, target_varia
 	plt.figure(figsize=(5,5))
 	plot_feature_importances(dectree,importances, impfeatures)
 	plt.title('Decision tree features importances')
-	plt.show()
-	
-	#plot CM and auc
-	fig,ax = plt.subplots(1,3)
-	fig.set_size_inches(15,5)
-	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'DecisionTreeClassifier Confusion matrix (TRAIN)', 0.5)
-	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'DecisionTreeClassifier Confusion matrix (TEST)', 0.5)
-	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
-	plt.tight_layout()
 	plt.show()
 	
 	# plot decision tree
@@ -1688,10 +1640,9 @@ def run_decision_tree(X_train, y_train, X_test, y_test, X_features, target_varia
 	now = now.strftime("%Y-%m-%d.%H:%M")
 	modelname = 'decision_tree' + '_'+ now +'.png'
 	modelname = os.path.join('./ML_models', modelname)
-	print('Saving the decision tree: {}', modelname)
+	print('\n ......Saving the decision tree at: {} n', modelname)
 	graph.write_png(modelname)
 	return dectree
-
 
 def run_gradient_boosting_classifier(X_train, y_train, X_test, y_test, type_of_algo=None):
 	""" run_gradient_boosting_classifier: GB builds an additive model in a forward stage-wise fashion; it allows for the optimization of arbitrary differentiable loss functions
@@ -1707,40 +1658,22 @@ def run_gradient_boosting_classifier(X_train, y_train, X_test, y_test, type_of_a
 	ratio01s= int(sum(y_train==0)/sum(y_train==1))
 	sample_weight = np.array([2 if i == 1 else 0 for i in y_train])
 	#https://machinelearningmastery.com/configure-gradient-boosting-algorithm/
-	n_estimators = 100; learn_r = 0.001; max_depth=5;
+	n_estimators = 100; learn_r = 0.1; max_depth=3;
+	#default n_estimators = 100; learn_r = 0.1; max_depth=3;
 	# By default do GradientBoostingClassifier
 	clf = GradientBoostingClassifier(n_estimators=n_estimators, learning_rate =learn_r, max_depth=max_depth, random_state=0).fit(X_train, y_train, sample_weight=None)
+	 
 	if type_of_algo is 'XGBClassifier':
 		clf = XGBClassifier(class_weight='balanced').fit(X_train, y_train,sample_weight=None)
 	elif type_of_algo is 'AdaBoostClassifier':
-			clf = AdaBoostClassifier(DecisionTreeClassifier(max_depth=max_depth), n_estimators=n_estimators,algorithm="SAMME.R", learning_rate=learn_r).fit(X_train, y_train,sample_weight=None)		
-	elif type_of_algo is 'GradientBoostingClassifier':
-		#by default
-		type_of_algo = 'GradientBoostingClassifier' #clf= GradientBoostingClassifier(n_estimators=n_estimators, learning_rate =learn_r, max_depth=max_depth, random_state=0).fit(X_train, y_train, sample_weight=sample_weight)
+		clf = AdaBoostClassifier(DecisionTreeClassifier(max_depth=max_depth), n_estimators=n_estimators,algorithm="SAMME.R", learning_rate=learn_r).fit(X_train, y_train,sample_weight=None)
+	else:
+		type_of_algo = 'GradientBoostClassifier'
+	#Plot report CM+ROC and learning curves 	
+	clf_boost = clf.score(X_test, y_test)
 
-	#XGBmodel = XGBClassifier(class_weight='balanced').fit(X_train, y_train,sample_weight=None)
-	#XGBmodel = XGBClassifier(class_weight=np.array((1,2))).fit(X_train, y_train,sample_weight=None)
-	#XGBmodel = AdaBoostClassifier(DecisionTreeClassifier(max_depth=2), n_estimators=n_estimators,algorithm="SAMME.R", learning_rate=learn_r).fit(X_train, y_train,sample_weight=None)
-	y_train_pred = clf.predict_proba(X_train)[:,1]
-	y_test_pred = clf.predict_proba(X_test)[:,1]
-	y_pred = [int(a) for a in clf.predict(X_test)]
-	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
-	print("Baseline classifier using Boosting_classifier: %s:. %s of %s  values correct." % (type_of_algo, num_correct, len(y_test)))
-	# plot learning curve
-	plot_learning_curve(clf, 'Boosting learning curve', X_all, y_all, cv=7, n_jobs=2)
-	print('Accuracy of {} classifier on training set {:.2f}'.format(type_of_algo, clf.score(X_train, y_train)))
-	print('Accuracy of {} classifier on test set {:.2f}'.format(type_of_algo, clf.score(X_test, y_test)))
-	print(classification_report(y_test, y_pred))
-	
-	#plot confusion matrix and AUC
-	fig,ax = plt.subplots(1,3)
-	fig.set_size_inches(15,5)
-	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'Boosting CM (TRAIN)', 0.5)
-	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'Boosting CM (TEST)', 0.5)
-	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
-	plt.tight_layout()
-	plt.show()
-	
+	plot_CM_classificationreport_and_learningcurve(clf, type_of_algo, X_train, X_test, y_train, y_test)
+
 	if type_of_algo is 'XGBClassifier':
 		dtrain = xgb.DMatrix(X_train, label=y_train)
 		dtest = xgb.DMatrix(X_test, label=y_test)
@@ -1783,26 +1716,14 @@ def run_svm_classifier(X_train, y_train, X_test, y_test, kernel=None):
 	#Plot report CM+ROC and learning curves 	
 	score_svm = svm.score(X_test, y_test)
 	plot_CM_classificationreport_and_learningcurve(svm, 'SVM', X_train, X_test, y_train, y_test)
-	#Check if the model generalizes well.
-	# print('Calling to cross_validation_formodel to see whether the model generalizes well...\n')
-	# modelCV = SVC()
-	# n_splits = 7
-	# results_CV = cross_validation_formodel(modelCV, X_train, y_train, n_splits=n_splits)
 
-	# print('Plotting learning curve for CV...\n')
-	# kfolds = StratifiedKFold(n_splits=7)
-	# #Generate indices to split data into training and test set.
-	# cv = kfolds.split(X_all,y_all)
-	# title ='SVM CV Learning Curve'
-	# plot_learning_curve(svm, title, X_all, y_all, cv=cv, n_jobs=1)
-	pdb.set_trace()
 	n_splits = 7
 	print("Exhaustive search for SVM parameters to improve the out-of-the-box performance of vanilla SVM.")
 	if kernel is 'linear':
 		parameters = {'C':10. ** np.arange(-2,3)}
 	else:
 		parameters = {'C':10. ** np.arange(-2,3), 'gamma':2. ** np.arange(-5, 1)}
-	grid_SVM = GridSearchCV(svm, parameters, cv=n_splits, verbose=3, n_jobs=2).fit(X_train, y_train)
+	grid_SVM = GridSearchCV(svm, parameters, cv=n_splits, verbose=1, n_jobs=2).fit(X_train, y_train)
 	print(grid_SVM.best_estimator_)
 	if kernel is 'linear':
 		print("\n LVSM GridSearchCV. The best C:{} \n".format(grid_SVM.best_params_.values()[0])) 
@@ -1812,14 +1733,19 @@ def run_svm_classifier(X_train, y_train, X_test, y_test, kernel=None):
 	print(" SVM accuracy score with default:{} and optimal hyperparameters C, gamma):{} \n", score_svm, grid_SVM.score(X_test, y_test))
 	#Plot again 
 	plot_CM_classificationreport_and_learningcurve(grid_SVM, 'SVM', X_train, X_test, y_train, y_test)
-	pdb.set_trace()
 	# load the m odel with : my_model_loaded = joblib.load("my_model.pkl")
 	return svm
 
-def plot_CM_classificationreport_and_learningcurve(clf, clf_name, X_train, X_test, y_train, y_test):
+def plot_CM_classificationreport_and_learningcurve(clf, clf_name, X_train, X_test, y_train, y_test, cv=None):
 	""" plot_CM_classificationreport_and_learningcurve: plot two figures: CM + ROC and learning curve for CV"""
-	y_train_pred = clf.predict(X_train)
-	y_test_pred = clf.predict(X_test)
+
+	if clf_name in ['nbayes','dectree','LogReg', 'RandomForest', 'XGBClassifier', 'AdaBoostClassifier','GradientBoostlassifier']:
+		#Return probability estimates for the test vector X.
+		y_train_pred = clf.predict_proba(X_train)[:,1]
+		y_test_pred = clf.predict_proba(X_test)[:,1]
+	else:
+		y_train_pred = clf.predict(X_train)
+		y_test_pred = clf.predict(X_test)
 	y_pred = [int(a) for a in clf.predict(X_test)]
 	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
 	print("Baseline classifier using %s: %s of %s values correct." % (clf_name, num_correct, len(y_test)))
@@ -1827,16 +1753,16 @@ def plot_CM_classificationreport_and_learningcurve(clf, clf_name, X_train, X_tes
 	conf_matrix = confusion_matrix(y_test, y_pred)
 	print(conf_matrix)
 	print('Accuracy of {:s} classifier on training set {:.2f}'.format(clf_name, clf.score(X_train, y_train)))
-	score_svm = clf.score(X_test, y_test)
-	print('Accuracy of {:s} classifier on test set {:.2f}'.format(clf_name, score_svm))
+	score_clf = clf.score(X_test, y_test)
+	print('Accuracy of {:s} classifier on test set {:.2f}'.format(clf_name, score_clf))
 	print(classification_report(y_test, y_pred))
 	
 	# plot learning curves
 	title = str(clf_name) + ' Learning Curve'
-	cv = 7
+	if cv is None: cv = 5
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
-	plot_learning_curve(clf, title, X_all, y_all, cv= cv, n_jobs=1)
+	plot_learning_curve(clf, title, X_all, y_all, cv= cv, n_jobs=4)
 	
 	#plot confusion matrix and AUC
 	fig,ax = plt.subplots(1,3)
@@ -1861,29 +1787,11 @@ def run_naive_Bayes(X_train, y_train, X_test, y_test):
 	#cv = ShuffleSplit(n_splits=100, test_size=0.2, random_state=0)
 	#Incremental fit on a batch of samples.
 	nbayes = GaussianNB().partial_fit(X_train,y_train, np.unique(y_train))
-	nbayes = GaussianNB().fit(X_train,y_train)
-	y_train_pred = nbayes.predict_proba(X_train)[:,1]
-	#Return probability estimates for the test vector X.
-	y_test_pred = nbayes.predict_proba(X_test)[:,1]
-	y_pred = [int(a) for a in nbayes.predict(X_test)]
-	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
-	print("Baseline classifier using Naive Bayes: %s of %s values correct." % (num_correct, len(y_test)))
-	# plot learning curve
-	#http://scikit-learn.org/stable/auto_examples/model_selection/plot_learning_curve.html#sphx-glr-auto-examples-model-selection-plot-learning-curve-py
-	plot_learning_curve(nbayes, 'Naive Bayes classifier learning curve', X_all, y_all,  cv=3, n_jobs=4)	
-	print('Accuracy of GaussianNB classifier on training set {:.2f}'.format(nbayes.score(X_train, y_train)))
-	print('Accuracy of GaussianNB classifier on test set {:.2f}'.format(nbayes.score(X_test, y_test)))
-	print(classification_report(y_test, y_pred))
-	#plot_class_regions_for_classifier(nbayes,X_train, y_train, X_test, y_test, 'Gaussian naive classifier')
-	
-	#plot confusion matrix and AUC
-	fig,ax = plt.subplots(1,3)
-	fig.set_size_inches(15,5)
-	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'GaussianNB Confusion matrix (TRAIN)', 0.5)
-	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'GaussianNB Confusion matrix (TEST)', 0.5)
-	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
-	plt.tight_layout()
-	plt.show()
+	#nbayes = GaussianNB().fit(X_train,y_train)
+	score_clf = nbayes.score(X_test, y_test)
+	print('NB score:{}', score_clf)
+	plot_CM_classificationreport_and_learningcurve(nbayes, 'nbayes', X_train, X_test, y_train, y_test, cv=5)
+
 	return nbayes
 
 
@@ -1919,36 +1827,20 @@ def run_votingclassifier(classifiers, X_train, y_train, X_test, y_test):
 	return voting_clf
 
 def run_randomforest(X_train, y_train, X_test, y_test, X_features, threshold=None):
-	""" run_randomforest: select most imp features
+	""" run_randomforest: build rf predictor and select most imp features
 	Args:
 	Output: rf object"""
+	n_splits = 5
 	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
 	n_estimators = 500; max_features= 10; min_samples_leaf=28; max_leaf_nodes=16
 	rf = RandomForestClassifier(n_estimators=n_estimators, max_features =max_features, max_leaf_nodes=max_leaf_nodes, min_samples_leaf=min_samples_leaf, class_weight='balanced').fit(X_train,y_train)
-	y_train_pred = rf.predict_proba(X_train)[:,1]
-	y_test_pred = rf.predict_proba(X_test)[:,1]
-	y_pred = [int(a) for a in rf.predict(X_test)]
-	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
-	print("Baseline classifier using RandomForestClassifier: n_estimators = %s, %s of %s values correct." % (n_estimators, num_correct, len(y_test)))
-	# plot learning curve
-	plot_learning_curve(rf, 'RandomForestClassifier learning curve', X_all, y_all, cv=3, n_jobs=1)	
-	print('Accuracy of RandomForestClassifier classifier on training set {:.2f}'.format(rf.score(X_train, y_train)))
-	print('Accuracy of RandomForestClassifier classifier on test set {:.2f}'.format(rf.score(X_test, y_test)))
-	print(classification_report(y_test, y_pred))
-	
-	#plot confusion matrix and AUC
-	fig,ax = plt.subplots(1,3)
-	fig.set_size_inches(15,5)
-	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'RandomForestClassifier Confusion matrix (TRAIN)', 0.5)
-	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'RandomForestClassifier Confusion matrix (TEST)', 0.5)
-	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
-	plt.tight_layout()
-	plt.show()
-	# select most important features
+	score_rf = rf.score(X_test, y_test)
+	plot_CM_classificationreport_and_learningcurve(rf, 'RandomForest', X_train, X_test, y_train, y_test)
 
+	# select most important features
 	idxbools= rf.feature_importances_ > 0; idxbools = idxbools.tolist()
 	idxbools = np.where(idxbools)[0]
 	impfeatures = []; importances = []
@@ -1958,34 +1850,21 @@ def run_randomforest(X_train, y_train, X_test, y_test, X_features, threshold=Non
 		importances.append(rf.feature_importances_[i])
 	plt.figure(figsize=(5,5))
 	plot_feature_importances(rf,importances, impfeatures)
+
 	# Finding the Optimal hyperparameters
-	#
-	print("Exhaustive search for RF parameters to improve the out-of-the-box performance of vanilla RF.")
-	#n_estimators = 500; max_features= 10; min_samples_leaf=28; max_leaf_nodes=16
-	parameters = {'n_estimators':10 ** np.arange(1,3), 'max_features':2 ** np.arange(1, 5), 'min_samples_leaf':[8,16,32]}
-	#max_features (default=”auto”)If “auto”, then max_features=sqrt(n_features).
-	parameters = {'n_estimators':10 ** np.arange(1,4), 'min_samples_leaf':[8,16,32]} 
-
-	grid_rf = GridSearchCV(rf, parameters, cv=5, verbose=3, n_jobs=-1).fit(X_train, y_train)
-	y_train_pred = grid_rf.predict_proba(X_train)[:,1]
-	y_test_pred = grid_rf.predict_proba(X_test)[:,1]
-	y_pred = [int(a) for a in grid_rf.predict(X_test)]
-	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
-	print("Baseline classifier using Grid RandomForestClassifier with optimal hyperparameters: %s of %s values correct." % (num_correct, len(y_test)))
-	# plot learning curve
-	plot_learning_curve(grid_rf, 'RandomForestClassifier learning curve', X_all, y_all, n_jobs=1)	
-	print('Accuracy of Grid-RandomForestClassifier classifier on training set {:.2f}'.format(grid_rf.score(X_train, y_train)))
-	print('Accuracy of Grid-RandomForestClassifier classifier on test set {:.2f}'.format(grid_rf.score(X_test, y_test)))
-	print(classification_report(y_test, y_pred))
-	#plot confusion matrix and AUC
-	fig,ax = plt.subplots(1,3)
-	fig.set_size_inches(15,5)
-	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'Grid-RandomForestClassifier Confusion matrix (TRAIN)', 0.5)
-	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'Grid-RandomForestClassifier Confusion matrix (TEST)', 0.5)
-	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, 0.5)
-	plt.tight_layout()
-	plt.show()
-
+	find_optimal_param = False
+	grid_rf  = rf
+	if find_optimal_param is True:
+		print("Exhaustive search for RF parameters to improve the out-of-the-box performance of vanilla RF.")
+		#n_estimators = 500; max_features= 10; min_samples_leaf=28; max_leaf_nodes=16
+		parameters = {'n_estimators':10 ** np.arange(1,3), 'max_features':2 ** np.arange(1, 5), 'min_samples_leaf':[8,16,32]}
+		#max_features (default=”auto”)If “auto”, then max_features=sqrt(n_features).
+		parameters = {'n_estimators':10 ** np.arange(1,4), 'min_samples_leaf':[8,16,32]} 
+		grid_rf = GridSearchCV(rf, parameters, cv=n_splits, verbose=1, n_jobs=-1).fit(X_train, y_train)
+		score_rf_grid = grid_rf.score(X_test, y_test)
+		C_optimal = grid_rf.best_params_
+		print('The optimalRF parameters are is:{}', C_optimal)
+		plot_CM_classificationreport_and_learningcurve(grid_rf, 'RandomForest', X_train, X_test, y_train, y_test)
 	return rf, grid_rf
 
 def run_logreg_Lasso(X_train, y_train, X_test, y_test,cv=None):
@@ -2039,65 +1918,44 @@ def run_logreg_Lasso(X_train, y_train, X_test, y_test,cv=None):
 	return lasso
 
 def run_logistic_regression(X_train, y_train, X_test, y_test, threshold=None, explanatory_variables=None, ):
-	"""run_logistic_regression: logistic regression classifier
+	"""run_logistic_regression: logistic regression classifier using statsmodels and sci-kitLearn methods
 	Args:  X_train, y_train, X_test, y_test, threshold=[0,1] for predict_proba
 	Output: logreg estimator"""
 	print("Training set set dimensions: X=", X_train.shape, " y=", y_train.shape)
 	print("Test set dimensions: X_test=", X_test.shape, " y_test=", y_test.shape)
 	X_all = np.concatenate((X_train, X_test), axis=0)
 	y_all = np.concatenate((y_train, y_test), axis=0)
-	#print logistic regression summary using statsmodels
-	logit_model_sm = sm.Logit(y_all,X_all)
-	result_sm = logit_model_sm.fit()
-	print(result_sm.summary(xname=explanatory_variables))
-	#Check the The p-values if for most of the variables are smaller than 0.05, most of them are significant to the model.
+	logit_statsmodels = True
+	if logit_statsmodels is True:
+		print('logistic regression summary using statsmodels...\n')
+		logit_model_sm = sm.Logit(y_all,X_all).fit()
+		#result_sm = logit_model_sm.fit()
+		print(logit_model_sm.summary(xname=explanatory_variables))
 
+	#Check the The p-values if for most of the variables are smaller than 0.05, most of them are significant to the model.
+	n_splits = 3
 	if threshold is None:
 		threshold = 0.5
 	# Create logistic regression object, class_weight='balanced':replicating the smaller class until you have 
 	#as many samples as in the larger one, but in an implicit way.
 	#penalty default is l2, C : default: 1.0
 	#Explicit weight , more emphasis with more weight on the less populated class e.g class_weight={0:.8, 1:1}
-	parameters = {'C':10.0 ** -np.arange(-5, 5)}
-	#parameters = {'C':1.0 ** -np.arange(0, 1)}
-	#logreg = LogisticRegression(class_weight='balanced').fit(X_train, y_train)
+	parameters = {'C':10.0 ** -np.arange(-3, 3)}
+	scoring = ['accuracy', 'recall'][1]
 	logbalanced = LogisticRegression(class_weight='balanced')
-	logreg = GridSearchCV(logbalanced, parameters, cv=5, verbose=3, n_jobs=2).fit(X_train, y_train)
+	logreg = GridSearchCV(logbalanced, parameters, cv=n_splits, verbose=3, n_jobs=-1,scoring=scoring).fit(X_train, y_train)
 	C_optimal = logreg.best_params_
 	print('The optimal C (inverse of strength of regularization is:{}', C_optimal)
+	score_clf = logreg.score(X_test, y_test)
+	#print('LR score:{}', score_clf)
+	plot_CM_classificationreport_and_learningcurve(logreg, 'LogReg', X_train, X_test, y_train, y_test, cv=n_splits)
 
-	#logreg = LogisticRegression(class_weight={0:.2, 1:.8}).fit(X_train, y_train)
-	y_train_pred = logreg.predict_proba(X_train)[:,1]
-	y_test_pred = logreg.predict_proba(X_test)[:,1]
-	#print("Y test predict proba:{}".format(y_test_pred))
-	y_pred = [int(a) for a in logreg.predict(X_test)]
-	num_correct = sum(int(a == ye) for a, ye in zip(y_pred, y_test))
-	print("Baseline classifier using LogReg: %s of %s values correct." % (num_correct, len(y_test)))
-	#confusion matrix on the test data
-	conf_matrix = confusion_matrix(y_test, y_pred)
-	print(conf_matrix)
-	print('Accuracy of LogReg classifier on training set {:.2f}'.format(logreg.score(X_train, y_train)))
-	print('Accuracy of LogReg classifier on test set {:.2f}'.format(logreg.score(X_test, y_test)))
-	print(classification_report(y_test, y_pred))
-
-	# plot learning curve with cv = number of KFOlds 1 leave out
-	plot_learning_curve(logreg, 'LogReg', X_all, y_all, cv= 7, n_jobs=1)	
-	#plot confusion matrix and AUC
-	fig,ax = plt.subplots(1,3)
-	fig.set_size_inches(15,5)
-	plot_cm(ax[0],  y_train, y_train_pred, [0,1], 'LogisticRegression Confusion matrix (TRAIN)', threshold)
-	plot_cm(ax[1],  y_test, y_test_pred,   [0,1], 'LogisticRegression Confusion matrix (TEST)', threshold)
-	plot_auc(ax[2], y_train, y_train_pred, y_test, y_test_pred, threshold)
-	plt.tight_layout()
-	plt.show()
-	pdb.set_trace()
-	
-	#Check if the model generalizes well.
+	#Check if the model generalizes well with the C optimal
 	print('Calling to cross_validation_formodel to see whether the model generalizes well...\n')
 	modelCV = LogisticRegression(class_weight='balanced', C=C_optimal.values()[0])
-	results_CV = cross_validation_formodel(modelCV, X_train, y_train, n_splits=7)
-	print('CV score is:', results_CV)
-	
+	#results_CV = cross_validation_formodel(modelCV, X_train, y_train, n_splits=n_splits, scoring=scoring)
+	scores = cross_val_score(modelCV, X_train, y_train, cv=n_splits, scoring=scoring)
+	print ('Score for:{} is:{}',scoring, scores.mean())
 	return logreg
 
 def run_multi_layer_perceptron(X_train, y_train, X_test, y_test):
@@ -2131,7 +1989,7 @@ def run_multi_layer_perceptron(X_train, y_train, X_test, y_test):
 		print('Accuracy MLP 1 hidden layer units = {}, score= {:.2f} on training'.format(units, mlp.score(X_train, y_train)))
 		print('Accuracy MLP 1 hidden layer units = {}, score= {:.2f} on test'.format(units, mlp.score(X_test, y_test)))
 		print(classification_report(y_test, y_pred))
-		plot_learning_curve(mlp, title, X_all, y_all, cv= 7, n_jobs=1)
+		plot_learning_curve(mlp, title, X_all, y_all, cv= 7, n_jobs=4)
 		#plot confusion matrix and AUC
 		fig,ax = plt.subplots(1,3)
 		fig.set_size_inches(15,5)
@@ -2156,7 +2014,7 @@ def run_multi_layer_perceptron(X_train, y_train, X_test, y_test):
 	#http://scikit-learn.org/stable/modules/neural_networks_supervised.html
 	parameters = {'alpha':10.0 ** -np.arange(1, 3)}
 	#crashes!!
-	grid = GridSearchCV(mlp_layers, parameters, cv=5, verbose=3, n_jobs=-1).fit(X_train, y_train)
+	grid = GridSearchCV(mlp_layers, parameters, cv=5, verbose=3, n_jobs=4).fit(X_train, y_train)
 	print(grid.best_estimator_)
 	print("MLPClassifier GridSearchCV. The best alpha is:{}".format(grid.best_params_)) 
 	print("MLPClassifier of the given test data and labels={} ", grid.score(X_test, y_test))
@@ -2172,7 +2030,7 @@ def run_multi_layer_perceptron(X_train, y_train, X_test, y_test):
 	print(classification_report(y_test, y_pred))
 
 	# plot learning curve
-	plot_learning_curve(grid, title, X_all, y_all, cv= 7, n_jobs=1)
+	plot_learning_curve(grid, title, X_all, y_all, cv= 7, n_jobs=4)
 	
 	#plot confusion matrix and AUC
 	fig,ax = plt.subplots(1,3)
@@ -3165,7 +3023,6 @@ def cross_validation_formodel(modelCV, X_train, y_train, n_splits):
 	# 	y_train, y_test = y_train[train_index-1], y_train[test_index-1]
 	# 	modelCV.fit(X_train, y_train)
 	# 	confusion_matrix(y_test, modelCV.predict(X_test))
-
 	return results
 
 
