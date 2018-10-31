@@ -68,6 +68,7 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier, export_graphviz
 from sklearn import tree
 from xgboost import XGBClassifier
+#REMEMBER to Activate Keras source github/code/tensorflow/bin/activate
 from keras import regularizers
 from keras.datasets import mnist
 from keras.models import Model, Sequential
@@ -83,17 +84,16 @@ from adspy_shared_utilities import plot_class_regions_for_classifier, plot_decis
 
 def main():
 	plt.close('all')
+	print('You must activate Keras: source github/code/tensorflow/bin/activate \n')
 	#Particular EDAs
 	#df = meritxell_eda()
-	
-	
-	#pdb.set_trace()
 	#df = socioeconomics_infographics()
-	#pdb.set_trace()
 	# get the data in csv format
-	dataframe = run_load_csv()	
-	# Feature Selection : cosmetic name changing and select input and output 
-	print('Calling for cosmetic cleanup (all lowercase, /, remove blanks) e.g. cleanup_column_names(df,rename_dict={},do_inplace=True)') 
+	csv_file = "/Users/jaime/vallecas/data/BBDD_vallecas/Proyecto_Vallecas_7-1_visitas_29_octubre_2018.csv"
+	dataframe = load_csv_file(csv_file)
+	#Feature Selection : cosmetic name changing and select input and output 
+	print('Cosmetic cleanup (put lowercase, /, remove blanks) e.g. cleanup_column_names(df,rename_dict={},do_inplace=True)\n\n') 
+	pdb.set_trace()
 	cleanup_column_names(dataframe, {}, True)
 	#copy dataframe with the cosmetic changes e.g. Tiempo is now tiempo
 	dataframe_orig = dataframe.copy()
@@ -196,8 +196,9 @@ def main():
 	
 	dict_features = split_features_in_groups()
 	print("Dictionary of static features: ", dict_features)
-	run_print_dataset(dataframe)
-	
+	print_dataset_info(dataframe)
+	#features_static = feature_selection(dataframe)
+	#sequential_feature_extraction(dataframe, classifier)
 	# Select subset of explanatory variables from prior information MUST include the target_variable
 	features_static = dict_features['vanilla'] + dict_features['sleep'] + dict_features['anthropometric'] + \
 	dict_features['intellectual'] + dict_features['offspring'] + \
@@ -243,6 +244,9 @@ def main():
 			coluswithnans.append(colu)
 			print("Number of NaNs for column", colu, " = ", nanscount)
 	
+	# only drop rows where NaN appear in specific columns
+	#df.dropna(thresh=4) drop columns with at least 4 nans
+	#df.dropna(subset=['PREDIMED1_visita7', 'PREDIMED2_visita7'])
 	dataframe.dropna(axis=0, how='any', inplace=True)
 	print( "Number of NaN cells in the imputed dataframe: {} / {}, total rows:{}".format(pd.isnull(dataframe.values).sum(axis=1).sum(), dataframe.size, dataframe.shape[0]))
 	# print('Plot pair plot of the explanatory variables...\n')
@@ -256,7 +260,10 @@ def main():
 	Xy = dataframe[explanatory_and_target_features].values
 	X = Xy[:,:-1]
 	y = Xy[:,-1]
-	X_scaled_list, scaler = run_transformations(X) # Normalize to minmaxscale or others make input normal
+	# Transform data haing same scale, type_of_scaling='MinMax'|'Standard'|'Robust'
+	# MinMax [0,1]n Standard N(0, std) weights easier to learn and maintains inf about ouliers
+	# MinMax moves the outliers to the range [0,1] it eliminates outliers.
+	X_scaled_list = scaling_data(X, type_of_scaling='Standard') 
 	#run_feature_ranking requires all positive 	X_scaled_list[0]. Use standard otherwise
 	X_scaled = 	X_scaled_list[0] #0 MinMax (0,1), 1 standard (mean 0 , std 1), 2 robust
 	print("X Standard (mu=0, std=1) scaled dimensions:{} \n ".format(X_scaled.shape))
@@ -516,18 +523,16 @@ def main():
 	print('Program Finished!! Yay!! \n\n\n')
 
 	
-def run_print_dataset(dataset):
+def print_dataset_info(dataset):
 	""" run_print_dataset: print information about the dataset, type of features etc
 	Args: Pandas dataset
 	Output: None"""
-
 	print("dtypes of the Pandas dataframe :\n\n{}".format(dataset.dtypes))
+	print('List of columns object(categorical) type are: {}', dataset.select_dtypes(include=['object']).columns)
 	print(" Number of cells with NaNs per Column:\n{}".format(dataset.isnull().sum()))
 	ss = dataset.isnull().sum(axis=1)
 	print(" Number of cells with NaNs per Row:\n{}".format(ss[ss==0 ]))
 	print("List of rows that contain some NaNs:{}".format(ss[ss>0].index[:].tolist()))
-	#for colix in range(dataset.shape[1]):
-	#	print(dataset.ix[:,colix].value_counts())
 	
 def run_variable_selection(dataframe, explanatory_features=None,target_variable=None):
 	"""run_variable_selection: select features: explanatory and target. check if target var is in
@@ -564,52 +569,127 @@ def run_variable_selection(dataframe, explanatory_features=None,target_variable=
 	print(" explanatory features:  {}".format(dataframe.keys()))
 	return dataframe, explanatory_features 
 
+
+
 def combine_features(dataset):
 	""" combine_features: combine features and remove redundant 
 	Args:dataset
 	Output: detaset"""
 	#diet_med = ['alfrut','alaves', 'alaceit', 'alpast', 'alpan', 'alverd','allact','alpesblan', 'alpeszul']
 	import math
-	phys_exercise = ['a01', 'ejfre', 'ejminut']
-	dataset['physical_exercise'] = dataset['ejfre']*dataset['ejminut']
-	dataset.drop(['a01', 'ejfre', 'ejminut'], axis=1,  inplace=True)
-	dataset['familiar_ad'] = dataset['demmad'] | dataset['dempad']
-	dataset.drop(['edemmad', 'edempad'], axis=1,  inplace=True)
-	#fillna with mean
-	dataset['dietaketo'] = dataset['dietaproteica']*dataset['dietagrasa']
-	dataset['dietaketo'].fillna(dataset['dietaketo'].mean(), inplace=True)
-	dataset['dietaketo'] = dataset['dietaketo'].astype('int')
-	dataset['dietaglucemica'].fillna(dataset['dietaglucemica'].mean(), inplace=True)
-	dataset['dietaglucemica'] = dataset['dietaglucemica'].astype('int')
-	dataset['dietasaludable'].fillna(dataset['dietasaludable'].mean(), inplace=True)
-	dataset['dietasaludable'] = dataset['dietasaludable'].astype('int')
-	
-	#make last visit column
-	make_visit_N = False
-	if make_visit_N is True:  
-		visitas = ['tpo1.2', 'tpo1.3', 'tpo1.4', 'tpo1.5']
-		visitas_scores =['scd_visita1', 'preocupacion_visita1', 'act_aten_visita1', 'act_orie_visita1', 'act_mrec_visita1', 'act_visu_visita1', 'act_expr_visita1', 'act_comp_visita1', 'act_apat_visita1', 'gds_visita1', 'stai_visita1', 'eq5dsalud_visita1', 'eq5deva_visita1', 'valcvida2_visita1', 'valsatvid2_visita1', 'valfelc2_visita1'] #'relafami_visita1', 'relaamigo_visita1', valcvida(2)_visita1, valsatvid(2)_visita1, valfelc2_visita1
-		#initialize visitaN to visita1
-		for k in visitas_scores:
-			score_year = k[:-1] + '1'
-			score_N = k[:-1] + 'N'
-			dataset[score_N] = dataset[score_year]
+	import re
+	regxpattern  ='famili*'
+	regx = re.compile(regxpattern)
+	listofcols = dataset.columns.values.tolist()
+	listofcols.sort()
+	ressearch = filter(busco.match,listofcols)
+	if ressearch > 0: print('{} Found in features list', regxpattern)
+	cluster_dict = {'Demographics':['edad_visita2', 'edad_visita3', 'edad_visita4', 'edad_visita5', \
+	'edad_visita6', 'edad_visita7', 'edadinicio_visita1', 'edadinicio_visita2', 'edadinicio_visita3',\
+	'edadinicio_visita4', 'edadinicio_visita5', 'edadinicio_visita6', 'edadinicio_visita7'],'Demographics_s':\
+	['renta','nivelrenta','educrenta', 'municipio', 'barrio','distrito','sexo','nivel_educativo',\
+	'anos_escolaridad','familial_ad','sdestciv','sdhijos', 'numhij','sdvive','sdocupac', 'sdresid', \
+	'sdtrabaja', 'sdvive','sdeconom','sdresid','sdatrb','sdocupac','sdtrabaja'],'SCD':['scd_visita1', \
+	'scd_visita2', 'scd_visita3', 'scd_visita4', 'scd_visita5', 'scd_visita6', 'scd_visita7', \
+	'scdgroups_visita1', 'scdgroups_visita2', 'scdgroups_visita3', 'scdgroups_visita4', \
+	'scdgroups_visita5', 'scdgroups_visita6', 'scdgroups_visita7','peorotros_visita1', \
+	'peorotros_visita2', 'peorotros_visita3', 'peorotros_visita4', 'peorotros_visita5', \
+	'peorotros_visita6', 'peorotros_visita7','preocupacion_visita1', 'preocupacion_visita2',\
+	'preocupacion_visita3', 'preocupacion_visita4', 'preocupacion_visita5', 'preocupacion_visita6',\
+	'preocupacion_visita7','eqm06_visita1', 'eqm06_visita2', 'eqm06_visita3', 'eqm06_visita4', \
+	'eqm06_visita5', 'eqm06_visita6', 'eqm06_visita7', 'eqm07_visita1', 'eqm07_visita2', \
+	'eqm07_visita3', 'eqm07_visita4', 'eqm07_visita5','eqm81_visita1', 'eqm81_visita2', \
+	'eqm81_visita3', 'eqm81_visita4', 'eqm81_visita5', 'eqm82_visita1', 'eqm82_visita2', \
+	'eqm82_visita3', 'eqm82_visita4', 'eqm82_visita5', 'eqm83_visita1', 'eqm83_visita2', \
+	'eqm83_visita3', 'eqm83_visita4', 'eqm83_visita5', 'eqm84_visita1', 'eqm84_visita2', \
+	'eqm84_visita3', 'eqm84_visita4', 'eqm84_visita5', 'eqm85_visita1', 'eqm85_visita2', \
+	'eqm85_visita3', 'eqm85_visita4', 'eqm85_visita5', 'eqm86_visita1', 'eqm86_visita2', \
+	'eqm86_visita3', 'eqm86_visita4', 'eqm86_visita5','eqm09_visita1', 'eqm09_visita2', \
+	'eqm09_visita3', 'eqm09_visita4', 'eqm09_visita5', 'eqm10_visita1', 'eqm10_visita2',\
+	'eqm10_visita3', 'eqm10_visita4', 'eqm10_visita5', 'eqm10_visita6', 'eqm10_visita7',\
+	'act_aten_visita1', 'act_aten_visita2', 'act_aten_visita3', 'act_aten_visita4', \
+	'act_aten_visita5', 'act_aten_visita6', 'act_aten_visita7','act_orie_visita1',\
+	'act_orie_visita2', 'act_orie_visita3', 'act_orie_visita4', 'act_orie_visita5',\
+	'act_orie_visita6', 'act_orie_visita7','act_mrec_visita1', 'act_mrec_visita2', \
+	'act_mrec_visita3', 'act_mrec_visita4', 'act_mrec_visita5', 'act_mrec_visita6',\
+	'act_mrec_visita7','act_expr_visita1', 'act_expr_visita2', 'act_expr_visita3', \
+	'act_expr_visita4', 'act_expr_visita5', 'act_expr_visita6', 'act_expr_visita7', \
+	'act_memt_visita1', 'act_memt_visita2', 'act_memt_visita3', 'act_memt_visita4', \
+	'act_memt_visita5', 'act_memt_visita6', 'act_memt_visita7','act_prax_visita1', \
+	'act_prax_visita2', 'act_prax_visita3', 'act_prax_visita4', 'act_prax_visita5', \
+	'act_prax_visita6', 'act_prax_visita7','act_ejec_visita1', 'act_ejec_visita2', \
+	'act_ejec_visita3', 'act_ejec_visita4', 'act_ejec_visita5', 'act_ejec_visita6',\
+	'act_ejec_visita7','act_comp_visita1', 'act_comp_visita2', 'act_comp_visita3', \
+	'act_comp_visita4', 'act_comp_visita5', 'act_comp_visita6', 'act_comp_visita7',\
+	'act_visu_visita1', 'act_visu_visita2', 'act_visu_visita3', 'act_visu_visita4', \
+	'act_visu_visita5', 'act_visu_visita6', 'act_visu_visita7'],'Neuropsychiatric':\
+	['act_ansi_visita1', 'act_ansi_visita2', 'act_ansi_visita3', 'act_ansi_visita4',\
+	'act_ansi_visita5', 'act_ansi_visita6', 'act_ansi_visita7','act_apat_visita1',\
+	'act_apat_visita2', 'act_apat_visita3', 'act_apat_visita4', 'act_apat_visita5', \
+	'act_apat_visita6', 'act_apat_visita7','act_depre_visita1', 'act_depre_visita2',\
+	'act_depre_visita3', 'act_depre_visita4', 'act_depre_visita5', 'act_depre_visita6',\
+	'act_depre_visita7','gds_visita1', 'gds_visita2', 'gds_visita3', 'gds_visita4', \
+	'gds_visita5', 'gds_visita6', 'gds_visita7','stai_visita1', 'stai_visita2', \
+	'stai_visita3', 'stai_visita4', 'stairasgo_visita5', 'stai_visita6', 'stai_visita7'] }
 
-		for subject in np.arange(0, dataset.shape[0]):		
-			print('Finding last visit for subject:', subject)
-			for v in reversed(visitas):
-				if math.isnan(dataset[v][subject]) == False:
-					print('Found last visit for subject:', subject, ' visit: ', v)
-					year = v[-1]
-					for k in visitas_scores:
-						score_year = k[:-1] + year
-						score_N = k[:-1] + 'N'
-						dataset[score_N] = ""
-						dataset[score_N][subject] = dataset[score_year][subject]
-						print('Changed :', score_year, ' to :', score_N)
-					break
-			print('Out of loop s:', subject, ' v:', v)
-	dataset.to_csv('/Users/jaime/vallecas/data/BBDD_vallecas/vallecaswithvisitN.csv')		
+	# dataset['Demographics_s']
+	# dataset['SCD']
+	# dataset['Neuropsychiatric']
+	# dataset['CognitivePerformance']
+	# dataset['QualityOfLife']
+	# dataset['SocialEngagement']
+	# dataset['PhysicalExercise']
+	# dataset['Diet_s']
+	# dataset['EngagementExternalWorld_s']
+	# dataset['Cardiovascular_s']
+	# dataset['PsychiatricHistory_s']
+	# dataset['TraumaticBrainInjury_s']
+	# dataset['Sleep_s']
+	# dataset['Anthropometric_s']
+	# dataset['Genetics_s']
+	# dataset['Diagnoses']
+
+
+	# phys_exercise = ['a01', 'ejfre', 'ejminut']
+	# dataset['physical_exercise'] = dataset['ejfre']*dataset['ejminut']
+	# dataset.drop(['a01', 'ejfre', 'ejminut'], axis=1,  inplace=True)
+	# dataset['familiar_ad'] = dataset['demmad'] | dataset['dempad']
+	# dataset.drop(['edemmad', 'edempad'], axis=1,  inplace=True)
+	# #fillna with mean
+	# dataset['dietaketo'] = dataset['dietaproteica']*dataset['dietagrasa']
+	# dataset['dietaketo'].fillna(dataset['dietaketo'].mean(), inplace=True)
+	# dataset['dietaketo'] = dataset['dietaketo'].astype('int')
+	# dataset['dietaglucemica'].fillna(dataset['dietaglucemica'].mean(), inplace=True)
+	# dataset['dietaglucemica'] = dataset['dietaglucemica'].astype('int')
+	# dataset['dietasaludable'].fillna(dataset['dietasaludable'].mean(), inplace=True)
+	# dataset['dietasaludable'] = dataset['dietasaludable'].astype('int')
+	
+	# #make last visit column
+	# make_visit_N = False
+	# if make_visit_N is True:  
+	# 	visitas = ['tpo1.2', 'tpo1.3', 'tpo1.4', 'tpo1.5']
+	# 	visitas_scores =['scd_visita1', 'preocupacion_visita1', 'act_aten_visita1', 'act_orie_visita1', 'act_mrec_visita1', 'act_visu_visita1', 'act_expr_visita1', 'act_comp_visita1', 'act_apat_visita1', 'gds_visita1', 'stai_visita1', 'eq5dsalud_visita1', 'eq5deva_visita1', 'valcvida2_visita1', 'valsatvid2_visita1', 'valfelc2_visita1'] #'relafami_visita1', 'relaamigo_visita1', valcvida(2)_visita1, valsatvid(2)_visita1, valfelc2_visita1
+	# 	#initialize visitaN to visita1
+	# 	for k in visitas_scores:
+	# 		score_year = k[:-1] + '1'
+	# 		score_N = k[:-1] + 'N'
+	# 		dataset[score_N] = dataset[score_year]
+
+	# 	for subject in np.arange(0, dataset.shape[0]):		
+	# 		print('Finding last visit for subject:', subject)
+	# 		for v in reversed(visitas):
+	# 			if math.isnan(dataset[v][subject]) == False:
+	# 				print('Found last visit for subject:', subject, ' visit: ', v)
+	# 				year = v[-1]
+	# 				for k in visitas_scores:
+	# 					score_year = k[:-1] + year
+	# 					score_N = k[:-1] + 'N'
+	# 					dataset[score_N] = ""
+	# 					dataset[score_N][subject] = dataset[score_year][subject]
+	# 					print('Changed :', score_year, ' to :', score_N)
+	# 				break
+	# 		print('Out of loop s:', subject, ' v:', v)
+	# dataset.to_csv('/Users/jaime/vallecas/data/BBDD_vallecas/vallecaswithvisitN.csv')		
 	return dataset
 
 def leakage_data(dataset, colstoremove):
@@ -633,10 +713,11 @@ def leakage_data(dataset, colstoremove):
 	return dataset
 
 def cleanup_column_names(df,rename_dict={},do_inplace=True):
-    """cleanup_column_names: renames columns of a pandas dataframe. It converts column names to snake case if rename_dict is not passed. 
+    """cleanup_column_names: renames columns of a pandas dataframe. It converts column names to 
+    snake case if rename_dict is not passed. 
     Args: rename_dict (dict): keys represent old column names and values point to newer ones
         do_inplace (bool): flag to update existing dataframe or return a new one
-    Returns: pandas dataframe if do_inplace is set to False, None otherwise
+    Output: pandas dataframe
     """
     #Rename columns eg df.rename(index=str, columns={"A": "a", "B": "c"})
     df.rename(index=str, columns={"Edad_visita1": "edad"}, inplace=True) 
@@ -822,35 +903,47 @@ def run_encoding_categorical_features(dataset):
 	enc = preprocessing.OneHotEncoder()
 	enc.fit(dataset)
 
-def run_transformations(dataset):
-	""" run_transformations performs scaling discretization and categorization. Estimators may behave badly of data are not normally distributed:
-	Gaussian with zero mean and unit variance.In practice we often ignore the shape of the distribution and just transform the data to 
+def scaling_data(dataset, type_of_scaling='MinMax'):
+	""" scaling_data: performs datseet scaling. Estimators may behave badly of data are not normally distributed:
+	Gaussian with zero mean and unit variance.I n practice we often ignore the shape of the distribution and just transform the data to 
 	center it by removing the mean value of each feature, then scale it by dividing non-constant features by their standard deviation.
 	IMPORTANT : RBF kernel of Support Vector Machines or the l1 and l2 regularizers of linear models) assume that all features are centered around zero and 
 	have variance in the same order. If a feature has a variance that is orders of magnitude larger than others, it might dominate the objective 
 	function and make the estimator unable to learn from other features correctly as expected.
-	Args: dataset:ndarray
+	Args: dataset:ndarray, type_of_scaling=MinMax, Standard, Robust
 	Output: X_train_minmax transformed by scaling ndarray. 
 	Note: If NaN values doesnt work """
+	#from sklearn.preprocessing import MinMaxScaler
+	if type_of_scaling is 'Standard':
+		print('Normalizing the dataset using Standard: Gaussian distribution around 0 (not bound values to a specific range) \n')
+		# Standardization is less affected by outliers than MinMax
+		scaler = preprocssing.StandardScaler()
+	elif type_of_scaling is 'Robust':
+		scaler = preprocssing.RobustScaler()
+	else:
+		print('Normalizing the dataset using MinMaxScaler (values shifted and rescaled to ranging from 0 to 1) \n')
+		scaler = preprocssing.MinMaxScaler()
+	X_scaled = scaler.fit_transform(dataset)
+	return X_scaled
 
-	# feature scaling scaling individual samples to have unit norm
-	# the quick way to normalize : X_scaled = preprocessing.scale(X_train), fit_transform is practical if we are going to train models 
-	# To scale [-1,1] use MaxAbsScaler(). MinMaxScaler formula is std*(max-min) + min
-	print('Normalizing the dataset using MinMaxScaler (values shifted and rescaled to ranging from 0 to 1) \n')
+	# # feature scaling scaling individual samples to have unit norm
+	# # the quick way to normalize : X_scaled = preprocessing.scale(X_train), fit_transform is practical if we are going to train models 
+	# # To scale [-1,1] use MaxAbsScaler(). MinMaxScaler formula is std*(max-min) + min
+	# print('Normalizing the dataset using MinMaxScaler (values shifted and rescaled to ranging from 0 to 1) \n')
 	
-	scaler = preprocessing.MinMaxScaler()
-	#http://scikit-learn.org/stable/auto_examples/preprocessing/plot_all_scaling.html
-	scaler_std  = preprocessing.StandardScaler()
-	scaler_rob = preprocessing.RobustScaler()
-	#Standarization substracts the mean and divide by std so that the new distribution has unit variance.
-	#Unlike min-max scaling, standardization does not bound values to a specific range this may be a problem
-	#standardization is much less affected by outliers
-	X_train_minmax = scaler.fit_transform(dataset)
-	X_std = scaler_std.fit_transform(dataset)
-	X_rob = scaler_rob.fit_transform(dataset)
-	print("Orignal ndarray \n {}".format(dataset))
-	#print("X_train_minmax \n {}".format(X_train_minmax))
-	return [X_train_minmax, X_std, X_rob], [scaler, scaler_std, scaler_rob]
+	# scaler = preprocessing.MinMaxScaler()
+	# #http://scikit-learn.org/stable/auto_examples/preprocessing/plot_all_scaling.html
+	# scaler_std  = preprocessing.StandardScaler()
+	# scaler_rob = preprocessing.RobustScaler()
+	# #Standarization substracts the mean and divide by std so that the new distribution has unit variance.
+	# #Unlike min-max scaling, standardization does not bound values to a specific range this may be a problem
+	
+	# X_train_minmax = scaler.fit_transform(dataset)
+	# X_std = scaler_std.fit_transform(dataset)
+	# X_rob = scaler_rob.fit_transform(dataset)
+	# print("Orignal ndarray \n {}".format(dataset))
+	# #print("X_train_minmax \n {}".format(X_train_minmax))
+	# return [X_train_minmax, X_std, X_rob], [scaler, scaler_std, scaler_rob]
 
 
 def run_split_dataset_in_train_test(X,y,test_size=None):
@@ -864,6 +957,7 @@ def split_features_in_groups():
 	""" split_features_in_groups
 	Output: dictionaty 'group name':list of features"""
 	dict_features = {}
+
 	vanilla = ['sexo', 'lat_manual', 'edad', 'edad_ultimodx'] #remove apoe , edad_ultimodx
 	#vanilla = ['sexo', 'lat_manual', 'nivel_educativo', 'edad']
 	#sleep = ['hsnoct' , 'sue_dia' , 'sue_noc' , 'sue_con' , 'sue_man' , 'sue_suf' , 'sue_pro' , 'sue_ron' , 'sue_mov' , 'sue_rui' , 'sue_hor', 'sue_rec']
@@ -888,9 +982,11 @@ def split_features_in_groups():
 	#family_history = ['dempad' , 'edempad' , 'demmad' , 'edemmad']
 	#family_history = ['dempad' , 'demmad']
 	familiar_ad = ['familiar_ad']
-	dict_features = {'vanilla':vanilla, 'sleep':sleep,'anthropometric':anthropometric, 'familiar_ad':familiar_ad, \
+	#static = ['renta', 'educrenta', 'sexo', 'niveleducativo', 'anos_escolaridad', 'apoe', 'familiar_ad'\
+	#'edad_visita1']
+	dict_features = {'vanilla':vanilla, 'sleep':sleep,'anthropometric':anthropometric,'familiar_ad':familiar_ad, \
 	'intellectual':intellectual,'offspring':offspring,'professional':professional, \
-	'cardiovascular':cardiovascular, 'ictus':ictus, 'diet':diet, 'wealth':wealth, 'familiar_ad':familiar_ad, 'physical_exercise':physical_exercise}
+	'cardiovascular':cardiovascular, 'ictus':ictus, 'diet':diet, 'wealth':wealth, 'physical_exercise':physical_exercise}
 
 	return dict_features
 
@@ -2470,7 +2566,7 @@ def calculate_top_features_contributing_class(clf, features, numbertop=None):
 	if features is not None:
 		print("\tand the top {} features labels contributing to the class labels are:{} \n".format(numbertop, operator.itemgetter(*toplist)(features)))
 	
-def run_load_csv(csv_path = None):
+def load_csv_file(csv_path = None):
 	""" load csv database, load csv file and print summary
 	Args: csv_path
 	Output: dataset pandas dataframe"""
@@ -2478,18 +2574,16 @@ def run_load_csv(csv_path = None):
 		csv_path = "/Users/jaime/vallecas/data/scc/SCDPlus_IM_21052018.csv"
 		csv_path = "/Users/jaime/vallecas/data/scc/socioeconomics_29052018.csv" #socioeconomics dataset Dataset_29052018
 		csv_path = "/Users/jaime/vallecas/data/scc/Dataset_29052018.csv"
-		csv_path = "/Users/jaime/vallecas/data/BBDD_vallecas/Proyecto Vallecas_5_visitas_mayo 2018.csv"
-		csv_path = "/Users/jaime/vallecas/data/BBDD_vallecas/Proyecto Vallecas_N_visitas_14_junio_2018.csv"
 	dataset = pd.read_csv(csv_path) #, sep=';')
 	print('Loaded the csv file: ', csv_path, '\n')
 	#summary of data
 	print("Number of Rows=", dataset.shape[0])
-	print("Name of the features:",dataset.columns.values)
-	print("\n\nColumn data types:",dataset.dtypes)
 	print("Number of Features=", dataset.shape[1])
-	print("Columns with missing values::", dataset.columns[dataset.isnull().any()].tolist())
-	print("Number of rows with missing values::", len(pd.isnull(dataset).any(1).nonzero()[0].tolist()))
-	print("Sample Indices with missing data::",pd.isnull(dataset).any(1).nonzero()[0].tolist())
+	print("Name of the features:",dataset.columns.values)
+	print("\n\n Column data types:",dataset.dtypes)
+	print("Columns with missing values:: \n\n", dataset.columns[dataset.isnull().any()].tolist())
+	print("Number of rows with missing values:\n\n", len(pd.isnull(dataset).any(1).nonzero()[0].tolist()))
+	print("Sample Indices with missing data:\n\n",pd.isnull(dataset).any(1).nonzero()[0].tolist())
 	print("General Stats::")
 	print(dataset.info())
 	print("Summary Stats::" )
@@ -3029,7 +3123,7 @@ def cross_validation_formodel(modelCV, X_train, y_train, n_splits):
 def meritxell_eda():
 	""" """
 	cvs2load = '/Users/jaime/vallecas/data/BBDD_vallecas/20180531_meritxell.csv'
-	dataframe = run_load_csv(cvs2load)
+	dataframe = load_csv_file(cvs2load)
 	cleanup_column_names(dataframe, {}, True)	
 	target_variable = '5dcl'
 	explanatory_features = ['1glu',  'visita_1_sue_rec', 'visita_1_sue_noc','1ortostatismo', '1trat', '1dcl']
@@ -3119,12 +3213,55 @@ def save_the_model(clf, clf_name, path=None):
 	joblib.dump(clf, modelname)
 	print('To load the model: my_model_loaded = joblib.load("my_model.pkl") ')
 
-def socioeconomics_infographics():
-	""" socioeconomics_infographics: EDA for wealth, diet etc
+def sequential_feature_extraction(df, classifier):
+	"""sequential_feature_extraction  from p 116 Raschka:select a subset of features that are most 
+	relevant to the problem to improve computational efficiency or reduce the generalization error 
+	of the model by removing irrelevant features or noise, which can be useful for algorithms that don't support regularization
+	Sequential feature selection algorithms are a family of greedy search algorithms
+	to reduce an initial d-dimensional feature space to a k-dimensional feature subspace where k < d.
+	Args:
+	Output:"""
+	#Sequential Backward Selection (SBS), which aims to reduce the dimensionality of the initial
+	#feature subspace with a minimum decay in performance of the classifier to improve upon computational efficiency
+	# We implement the sequential backward selection SBS algo (it is not implemented in sklearn)
+	# sklearn feature selection http://scikit-learn.org/stable/modules/feature_selection.html
+	from sklearn.base import clone
+	from itertools import combinations
+	from sklearn.cross_validation import train_test_split
+	from sklearn.metrics import accuracy_score
+
+
+
+
+
+
+def imputing_missing_values(df):
+	"""imput_missing_values"""
+	from sklearn.preprocessing import Imputer
+	# Show columns with null values
+	df.isnull().sum()
+	# remove rows with all columns nans
+	df.dropna(how='all')
+	# remove rows with thresh or more nans values
+	df.dropna(thresh=4)
+	# remove rows only  looking for nans in a subset
+	df.dropna(subset=[df.columns[0],df.columns[1]])
+	# Imputing missing values :replaced each NaN value by the corresponding mean, 
+	#which is separately calculated for each feature column (if axis=1 it calculates the mean for the row)
+	#startegiescan be median or most_frequent (useful for categorical variables)
+	imr = Imputer(missing_values='NaN', strategy='mean', axis=0)
+	# learn the parameters from the training data
+	imr = imr.fit(df)
+	# use the parameters to transform the data
+	imputed_data = imr.transform(df.values)
+
+def socioeconomics_infographics(csv_file=None):
+	""" socioeconomics_infographics: EDA for wealth, diet etc using groupby
+	Args: csv_file
 	"""
 	plt.close('all')
-	
-	dataframe = run_load_csv('/Users/jaime/vallecas/data/scc/Dataset_29052018.csv')	
+	if csv_file is None:csv_file = '/Users/jaime/vallecas/data/scc/Dataset_29052018.csv'
+	dataframe = load_csv_file(csv_file)	
 	target_variable = 'conversionmci'
 	# Feature Selection : cosmetic name changing and select input and output 
 	print('Calling for cosmetic cleanup (all lowercase, /, remove blanks) e.g. cleanup_column_names(df,rename_dict={},do_inplace=True)') 
@@ -3157,11 +3294,8 @@ def socioeconomics_infographics():
 	# dfjoints = dataframe[[feature_x,feature_y]].dropna()
 	plot_jointdistributions(dfjoints, feature_x, feature_y)
 	feature_y = 'mmse_visita1'
-	
-	
+		
 	#plot_jointdistributions(dataframe_orig[[feature_x, feature_y]].dropna(), feature_x, 'mmse_visita1')
-
-
 
 	#Detect multicollinearities
 	#cols_list = [['scd_visita1', 'gds_visita1']] to multicollinearity of a list
@@ -3179,9 +3313,7 @@ def socioeconomics_infographics():
 	 	print('Detect collinearities conversionmci and ', features)
 	 	#detect_multicollinearities calls to plot_jointdistributions
 	 	detect_multicollinearities(dataframe, 'conversionmci', features)
-
-
-
+	return 
 
 if __name__ == "__name__":
 	#print(Parallel(n_jobs=2)(parallel_func() for _ in range(3)))  # forgot delayed around parallel_func here
