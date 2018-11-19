@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 """
+#/Users/jaime/github/code/tensorflow/production/descriptive_stats.py
 ========================
 Data Pipeline:
 	Import data (csv or xlsx)
@@ -89,25 +90,37 @@ def main():
 	#df = meritxell_eda()
 	#df = socioeconomics_infographics()
 	# get the data in csv format
-	csv_file = "/Users/jaime/vallecas/data/BBDD_vallecas/Proyecto_Vallecas_7-1_visitas_29_octubre_2018.csv"
+	csv_file = "/Users/jaime/vallecas/data/BBDD_vallecas/Proyecto_Vallecas_7visitas_19_nov_2018.csv"
 	dataframe = load_csv_file(csv_file)
 	#Feature Selection : cosmetic name changing and select input and output 
-	print('Cosmetic cleanup (put lowercase, /, remove blanks) e.g. cleanup_column_names(df,rename_dict={},do_inplace=True)\n\n') 
-	pdb.set_trace()
+	print('Cosmetic cleanup (lowercase, /, remove blanks) e.g. cleanup_column_names(df,rename_dict={},do_inplace=True)\n\n') 
 	cleanup_column_names(dataframe, {}, True)
 	#copy dataframe with the cosmetic changes e.g. Tiempo is now tiempo
 	dataframe_orig = dataframe.copy()
-	#combine physical exercise and diet features
-	dataframe = combine_features(dataframe)
+	print('Build dictionary with features ontology...\n')
+	features_dict = vallecas_features_dictionary()
+	list_clusters, list_features =  features_dict.keys(), features_dict.values()
+
+	#check the features are in the list of features
+	#dataframe = combine_features(dataframe)
 	#income_charts(dataframe)
 
 	###########################################################################################
 	##################  3.0. EDA plot ##########################################################
 	target_variable = 'conversionmci'
-	edaplot = False
+	edaplot = True
 	if edaplot is True:
 		print('Plot longitudinal features')
-		longit_pattern = re.compile("^scd_+visita[1-5]+$"); 
+		#mmse_list = features_dict.values()[0][0:6]
+		pdb.set_trace()
+		mmse_list = ['mmse_visita1', 'mmse_visita2', 'mmse_visita3', 'mmse_visita4','mmse_visita5', 'mmse_visita6', 'mmse_visita7']
+		plot_histograma_one_longitudinal(dataframe, mmse_list)
+		
+		longit_pattern = re.compile("^scd_+visita[1-5]+$")
+		longit_reloj = re.compile("^reloj_+visita[1-5]+$")
+		longit_fcsrt = re.compile("^fcsrtlibdem_+visita[1-7]+$")
+		plot_histograma_one_longitudinal(dataframe, longit_fcsrt)
+		pdb.set_trace()
 		longit_pattern2 = re.compile("^stai_+visita[1-5]+$") 
 		longit_pattern3 = re.compile("^gds_+visita[1-5]+$")
 		longit_pattern4 = re.compile("^fcsrtrl1_visita[1-5]+$") 
@@ -571,20 +584,20 @@ def run_variable_selection(dataframe, explanatory_features=None,target_variable=
 
 
 
-def combine_features(dataset):
-	""" combine_features: combine features and remove redundant 
+def vallecas_features_dictionary():
+	""" build_features_dict: combine features and remove redundant 
 	Args:dataset
-	Output: detaset"""
-	#diet_med = ['alfrut','alaves', 'alaceit', 'alpast', 'alpan', 'alverd','allact','alpesblan', 'alpeszul']
-	import math
-	import re
-	regxpattern  ='famili*'
-	regx = re.compile(regxpattern)
-	listofcols = dataset.columns.values.tolist()
-	listofcols.sort()
-	ressearch = filter(busco.match,listofcols)
-	if ressearch > 0: print('{} Found in features list', regxpattern)
-	cluster_dict = {'Demographics':['edad_visita2', 'edad_visita3', 'edad_visita4', 'edad_visita5', \
+	Output: cluster_dict"""
+	# import math
+	# import re
+	# regxpattern  ='famili*'
+	# regx = re.compile(regxpattern)
+	# listofcols = dataset.columns.values.tolist()
+	# listofcols.sort()
+	# ressearch = filter(busco.match,listofcols)
+	# if ressearch > 0: print('{} Found in features list', regxpattern)
+
+	cluster_dict = {'Demographics':['edad','edad_visita2', 'edad_visita3', 'edad_visita4', 'edad_visita5', \
 	'edad_visita6', 'edad_visita7', 'edadinicio_visita1', 'edadinicio_visita2', 'edadinicio_visita3',\
 	'edadinicio_visita4', 'edadinicio_visita5', 'edadinicio_visita6', 'edadinicio_visita7'],'Demographics_s':\
 	['renta','nivelrenta','educrenta', 'municipio', 'barrio','distrito','sexo','nivel_educativo',\
@@ -630,24 +643,50 @@ def combine_features(dataset):
 	'act_depre_visita3', 'act_depre_visita4', 'act_depre_visita5', 'act_depre_visita6',\
 	'act_depre_visita7','gds_visita1', 'gds_visita2', 'gds_visita3', 'gds_visita4', \
 	'gds_visita5', 'gds_visita6', 'gds_visita7','stai_visita1', 'stai_visita2', \
-	'stai_visita3', 'stai_visita4', 'stairasgo_visita5', 'stai_visita6', 'stai_visita7'] }
-
-	# dataset['Demographics_s']
-	# dataset['SCD']
-	# dataset['Neuropsychiatric']
-	# dataset['CognitivePerformance']
-	# dataset['QualityOfLife']
-	# dataset['SocialEngagement']
-	# dataset['PhysicalExercise']
-	# dataset['Diet_s']
-	# dataset['EngagementExternalWorld_s']
-	# dataset['Cardiovascular_s']
-	# dataset['PsychiatricHistory_s']
-	# dataset['TraumaticBrainInjury_s']
-	# dataset['Sleep_s']
-	# dataset['Anthropometric_s']
-	# dataset['Genetics_s']
-	# dataset['Diagnoses']
+	'stai_visita3', 'stai_visita4', 'stai_visita5', 'stai_visita6', 'stai_visita7'],\
+	'CognitivePerformance':['mmse_visita1', 'mmse_visita2', 'mmse_visita3', 'mmse_visita4',\
+	'mmse_visita5', 'mmse_visita6', 'mmse_visita7','reloj_visita1', 'reloj_visita2',\
+	'reloj_visita3', 'reloj_visita4', 'reloj_visita5', 'reloj_visita6', 'reloj_visita7',\
+	'faq_visita1', 'faq_visita2', 'faq_visita3', 'faq_visita4', 'faq_visita5', 'faq_visita6',\
+	'faq_visita7','fcsrtlibdem_visita1', 'fcsrtlibdem_visita2', 'fcsrtlibdem_visita3', \
+	'fcsrtlibdem_visita4', 'fcsrtlibdem_visita5', 'fcsrtlibdem_visita6', 'fcsrtlibdem_visita7',\
+	'fcsrtrl1_visita1', 'fcsrtrl1_visita2', 'fcsrtrl1_visita3', 'fcsrtrl1_visita4', 'fcsrtrl1_visita5',\
+	'fcsrtrl1_visita6', 'fcsrtrl1_visita7', 'fcsrtrl2_visita1', 'fcsrtrl2_visita2', 'fcsrtrl2_visita3',\
+	'fcsrtrl2_visita4', 'fcsrtrl2_visita5', 'fcsrtrl2_visita6', 'fcsrtrl2_visita7', 'fcsrtrl3_visita1', \
+	'fcsrtrl3_visita2', 'fcsrtrl3_visita3', 'fcsrtrl3_visita4', 'fcsrtrl3_visita5', 'fcsrtrl3_visita6', \
+	'fcsrtrl3_visita7', 'cn_visita1', 'cn_visita2', 'cn_visita3', 'cn_visita4','cn_visita5', 'cn_visita6',\
+	'cn_visita7','cdrsum_visita1', 'cdrsum_visita2', 'cdrsum_visita3', 'cdrsum_visita4', 'cdrsum_visita5',\
+	'cdrsum_visita6', 'cdrsum_visita7'],'QualityOfLife':['eq5dmov_visita1', 'eq5dmov_visita2', 'eq5dmov_visita3',\
+	'eq5dmov_visita4', 'eq5dmov_visita5', 'eq5dmov_visita6', 'eq5dmov_visita7','eq5dcp_visita1', 'eq5dcp_visita2',\
+	'eq5dcp_visita3', 'eq5dcp_visita4', 'eq5dcp_visita5', 'eq5dcp_visita6', 'eq5dcp_visita7','eq5dact_visita1',\
+	'eq5dact_visita2', 'eq5dact_visita3', 'eq5dact_visita4', 'eq5dact_visita5', 'eq5dact_visita6', 'eq5dact_visita7',\
+	'eq5ddol_visita1', 'eq5ddol_visita2', 'eq5ddol_visita3', 'eq5ddol_visita4', 'eq5ddol_visita5', 'eq5ddol_visita6', \
+	'eq5ddol_visita7','eq5dans_visita1', 'eq5dans_visita2', 'eq5dans_visita3', 'eq5dans_visita4', 'eq5dans_visita5',\
+	'eq5dans_visita6', 'eq5dans_visita7',  'eq5dsalud_visita1', 'eq5dsalud_visita2', 'eq5dsalud_visita3', \
+	'eq5dsalud_visita4', 'eq5dsalud_visita5', 'eq5dsalud_visita6', 'eq5dsalud_visita7','eq5deva_visita1', \
+	'eq5deva_visita2', 'eq5deva_visita3', 'eq5deva_visita4', 'eq5deva_visita5', 'eq5deva_visita6', \
+	'eq5deva_visita7','valcvida2_visita1', 'valcvida2_visita2', 'valcvida2_visita3', 'valcvida2_visita4',\
+	'valcvida2_visita6', 'valcvida2_visita7','valsatvid2_visita1', 'valsatvid2_visita2', 'valsatvid2_visita3',\
+	'valsatvid2_visita4', 'valsatvid2_visita5', 'valsatvid2_visita6', 'valsatvid2_visita7', 'valfelc2_visita1',\
+	'valfelc2_visita2', 'valfelc2_visita3', 'valfelc2_visita4', 'valfelc2_visita5', 'valfelc2_visita6', \
+	'valfelc2_visita7'],'SocialEngagement':[],'PhysicalExercise':['ejfre', 'ejfre_visita5','ejfre_visita6','ejfre_visita7','ejminut', 'ejminut_visita5','ejminut_visita6','ejminut_visita7'], 'Diet_s':['alaceit', 'alaves', 'alcar', \
+	'aldulc', 'alemb', 'alfrut', 'alhuev', 'allact', 'alleg', 'alpan', 'alpast', 'alpesblan', 'alpeszul', \
+	'alverd','dietaglucemica', 'dietagrasa', 'dietaproteica', 'dietasaludable'],'EngagementExternalWorld_s':\
+	['a01', 'a02', 'a03', 'a04', 'a05', 'a06', 'a07', 'a08', 'a09', 'a10', 'a11', 'a12', 'a13', 'a14'],\
+	'Cardiovascular_s':['hta', 'hta_ini','glu','lipid','tabac', 'tabac_cant', 'tabac_fin', 'tabac_ini'\
+	'sp', 'cor','cor_ini','arri','arri_ini','card','card_ini','tir','ictus', 'ictus','ictus_num','ictus_ini','ictus_secu'],\
+	'PsychiatricHistory_s':['depre', 'depre_ini', 'depre_num', 'depre_trat','ansi', 'ansi_ini', 'ansi_num', 'ansi_trat'],\
+	'TraumaticBrainInjury_s':['tce', 'tce_con', 'tce_ini', 'tce_num', 'tce_secu'],'Sleep_s':['sue_con', 'sue_dia', 'sue_hor',\
+	'sue_man', 'sue_mov', 'sue_noc', 'sue_pro', 'sue_rec', 'sue_ron', 'sue_rui', 'sue_suf'],'Anthropometric_s':['lat_manual',\
+	'pabd','peso','talla','audi','visu', 'imc'],'Genetics_s':['apoe', 'apoe2niv'],'Diagnoses':['dx_corto_visita1', \
+	'dx_corto_visita2', 'dx_corto_visita3', 'dx_corto_visita4', 'dx_corto_visita5', 'dx_corto_visita6', 'dx_corto_visita7',\
+	'dx_largo_visita1', 'dx_largo_visita2', 'dx_largo_visita3', 'dx_largo_visita4', 'dx_largo_visita5', 'dx_largo_visita6',\
+	'dx_largo_visita7', 'dx_visita1', 'dx_visita2', 'dx_visita3', 'dx_visita4', 'dx_visita5', 'dx_visita6', 'dx_visita7',\
+	'ultimodx','edad_conversionmci', 'edad_ultimodx','tpo1.2', 'tpo1.3', 'tpo1.4', 'tpo1.5', 'tpo1.6', 'tpo1.7', \
+	'tpoevol_visita1', 'tpoevol_visita2', 'tpoevol_visita3', 'tpoevol_visita4', 'tpoevol_visita5', 'tpoevol_visita6',\
+	'tpoevol_visita7','tiempodementia', 'tiempomci']}
+	#check that exist in the dataset
+	return cluster_dict
 
 
 	# phys_exercise = ['a01', 'ejfre', 'ejminut']
@@ -663,7 +702,9 @@ def combine_features(dataset):
 	# dataset['dietaglucemica'] = dataset['dietaglucemica'].astype('int')
 	# dataset['dietasaludable'].fillna(dataset['dietasaludable'].mean(), inplace=True)
 	# dataset['dietasaludable'] = dataset['dietasaludable'].astype('int')
-	
+
+def combine_features(dataset):	
+	#	#diet_med = ['alfrut','alaves', 'alaceit', 'alpast', 'alpan', 'alverd','allact','alpesblan', 'alpeszul']
 	# #make last visit column
 	# make_visit_N = False
 	# if make_visit_N is True:  
@@ -732,14 +773,18 @@ def plot_histograma_one_longitudinal(df, longit_pattern=None):
 	""" plot_histogram_pair_variables: histograma 1 for each year 
 	Args: Pandas dataframe , regular expression pattern eg mmse_visita """
 
-	longit_status_columns = [ x for x in df.columns if (longit_pattern.match(x))]
+	if type(longit_pattern) is list:
+		longit_status_columns = longit_pattern
+	else:
+		longit_status_columns = [ x for x in df.columns if (longit_pattern.match(x))]
 	df[longit_status_columns].head(10)
 	# plot histogram for longitudinal pattern
-	fig, ax = plt.subplots(2,3)
+	nb_rows, nb_cols = 2, 4
+	fig, ax = plt.subplots(nb_rows,nb_cols, sharey=True)
 	fig.set_size_inches(15,5)
 	#fig.suptitle('Distribution in' +  str(len(longit_status_columns)) + ' visits')
 	for i in range(len(longit_status_columns)):
-		row,col = int(i/3), i%3
+		row,col = int(i/(2**nb_rows)), int(i%(nb_cols))
 		d  = df[longit_status_columns[i]].value_counts()
 		#n, bins, patches = ax[row,col].hist(d, 50, normed=1, facecolor='green', alpha=0.75)
     	# kernel density estimation
@@ -752,6 +797,8 @@ def plot_histograma_one_longitudinal(df, longit_pattern=None):
 		ax[row,col].bar(d.index, d, align='center', color='g')
 		ax[row,col].set_title(longit_status_columns[i])
 	plt.tight_layout(pad=3.0, w_pad=0.5, h_pad=1.0)
+	#remove axis for 8th year plot
+	ax[-1, -1].axis('off')
 	plt.show()
 
 def plot_histograma_bygroup(df, label=None):
