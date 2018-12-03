@@ -69,7 +69,7 @@ from sklearn.naive_bayes import GaussianNB
 from sklearn.tree import DecisionTreeClassifier, export_graphviz
 from sklearn import tree
 from xgboost import XGBClassifier
-#REMEMBER to Activate Keras source github/code/tensorflow/bin/activate
+#REMEMBER to Activate Keras source ~/github/code/tensorflow/bin/activate
 from keras import regularizers
 from keras.datasets import mnist
 from keras.models import Model, Sequential
@@ -86,57 +86,100 @@ from adspy_shared_utilities import plot_class_regions_for_classifier, plot_decis
 def main():
 	plt.close('all')
 	print('You must activate Keras: source github/code/tensorflow/bin/activate \n')
-	#Particular EDAs
-	#df = meritxell_eda()
-	#df = socioeconomics_infographics()
 	# get the data in csv format
 	csv_file = "/Users/jaime/vallecas/data/BBDD_vallecas/Proyecto_Vallecas_7visitas_19_nov_2018.csv"
 	dataframe = load_csv_file(csv_file)
-	#Feature Selection : cosmetic name changing and select input and output 
+	# Feature Selection : cosmetic name changing and select input and output 
 	print('Cosmetic cleanup (lowercase, /, remove blanks) e.g. cleanup_column_names(df,rename_dict={},do_inplace=True)\n\n') 
 	cleanup_column_names(dataframe, {}, True)
-	#copy dataframe with the cosmetic changes e.g. Tiempo is now tiempo
+	# numeric values only
+	df_num = dataframe.select_dtypes(include = ['float64', 'int64'])
+	all_num_features = df_num.columns.tolist()
+	pdb.set_trace()
+	# Copy dataframe with the cosmetic changes e.g. Tiempo is now tiempo
 	dataframe_orig = dataframe.copy()
-	print('Build dictionary with features ontology...\n')
-	features_dict = vallecas_features_dictionary()
+	print('Build dictionary with features ontology and check the features are in the dataframe\n') 
+	features_dict = vallecas_features_dictionary(dataframe)
 	list_clusters, list_features =  features_dict.keys(), features_dict.values()
-
-	#check the features are in the list of features
-	#dataframe = combine_features(dataframe)
-	#income_charts(dataframe)
+	static_topics = filter(lambda k: '_s' in k, list_clusters)
+	longitudinal_topics = [a for a in list_clusters if (a not in static_topics)]
+	# List of selected features
+	flat_features_list = [item for sublist in features_dict.values() for item in sublist]
+	print('Original dataframe pre dict selection {}=',format(dataframe.shape))
+	dataframe = dataframe[flat_features_list]
+	print('Columns selected in dataframe {}=',format(dataframe.shape))
 
 	###########################################################################################
-	##################  3.0. EDA plot ##########################################################
-	target_variable = 'conversionmci'
-	edaplot = True
-	if edaplot is True:
-		print('Plot longitudinal features')
-		#mmse_list = features_dict.values()[0][0:6]
-		pdb.set_trace()
-		mmse_list = ['mmse_visita1', 'mmse_visita2', 'mmse_visita3', 'mmse_visita4','mmse_visita5', 'mmse_visita6', 'mmse_visita7']
-		plot_histograma_one_longitudinal(dataframe, mmse_list)
+	##################  3.0. EDA     ##########################################################
+	# plot quick  histogram
+	#dataframe[['edad','pabd']].hist(figsize=(16, 20), bins=None, xlabelsize=8, ylabelsize=8)
+	#dataframe.hist(figsize=(16, 20), bins=None, xlabelsize=8, ylabelsize=8)
+	target_variable = 'ultimodx' #'conversionmci'
+	dataframe_2ormorevisits = dataframe[dataframe['dx_corto_visita2'].notnull()]
+	plot_static = False
+	if plot_static is True:
+		# Plot histogram for all static variables plot_histograma_bygroup_categorical(df, type, target)
+		# plot  distribution qualitative feaatures == barrio, municipio, distrito
+		plot_distribution_categorical(dataframe, categorical_features=None)
+		# plot distribution and kde for list of features
+		plot_distribution_kde(dataframe, features = ['sue_noc','edad','pabd', 'peso','talla','imc', 'depre_num','ansi_num','tabac_cant','ictus_num'])
+
+		# Plot Correlation based with QuaLitative target
+		print('Ploting groupby for qualitative static features....\n')
+		plot_histograma_static_categorical(dataframe_2ormorevisits, target_variable='ultimodx')
+
+		# Plot Correlation based with QuaNtitative target
+		df_num_corr = df_num.corr()['fcsrtlibdem_visita1'][:-1]
+		golden_features_list = df_num_corr[abs(df_num_corr) > 0.5].sort_values(ascending=False)
+		print("There is {} strongly correlated values with fcsrtlibdem:\n{}".format(len(golden_features_list), golden_features_list))
+		## get subset of golden_features_list to plot or hardcore select
+		listquant = ['renta', 'anos_escolaridad', 'sdatrb', 'sue_noc','sue_dia', 'peso','imc','depre_num', \
+		'fcsrtlibdem_visita1']
+		df_quantitative_values = df_num[listquant]
+		plot_correlation_quantitative(df_quantitative_values, target_variable=listquant[-1])
+
+		print('Ploting heatmap for static features....\n')
+		# calculate correlation between items within group
+		plot_heatmap_static(dataframe, features_dict)				
+		# quantitative analsis of static versus cuantitative (eg Buschke)
+		# Boxplot categorical versus quantitative target
+		categorical_features = ['apoe', 'ansi','depre','ictus', 'tabac','cor', 'sp','fcsrtlibdem_visita1']
+		df_categ = dataframe_2ormorevisits[categorical_features]
+		plot_box_categorical_to_quantitative(df_categ, categorical_features, target_variable='fcsrtlibdem_visita1')
+	plot_longit = False
+	if plot_longit is True:
+		print('Plot longitudinal features ...\n')
+		for ix in longitudinal_topics:
+			print('Longitudinal histogram of group:{}',format(ix))
+			list_longi = features_dict[ix]
+			type_of_tests = []
+			if ix is 'CognitivePerformance':
+				type_of_tests = ['mmse_', 'reloj_', 'faq_', 'fcsrtlibdem_', 'fcsrtrl1_', 'cn', 'cdrsum_']
+			elif ix is 'Diagnoses':
+				type_of_tests = ['dx_corto_', 'dx_largo_']
+			elif ix is 'Neuropsychiatric':
+				type_of_tests = ['stai_','gds_', 'act_ansi_', 'act_depre_']
+			elif ix is 'QualityOfLife':
+				type_of_tests = ['eq5dmov_','eq5dsalud_', 'eq5deva_', 'valsatvid2_','valfelc2_']
+			elif ix is 'SCD':
+				#dificultad orientarse  86, 84 toma decisiones, 10 perdida memo afecta su vida
+				type_of_tests = ['scd_','peorotros_', 'preocupacion_', 'eqm86_','eqm84_','eqm10_']
+			if len(type_of_tests) > 0:
+				for j in type_of_tests:
+					longi_items_per_group = filter(lambda k: j in k, list_longi)
+					df_longi = dataframe[longi_items_per_group]
+					plot_histograma_one_longitudinal(df_longi, longi_items_per_group)
 		
-		longit_pattern = re.compile("^scd_+visita[1-5]+$")
-		longit_reloj = re.compile("^reloj_+visita[1-5]+$")
-		longit_fcsrt = re.compile("^fcsrtlibdem_+visita[1-7]+$")
-		plot_histograma_one_longitudinal(dataframe, longit_fcsrt)
-		pdb.set_trace()
-		longit_pattern2 = re.compile("^stai_+visita[1-5]+$") 
-		longit_pattern3 = re.compile("^gds_+visita[1-5]+$")
-		longit_pattern4 = re.compile("^fcsrtrl1_visita[1-5]+$") 
-		longit_pattern5 = re.compile("^preocupacion_visita[1-5]+$") 
-		longit_pattern6 = re.compile("^mmse_visita[1-5]+$") 
-		
-		# longit_pattern = re.compile("^mmse_+visita[1-5]+$") 
-		# # plot N histograms one each each variable_visitai
-		plot_histograma_one_longitudinal(dataframe, longit_pattern)
-		plot_histograma_one_longitudinal(dataframe, longit_pattern2)
-		plot_histograma_one_longitudinal(dataframe, longit_pattern3)
-		plot_histograma_one_longitudinal(dataframe, longit_pattern4)
-		plot_histograma_one_longitudinal(dataframe, longit_pattern5)
-		plot_histograma_one_longitudinal(dataframe, longit_pattern6)
-		# YS: this is hardcode fix
-		plot_histograma_bygroup_categorical(dataframe, target_variable=target_variable)
+	quickplot = False
+	if quickplot is True:
+		# quick plot of longitudinal features
+		pattern_list = ['mmse_visita1', 'mmse_visita2', 'mmse_visita3', 'mmse_visita4','mmse_visita5', 'mmse_visita6', 'mmse_visita7']
+		plot_histograma_one_longitudinal(dataframe, pattern_list)
+		plot_histograma_one_longitudinal(dataframe, re.compile("^scd_+visita[1-7]+$"))
+		plot_histograma_one_longitudinal(dataframe, re.compile("^reloj_+visita[1-7]+$"))
+		plot_histograma_one_longitudinal(dataframe, re.compile("^fcsrtlibdem_+visita[1-7]+$"))
+		plot_histograma_one_longitudinal(dataframe, re.compile("^fcsrtrl1_visita[1-7]+$"))
+
 		#(4) Descriptive analytics: plot scatter and histograms
 		#longit_xy_scatter = ['scd_visita', 'gds_visita'] #it works for longitudinal
 		plot_scatter_target_cond(dataframe, ['scd_visita', 'gds_visita'], target_variable=target_variable)
@@ -150,18 +193,25 @@ def main():
 	
 	################################################################################################
 	##################  1.1.Detect Multicollinearity  ##############################################
-
 	gaussian_test = False
 	if gaussian_test is True:
 		print('Test for Gaussian using Shapiro and Kolmogorov tests...\n')
-		#visual ispection better than p-valñue, if some ouliers p ~0 reject 
+		#visual ispection better than p-value, if some ouliers p ~0 reject 
 		#null hyp is gaussian but it fits the line so it is gaussian
 		colname = ['imc', 'a13', 'scd_visita1', 'a08', 'renta']
+		colname = ['renta', 'anos_escolaridad', 'sdatrb', 'sue_noc','sue_dia', 'peso','imc','depre_num', \
+		'fcsrtlibdem_visita1']
+		colname  = all_num_features
+		gauss_test_results = []
 		for colix in colname:
-			normal_gaussian_test(dataframe[colix],colix, method=None)
-	multicollin = False
+			gausstest_it = normal_gaussian_test(df_num[colix], colix, method=None, plotcurve=False)
+			gauss_test_results.append(gausstest_it)
+		print('Print the report for Shapiro and Kolmogorov test for Gaussian distribution in eda_output/gaussian_test.txt \n')
+		write_listreport_to_file(gauss_test_results, file='eda_output/gaussian_test.txt')	
+
+	multicollin = True
 	if multicollin is True:
-		feature_x = 'scd_visitan'
+		feature_x = 'scd_visita1'
 		feature_y = target_variable
 		dfjoints = dataframe_orig[[feature_x, feature_y]].dropna()
 		#plot_jointdistributions(dfjoints, feature_x, feature_y)
@@ -171,22 +221,16 @@ def main():
 		# #plot_jointdistributions(dfjoints, feature_x, feature_y, feature_x2)
 		# dfjoints = dataframe[[feature_x,feature_y]].dropna()
 		plot_jointdistributions(dfjoints, feature_x, feature_y)
-
 		#Detect multicollinearities
-		#cols_list = [['scd_visita1', 'gds_visita1']] to multicollinearity of a list
-		#cols_list = [['scd_visita1', 'edadinicio_visita1', 'tpoevol_visita1', 'peorotros_visita1', 'preocupacion_visita1', 'eqm06_visita1', 'eqm07_visita1', 'eqm81_visita1', 'eqm82_visita1', 'eqm83_visita1', 'eqm84_visita1', 'eqm85_visita1', 'eqm86_visita1', 'eqm09_visita1', 'eqm10_visita1', 'act_aten_visita1', 'act_orie_visita1', 'act_mrec_visita1', 'act_memt_visita1', 'act_visu_visita1', 'act_expr_visita1', 'act_comp_visita1', 'act_ejec_visita1', 'act_prax_visita1', 'act_depre_visita1', 'act_ansi_visita1', 'act_apat_visita1', 'gds_visita1', 'stai_visita1', 'eq5dmov_visita1', 'eq5dcp_visita1', 'eq5dact_visita1', 'eq5ddol_visita1', 'eq5dans_visita1', 'eq5dsalud_visita1', 'eq5deva_visita1', 'relafami_visita1', 'relaamigo_visita1', 'relaocio_visita1', 'rsoled_visita1', 'valcvida_visita1', 'valsatvid_visita1', 'valfelc_visita1']]
-		cols_list = [['scd_visita1', 'gds_visita1', 'educrenta', 'nivelrenta', 'apoe']]
-		#cols_list = [['scd_visitan', 'gds_visitan', 'educrenta', 'nivelrenta', 'apoe', 'valsatvid2_visitan', 'a13', 'sue_rec','imc']]
-		cols_list = [['scd_visita1', 'gds_visita1', 'educrenta', 'nivelrenta', 'apoe', 'valsatvid2_visitan', 'a13', 'sue_rec','imc']]
-
-		#for cols in cols_list:
+		cols_list = [['scd_visita1', 'gds_visita1', 'educrenta', 'nivelrenta', 'apoe', 'stai_visita1', 'a13',\
+		'sue_rec','imc']]
 		#for cols in dict_features.keys():
 		for cols in cols_list:
 		 	print("Calculating multicolinearities for Group feature: ", cols)
 		 	#features = dict_features[cols]
-		 	features = cols
 		 	#detect_multicollinearities calls to plot_jointdistributions
-		 	detect_multicollinearities(dataframe, target_variable, features)
+		 	detect_multicollinearities(dataframe, target_variable, cols)
+		pdb.set_trace()
 
 	################################################################################################
 	##################  END 1.1.Detect Multicollinearity t ##########################################
@@ -584,25 +628,18 @@ def run_variable_selection(dataframe, explanatory_features=None,target_variable=
 
 
 
-def vallecas_features_dictionary():
-	""" build_features_dict: combine features and remove redundant 
-	Args:dataset
-	Output: cluster_dict"""
-	# import math
-	# import re
-	# regxpattern  ='famili*'
-	# regx = re.compile(regxpattern)
-	# listofcols = dataset.columns.values.tolist()
-	# listofcols.sort()
-	# ressearch = filter(busco.match,listofcols)
-	# if ressearch > 0: print('{} Found in features list', regxpattern)
+def vallecas_features_dictionary(dataframe):
+	"""vallecas_features_dictionary: builds a dictionary with the feature clusters of PV
+	Args: None
+	Output: cluster_dict tpe is dict
+	""" 
 
 	cluster_dict = {'Demographics':['edad','edad_visita2', 'edad_visita3', 'edad_visita4', 'edad_visita5', \
 	'edad_visita6', 'edad_visita7', 'edadinicio_visita1', 'edadinicio_visita2', 'edadinicio_visita3',\
 	'edadinicio_visita4', 'edadinicio_visita5', 'edadinicio_visita6', 'edadinicio_visita7'],'Demographics_s':\
 	['renta','nivelrenta','educrenta', 'municipio', 'barrio','distrito','sexo','nivel_educativo',\
 	'anos_escolaridad','familial_ad','sdestciv','sdhijos', 'numhij','sdvive','sdocupac', 'sdresid', \
-	'sdtrabaja', 'sdvive','sdeconom','sdresid','sdatrb','sdocupac','sdtrabaja'],'SCD':['scd_visita1', \
+	'sdtrabaja','sdeconom','sdatrb'],'SCD':['scd_visita1', \
 	'scd_visita2', 'scd_visita3', 'scd_visita4', 'scd_visita5', 'scd_visita6', 'scd_visita7', \
 	'scdgroups_visita1', 'scdgroups_visita2', 'scdgroups_visita3', 'scdgroups_visita4', \
 	'scdgroups_visita5', 'scdgroups_visita6', 'scdgroups_visita7','peorotros_visita1', \
@@ -669,26 +706,48 @@ def vallecas_features_dictionary():
 	'valcvida2_visita6', 'valcvida2_visita7','valsatvid2_visita1', 'valsatvid2_visita2', 'valsatvid2_visita3',\
 	'valsatvid2_visita4', 'valsatvid2_visita5', 'valsatvid2_visita6', 'valsatvid2_visita7', 'valfelc2_visita1',\
 	'valfelc2_visita2', 'valfelc2_visita3', 'valfelc2_visita4', 'valfelc2_visita5', 'valfelc2_visita6', \
-	'valfelc2_visita7'],'SocialEngagement':[],'PhysicalExercise':['ejfre', 'ejfre_visita5','ejfre_visita6','ejfre_visita7','ejminut', 'ejminut_visita5','ejminut_visita6','ejminut_visita7'], 'Diet_s':['alaceit', 'alaves', 'alcar', \
+	'valfelc2_visita7'],'SocialEngagement_s':['relafami', 'relaamigo','relaocio','rsoled'],'PhysicalExercise_s':['ejfre', 'ejminut'], 'Diet_s':['alaceit', 'alaves', 'alcar', \
 	'aldulc', 'alemb', 'alfrut', 'alhuev', 'allact', 'alleg', 'alpan', 'alpast', 'alpesblan', 'alpeszul', \
 	'alverd','dietaglucemica', 'dietagrasa', 'dietaproteica', 'dietasaludable'],'EngagementExternalWorld_s':\
 	['a01', 'a02', 'a03', 'a04', 'a05', 'a06', 'a07', 'a08', 'a09', 'a10', 'a11', 'a12', 'a13', 'a14'],\
-	'Cardiovascular_s':['hta', 'hta_ini','glu','lipid','tabac', 'tabac_cant', 'tabac_fin', 'tabac_ini'\
-	'sp', 'cor','cor_ini','arri','arri_ini','card','card_ini','tir','ictus', 'ictus','ictus_num','ictus_ini','ictus_secu'],\
+	'Cardiovascular_s':['hta', 'hta_ini','glu','lipid','tabac', 'tabac_cant', 'tabac_fin', 'tabac_ini',\
+	'sp', 'cor','cor_ini','arri','arri_ini','card','card_ini','tir','ictus','ictus_num','ictus_ini','ictus_secu'],\
 	'PsychiatricHistory_s':['depre', 'depre_ini', 'depre_num', 'depre_trat','ansi', 'ansi_ini', 'ansi_num', 'ansi_trat'],\
 	'TraumaticBrainInjury_s':['tce', 'tce_con', 'tce_ini', 'tce_num', 'tce_secu'],'Sleep_s':['sue_con', 'sue_dia', 'sue_hor',\
 	'sue_man', 'sue_mov', 'sue_noc', 'sue_pro', 'sue_rec', 'sue_ron', 'sue_rui', 'sue_suf'],'Anthropometric_s':['lat_manual',\
-	'pabd','peso','talla','audi','visu', 'imc'],'Genetics_s':['apoe', 'apoe2niv'],'Diagnoses':['dx_corto_visita1', \
+	'pabd','peso','talla','audi','visu', 'imc'],'Genetics_s':['apoe', 'apoe2niv'],'Diagnoses':['conversionmci','dx_corto_visita1', \
 	'dx_corto_visita2', 'dx_corto_visita3', 'dx_corto_visita4', 'dx_corto_visita5', 'dx_corto_visita6', 'dx_corto_visita7',\
 	'dx_largo_visita1', 'dx_largo_visita2', 'dx_largo_visita3', 'dx_largo_visita4', 'dx_largo_visita5', 'dx_largo_visita6',\
 	'dx_largo_visita7', 'dx_visita1', 'dx_visita2', 'dx_visita3', 'dx_visita4', 'dx_visita5', 'dx_visita6', 'dx_visita7',\
 	'ultimodx','edad_conversionmci', 'edad_ultimodx','tpo1.2', 'tpo1.3', 'tpo1.4', 'tpo1.5', 'tpo1.6', 'tpo1.7', \
 	'tpoevol_visita1', 'tpoevol_visita2', 'tpoevol_visita3', 'tpoevol_visita4', 'tpoevol_visita5', 'tpoevol_visita6',\
 	'tpoevol_visita7','tiempodementia', 'tiempomci']}
-	#check that exist in the dataset
+	#check thatthe dict  exist in the dataset
+	for key,val in cluster_dict.items():
+		print('Checking if {} exists in the dataframe',key)
+		if set(val).issubset(dataframe.columns) is False:
+			print('ERROR!! some of the dictionary:{} are not column names!! \n', key)
+			print(dataframe[val])
+			#return None
+		else:
+			print('		Found the cluster key {} and its values {} in the dataframe columns\n',key, val)
+	# remove features do not need
+	#dataset['PhysicalExercise'] = dataset['ejfre']*dataset['ejminut']
+	#list_feature_to_remove = []
+	#dataframe.drop([list_feature_to_remove], axis=1,  inplace=True)
 	return cluster_dict
 
-
+	#build_features_dict: combine features and remove redundant 
+	#Args:dataset
+	#Output: cluster_dict"""
+	# import math
+	# import re
+	# regxpattern  ='famili*'
+	# regx = re.compile(regxpattern)
+	# listofcols = dataset.columns.values.tolist()
+	# listofcols.sort()
+	# ressearch = filter(busco.match,listofcols)
+	# if ressearch > 0: print('{} Found in features list', regxpattern)
 	# phys_exercise = ['a01', 'ejfre', 'ejminut']
 	# dataset['physical_exercise'] = dataset['ejfre']*dataset['ejminut']
 	# dataset.drop(['a01', 'ejfre', 'ejminut'], axis=1,  inplace=True)
@@ -770,31 +829,25 @@ def cleanup_column_names(df,rename_dict={},do_inplace=True):
         return df.rename(columns=rename_dict,inplace=do_inplace)
 
 def plot_histograma_one_longitudinal(df, longit_pattern=None):
-	""" plot_histogram_pair_variables: histograma 1 for each year 
+	""" plot_histogram_pair_variables: plot histograma for each year of a longitudinal variable
 	Args: Pandas dataframe , regular expression pattern eg mmse_visita """
 
 	if type(longit_pattern) is list:
 		longit_status_columns = longit_pattern
 	else:
-		longit_status_columns = [ x for x in df.columns if (longit_pattern.match(x))]
+		longit_status_columns = [x for x in df.columns if (longit_pattern.match(x))]
 	df[longit_status_columns].head(10)
 	# plot histogram for longitudinal pattern
 	nb_rows, nb_cols = 2, 4
-	fig, ax = plt.subplots(nb_rows,nb_cols, sharey=True)
-	fig.set_size_inches(15,5)
-	#fig.suptitle('Distribution in' +  str(len(longit_status_columns)) + ' visits')
+	fig, ax = plt.subplots(nb_rows, nb_cols, sharey=False, sharex=False)
+	fig.set_size_inches(15,10)
 	for i in range(len(longit_status_columns)):
 		row,col = int(i/(2**nb_rows)), int(i%(nb_cols))
-		d  = df[longit_status_columns[i]].value_counts()
-		#n, bins, patches = ax[row,col].hist(d, 50, normed=1, facecolor='green', alpha=0.75)
-    	# kernel density estimation
-    	#kde = KernelDensity(kernel='gaussian', bandwidth=0.2).fit(d.values.reshape(-1, 1))
-    	#x_grid = np.linspace(d.min(), d.max(), 1000)
-    	#log_pdf = kde.score_samples(x_grid.reshape(-1, 1))
-    	# add the density line
-    	#ax[row,col].plot(x_grid, np.exp(log_pdf), color='blue', alpha=0.5, lw=3)
-    	#ax[row,col].set_title(longit_status_columns[i])
-		ax[row,col].bar(d.index, d, align='center', color='g')
+		histo  = df[longit_status_columns[i]].value_counts()
+		min_r, max_r =df[longit_status_columns[i]].min(), df[longit_status_columns[i]].max()
+		#sns.distplot(df[longit_status_columns[i]], color='g', bins=None, hist_kws={'alpha': 0.4})
+		ax[row,col].bar(histo.index, histo, align='center', color='g')
+		ax[row,col].set_xticks(np.arange(min_r,max_r+1))
 		ax[row,col].set_title(longit_status_columns[i])
 	plt.tight_layout(pad=3.0, w_pad=0.5, h_pad=1.0)
 	#remove axis for 8th year plot
@@ -833,37 +886,398 @@ def plot_histograma_bygroup_target(df, target_label=None):
 	fig.suptitle(title)
 	plt.show()
 
-def plot_histograma_bygroup_categorical(df, target_variable=None):
-	# target related to categorical features
-	#categorical_features = ['sexo','nivel_educativo', 'apoe', 'edad']
-	#df['sexo'] = df['sexo'].astype('category').cat.rename_categories(['M', 'F'])
+# Static Features
+def plot_distribution_kde(dataframe, features):
+	print('Ploting distribution for features {} \n', format(features))
+	#features = ['sue_noc','edad','pabd', 'peso','talla','imc', 'depre_num','ansi_num','tabac_cant','ictus_num' ]
+	for dis_ix in features:
+		print(dataframe[dis_ix].describe())
+		plt.figure(figsize=(9, 8))
+		ax = sns.distplot(dataframe[dis_ix], color='g', bins=None, hist_kws={'alpha': 0.4})
+		ax.set_title(dis_ix)
+
+def plot_distribution_categorical(df, categorical_features=None):
+	"""plot_distribution_categorical: plot categorical features, municipio barrio distrito
+	Args:df, categorical_features
+	Output:None
+	"""
+	df_num = df.select_dtypes(include = ['float64', 'int64'])
+	if categorical_features is None:
+		categorical_features = [a for a in df.columns.tolist() if (a not in df_num.columns.tolist())]
+	df_categ = df[categorical_features] #['municipio', 'barrio', 'distrito']
+	df_categ.head()
+	fig, axes = plt.subplots(int(len(df_categ.columns) / 3), 3, figsize=(40, 20))
+	for i, ax in enumerate(fig.axes):
+		if i < len(df_categ.columns):
+			ax.set_xticklabels(ax.xaxis.get_majorticklabels(), fontsize='x-small', rotation=90)
+			sns.countplot(x=df_categ.columns[i], alpha=0.7, data=df_categ, ax=ax)
+	fig.tight_layout()
+
+	pdb.set_trace()
+
+def plot_correlation_quantitative(df, target_variable):
+	"""plot_correlation_quantitative
+	Args:df, target_variable
+	Output:None
+	"""
+	features_to_analyse = df.columns.tolist()
+	fig, ax = plt.subplots(int(len(features_to_analyse) / 3), 3, figsize = (18, 12))
+	for i, ax in enumerate(fig.axes):
+		if i < len(features_to_analyse) - 1:
+			sns.regplot(x=features_to_analyse[i],y=target_variable, data=df[features_to_analyse], ax=ax)
+
+def plot_box_categorical_to_quantitative(df, qualitative_features, target_variable):
+	"""plot_box_categorical_to_quantitative: plot box plot of qualitative feautres versus a target
+	variable that is quantitative for example Buschke test
+	Args:dataframe, features, target
+	Output:None
+	"""
+	fig, ax = plt.subplots(int(len(qualitative_features) / 3), 3, figsize = (18, 12),sharey=True)
+	for i, ax in enumerate(fig.axes):
+		if i < len(qualitative_features) - 1:
+			sns.boxplot(x=qualitative_features[i], y=target_variable, data=df,ax=ax)
+			#sns.violinplot(x=qualitative_features[i], y=target_variable, data=df,ax=ax,showmeans=True, showextrema=False, showmedians=True,bw_method='silverman')
+			plt.setp(ax.artists, alpha=.5, linewidth=2, edgecolor="k")
+			plt.xticks(rotation=45)
+		
+def plot_histograma_static_categorical(df, target_variable=None):
+	"""plot_histograma_static_categorical: plot using groupby of static features in pv
+	"""
+	plot_histograma_engagement_categorical(df, target_variable)
+	plot_histograma_demographics_categorical(df, target_variable)
+	plot_histograma_diet_categorical(df, target_variable)
+	plot_histograma_engagement_categorical(df, target_variable)
+	plot_histograma_anthropometric_categorical(df, target_variable)
+	plot_histograma_sleep_categorical(df, target_variable)
+	plot_histograma_psychiatrichistory_categorical(df, target_variable)
+	plot_histograma_cardiovascular_categorical(df, target_variable)
+	return
+
+def plot_heatmap_static(dataframe, features_dict):
+	"""plot_heatmap_static: plot heatmap of dataframe with the dictionary of pv
+	Args:dataframe, features_dict
+	Output: None
+	"""
+	list_clusters, list_features = features_dict.keys(), features_dict.values()
+	# static clusters
+	static_topics = filter(lambda k: '_s' in k, list_clusters)
+	for topic in static_topics:
+		print('Heatmap of static cluster:{}', format(topic))
+		topic_items= features_dict[topic]
+		if topic is 'Genetics_s' or topic is 'TraumaticBrainInjury_s':
+			continue
+		elif topic is 'Cardiovascular_s':
+			topic_items =[item for item in topic_items if item in ['hta','glu','lipid','tabac','ictus','sp','cor','arri','card']]
+		elif topic is 'PsychiatricHistory_s':
+			topic_items =[item for item in topic_items if item in ['depre','ansi']]
+		elif topic is 'Sleep_s':
+			topic_items =[item for item in topic_items if item in ['sue_dia','sue_noc','sue_ron','sue_mov','sue_suf','sue_prof']]
+		elif topic is 'Anthropometric_s':
+			topic_items =[item for item in topic_items if item in ['lat_manual', 'pabd', 'peso', 'talla', 'audi', 'visu', 'imc']]
+		elif topic is 'Diet_s':
+			topic_items =[item for item in topic_items if item in ['dietaglucemica', 'dietagrasa', 'dietaproteica', 'dietasaludable']]
+		elif topic is 'Demographics_s':
+			topic_items =[item for item in topic_items if item in ['renta', 'nivelrenta', 'educrenta',\
+			'sexo', 'nivel_educativo', 'anos_escolaridad', 'familial_ad', 'sdestciv', 'sdhijos', \
+			'numhij', 'sdvive', 'sdocupac', 'sdresid', 'sdtrabaja','sdatrb']]
+		elif topic is 'EngagementExternalWorld_s':
+			topic_items =[item for item in topic_items if item in ['a01', 'a02', 'a03', 'a06', 'a10', 'a12', 'a13']]
+			topic_labels = ['phys', 'creative','travel','church','music','read','internet']
+			#physical activities 1, creative 2, go out with friends 3,travel 4, ngo 5,church 6, social club 7,
+			# cine theater 8,sport 9, listen music 10, tv-radio (11), books (12), internet (13), manualidades(14)	
+		if topic is not 'EngagementExternalWorld_s':
+			topic_labels = topic_items
+		plt.figure(figsize=(18, 16))
+		corr = dataframe[topic_items].corr()
+		sns.heatmap(corr[(corr >= 0.2) | (corr <= -0.2)], cmap='RdYlGn', vmax=1.10, vmin=-1.10, xticklabels=topic_labels, yticklabels=topic_labels, linewidths=0.1,annot=True,annot_kws={"size": 8}, square=True);
+		plt.title(topic)
+		plt.xticks(rotation=90)
+		plt.yticks(rotation=0)
+
+def plot_histograma_cardiovascular_categorical(df, target_variable=None):
+	"""plot_histograma_cardiovascular_categorical: 
+	"""
+	this_function_name = sys._getframe(  ).f_code.co_name
+	print('Calling to {}',format(this_function_name))
+	list_cardio=['hta', 'hta_ini', 'glu', 'lipid', 'tabac', 'tabac_cant', 'tabac_fin', \
+	'tabac_ini', 'sp', 'cor', 'cor_ini', 'arri', 'arri_ini', 'card', 'card_ini', 'tir', \
+	'ictus', 'ictus_num', 'ictus_ini', 'ictus_secu']
+	df['hta'] = df['hta'].astype('category').cat.rename_categories(['NoHypArt', 'HypArt'])
+	df['glu'] = df['glu'].astype('category').cat.rename_categories(['NoGlu', 'DiabMel','Intoler.HydroC'])
+	df['tabac'] = df['tabac'].astype('category').cat.rename_categories(['NoSmoker', 'Smoker', 'ExSomoker'])
+	df['sp'] = df['sp'].astype('category').cat.rename_categories(['NoOW', 'OverWeight', 'NP'])
+	df['cor'] = df['cor'].astype('category').cat.rename_categories(['NoHeartPb', 'Angina', 'Infartion', 'NP'])
+	df['arri'] = df['arri'].astype('category').cat.rename_categories(['NoArri', 'FibrAur', 'Arrhythmia', 'NP'])
+	df['card'] = df['card'].astype('category').cat.rename_categories(['NoCardDis', 'CardDis', 'NP'])
+	df['tir'] = df['tir'].astype('category').cat.rename_categories(['NoTyr', 'HiperTyr','HipoTir', 'NP'])
+	df['ictus'] = df['ictus'].astype('category').cat.rename_categories(['NoIct', 'IschIct','HemoIct', 'NP'])
+	fig, ax = plt.subplots(2,5)
+	fig.set_size_inches(15,10)
+	ax[-1, -1].axis('off')
+	fig.suptitle('Conversion absolute numbers for cardiovascular')
+	d = df.groupby([target_variable, 'hta']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[0,0])
+	d = df.groupby([target_variable, 'glu']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[0,1])
+	d = df.groupby([target_variable, 'tabac']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[0,2])
+	d = df.groupby([target_variable, 'sp']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[0,3])
+	d = df.groupby([target_variable, 'cor']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[0,4])
+	d = df.groupby([target_variable, 'arri']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[1,0])
+	d = df.groupby([target_variable, 'card']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[1,1])
+	d = df.groupby([target_variable, 'tir']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[1,2])
+	d = df.groupby([target_variable, 'ictus']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[1,3])
+
+	# in relative numbers
+	fig, ax = plt.subplots(2,5)
+	ax[-1, -1].axis('off')
+	fig.set_size_inches(15,10)
+	fig.suptitle('Conversion relative numbers for cardiovascular')
+	d = df.groupby([target_variable, 'hta']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[0,0])
+	d = df.groupby([target_variable, 'glu']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[0,1])
+	d = df.groupby([target_variable, 'tabac']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[0,2])
+	d = df.groupby([target_variable, 'sp']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[0,3])
+	d = df.groupby([target_variable, 'cor']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[0,4])
+	d = df.groupby([target_variable, 'arri']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[1,0])
+	d = df.groupby([target_variable, 'card']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[1,1])
+	d = df.groupby([target_variable, 'tir']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[1,2])
+	d = df.groupby([target_variable, 'ictus']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[1,3])
+	plt.show()
+
+
+def plot_histograma_psychiatrichistory_categorical(df, target_variable=None):
+	list_psychiatric_h=['depre', 'depre_ini', 'depre_num', 'depre_trat', 'ansi', 'ansi_ini', 'ansi_num', 'ansi_trat']
+	df['depre_num_cat'] = pd.cut(df['depre_num']*df['depre'],4)
+	df['ansi_num_cat'] = pd.cut(df['ansi_num'],4)
+	fig, ax = plt.subplots(1,2)
+	fig.suptitle('Conversion absolute numbers for psychiatric history')
+	d = df.groupby([target_variable, 'depre_num_cat']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[0])
+	d = df.groupby([target_variable, 'ansi_num_cat']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[1])
+
+	fig, ax = plt.subplots(1,2)
+	fig.suptitle('Conversion relative numbers for psychiatric history')
+	d = df.groupby([target_variable, 'depre_num_cat']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[0])
+	d = df.groupby([target_variable, 'ansi_num_cat']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[1])
+
+def plot_histograma_sleep_categorical(df, target_variable=None):
+
+	this_function_name = sys._getframe(  ).f_code.co_name
+	print('Calling to {}',format(this_function_name))
+
+	list_sleep= ['sue_con', 'sue_dia', 'sue_hor', 'sue_man', 'sue_mov', 'sue_noc', 'sue_pro', \
+	'sue_rec', 'sue_ron', 'sue_rui', 'sue_suf']
+	df['sue_noc_cat'] = pd.cut(df['sue_noc'], 4) # hours of sleep night
+	df['sue_dia_cat'] = pd.cut(df['sue_dia'],4) # hours of sleep day
+	fig, ax = plt.subplots(2,4)
+	#ax[-1, -1].axis('off')
+	fig.set_size_inches(10,10)
+	fig.suptitle('Conversion absolute numbers for Sleep')
+	datag = df.groupby([target_variable, 'sue_noc_cat']).size()
+	p = datag.unstack(level=1).plot(kind='bar', ax=ax[0,0])
+	datag = df.groupby([target_variable, 'sue_dia_cat']).size()
+	p = datag.unstack(level=1).plot(kind='bar', ax=ax[0,1])
+	datag = df.groupby([target_variable, 'sue_con']).size()
+	p = datag.unstack(level=1).plot(kind='bar', ax=ax[0,2])
+	datag = df.groupby([target_variable, 'sue_suf']).size()
+	p = datag.unstack(level=1).plot(kind='bar', ax=ax[0,3])
+	datag = df.groupby([target_variable, 'sue_pro']).size()
+	p = datag.unstack(level=1).plot(kind='bar', ax=ax[1,0])
+	datag = df.groupby([target_variable, 'sue_ron']).size()
+	p = datag.unstack(level=1).plot(kind='bar', ax=ax[1,1])
+	datag = df.groupby([target_variable, 'sue_rec']).size()
+	p = datag.unstack(level=1).plot(kind='bar', ax=ax[1,2])
+	datag = df.groupby([target_variable, 'sue_hor']).size()
+	p = datag.unstack(level=1).plot(kind='bar', ax=ax[1,3])
+
+	fig, ax = plt.subplots(2,4)
+	#ax[-1, -1].axis('off')
+	fig.set_size_inches(10,10)
+	fig.suptitle('Conversion relative numbers for Sleep')
+	datag = df.groupby([target_variable, 'sue_noc_cat']).size().unstack(level=1)
+	datag = datag / datag.sum()
+	p = datag.plot(kind='bar', ax=ax[0,0])
+	datag = df.groupby([target_variable, 'sue_dia_cat']).size().unstack(level=1)
+	datag = datag / datag.sum()
+	p = datag.plot(kind='bar', ax=ax[0,1])
+	datag = df.groupby([target_variable, 'sue_con']).size().unstack(level=1)
+	datag = datag / datag.sum()
+	p = datag.plot(kind='bar', ax=ax[0,2])
+	datag= df.groupby([target_variable, 'sue_suf']).size().unstack(level=1)
+	datag = datag / datag.sum()
+	p = datag.plot(kind='bar', ax=ax[0,3])
+	datag = df.groupby([target_variable, 'sue_pro']).size().unstack(level=1)
+	datag = datag / datag.sum()
+	p = datag.plot(kind='bar', ax=ax[1,0])
+	datag = df.groupby([target_variable, 'sue_ron']).size().unstack(level=1)
+	datag = datag / datag.sum()
+	p = datag.plot(kind='bar', ax=ax[1,1])
+	datag = df.groupby([target_variable, 'sue_rec']).size().unstack(level=1)
+	datag = datag / datag.sum()
+	p = datag.plot(kind='bar', ax=ax[1,2])
+	datag = df.groupby([target_variable, 'sue_hor']).size().unstack(level=1)
+	datag = datag / datag.sum()
+	p = datag.plot(kind='bar', ax=ax[1,3])
+
+
+def plot_histograma_anthropometric_categorical(df, target_variable=None):
+
+	this_function_name = sys._getframe(  ).f_code.co_name
+	print('Calling to {}',format(this_function_name))
+	list_anthropometric = ['lat_manual', 'pabd', 'peso', 'talla', 'audi', 'visu', 'imc']
+	df['pabd_cat'] = pd.cut(df['pabd'], 4) # abdo perimeter
+	df['peso_cat'] = pd.cut(df['peso'], 4) # weight
+	df['talla_cat'] = pd.cut(df['talla'], 4) # height
+	df['imc_cat'] = pd.cut(df['imc'], 4) # height
+	
+	fig, ax = plt.subplots(2,4)
+	ax[-1, -1].axis('off')
+	fig.set_size_inches(10,10)
+	fig.suptitle('Conversion absolute numbers for Anthropometric')
+	d = df.groupby([target_variable, 'pabd_cat']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[0,0])
+	d = df.groupby([target_variable, 'peso_cat']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[0,1])
+	d = df.groupby([target_variable, 'talla_cat']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[0,2])
+	d = df.groupby([target_variable, 'imc_cat']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[0,3])
+	d = df.groupby([target_variable, 'audi']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[1,0])
+	d = df.groupby([target_variable, 'visu']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[1,1])
+	d = df.groupby([target_variable, 'lat_manual']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[1,2])
+
+	fig, ax = plt.subplots(2,4)
+	ax[-1, -1].axis('off')
+	fig.set_size_inches(10,10)
+	fig.suptitle('Conversion relative numbers for Anthropometric')
+	d = df.groupby([target_variable, 'pabd_cat']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[0,0])
+	d = df.groupby([target_variable, 'peso_cat']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[0,1])
+	d = df.groupby([target_variable, 'talla_cat']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[0,2])
+	d = df.groupby([target_variable, 'imc_cat']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[0,3])
+	d = df.groupby([target_variable, 'audi']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[1,0])
+	d = df.groupby([target_variable, 'visu']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[1,1])
+	d = df.groupby([target_variable, 'lat_manual']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[1,2])
+
+def plot_histograma_engagement_categorical(df, target_variable=None):	
+	lista_engag_ext_w = ['a01', 'a02', 'a03', 'a04', 'a05', 'a06', 'a07', 'a08', 'a09', \
+	'a10', 'a11', 'a12', 'a13', 'a14']
+	#physical activities 1, creative 2, go out with friends 3,travel 4, ngo 5,church 6, social club 7,
+	# cine theater 8,sport 9, listen music 10, tv-radio (11), books (12), internet (13), manualidades(14)
+	df['physicaltrain_cat'] = pd.cut(df['a01'] + df['a09'], 3) # phys exer sport
+	df['creative_cat'] = pd.cut(df['a02'] + df['a14'], 3) # creative manualidades
+	df['sociallife_cat'] = pd.cut(df['a03'] + df['a05']+ df['a07'] + df['a08'], 3)
+	#church, books, music , techno
+	fig, ax = plt.subplots(2,4)
+	ax[-1, -1].axis('off')
+	fig.set_size_inches(15,10)
+	fig.suptitle('Conversion absolute numbers for Engagement external world')
+	d = df.groupby([target_variable, 'physicaltrain_cat']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[0,0],label='physical exercise')
+
+	d = df.groupby([target_variable, 'creative_cat']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[0,1])
+	d = df.groupby([target_variable, 'sociallife_cat']).size()
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[0,2])
+	d = df.groupby([target_variable, 'a06']).size() # church goers
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[0,3])
+	d = df.groupby([target_variable, 'a12']).size() #read books
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[1,0])
+	d = df.groupby([target_variable, 'a10']).size() #listen to music
+	p = d.unstack(level=1).plot(kind='bar', ax=ax[1,1])
+	d = df.groupby([target_variable, 'a13']).size() #internet
+ 	p = d.unstack(level=1).plot(kind='bar', ax=ax[1,2],label='Internet')
+	ax[1,2].legend() 	
+ 	# 
+	fig, ax = plt.subplots(2,4)
+	ax[-1, -1].axis('off')
+	fig.set_size_inches(15,10)
+	fig.suptitle('Conversion relative numbers for Engagement external world')
+	datag = df.groupby([target_variable, 'physicaltrain_cat']).size().unstack(level=1)
+	datag = datag / datag.sum()
+	p = datag.plot(kind='bar', ax=ax[0,0])
+	datag = df.groupby([target_variable, 'creative_cat']).size().unstack(level=1)
+	datag = datag / datag.sum()
+	p = datag.plot(kind='bar', ax=ax[0,1])
+	datag = df.groupby([target_variable, 'sociallife_cat']).size().unstack(level=1)
+	datag = datag / datag.sum()
+	p = datag.plot(kind='bar', ax=ax[0,2])
+	datag = df.groupby([target_variable, 'a06']).size().unstack(level=1) # church goers
+	datag = datag / datag.sum()
+	p = datag.plot(kind='bar', ax=ax[0,3])
+	datag = df.groupby([target_variable, 'a12']).size().unstack(level=1) #read books
+	datag = datag / datag.sum()
+	p = datag.plot(kind='bar', ax=ax[1,0])
+	datag = df.groupby([target_variable, 'a10']).size().unstack(level=1) #listen to music
+	datag = datag / datag.sum()
+	p = datag.plot(kind='bar', ax=ax[1,1])
+	datag = df.groupby([target_variable, 'a13']).size().unstack(level=1) #internet
+ 	datag = datag / datag.sum()
+ 	p = datag.plot(kind='bar', ax=ax[1,2])
+
+
+def plot_histograma_demographics_categorical(df, target_variable=None):
+	d, p= pd.Series([]), pd.Series([])
 	df['apoe'] = df['apoe'].astype('category').cat.rename_categories(['No', 'Het', 'Hom'])
 	df['nivel_educativo'] = df['nivel_educativo'].astype('category').cat.rename_categories(['~Pr', 'Pr', 'Se', 'Su'])
-	df['familiar_ad'] = df['familiar_ad'].astype('category').cat.rename_categories(['NoFam', 'Fam'])
+	df['familial_ad'] = df['familial_ad'].astype('category').cat.rename_categories(['NoFam', 'Fam'])
 	df['nivelrenta'] = df['nivelrenta'].astype('category').cat.rename_categories(['Baja', 'Media', 'Alta'])
 	df['edad'] = pd.cut(df['edad'], range(0, 100, 10), right=False)
-	
-	# df['alfrut'] = df['alfrut'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
-	# df['alcar'] = df['alcar'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
-	# df['aldulc'] = df['aldulc'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
-	# df['alverd'] = df['alverd'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
-	#Diet
-	nb_of_categories = 4
-	#df['dietaproteica_cut'] = pd.cut(df['dietaproteica'],nb_of_categories)
-	#df['dietagrasa_cut'] = pd.cut(df['dietagrasa'],nb_of_categories)
-	df['dietaketo_cut'] = pd.cut(df['dietaketo'],nb_of_categories)
-	df['dietaglucemica_cut'] = pd.cut(df['dietaglucemica'],nb_of_categories)
-	df['dietasaludable_cut']= pd.cut(df['dietasaludable'],nb_of_categories)
-
 	#in absolute numbers
 	fig, ax = plt.subplots(1,5)
 	fig.set_size_inches(20,5)
 	fig.suptitle('Conversion by absolute numbers, for various demographics')
+
 	d = df.groupby([target_variable, 'apoe']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[0])
 	d = df.groupby([target_variable, 'nivel_educativo']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[1])
-	d = df.groupby([target_variable, 'familiar_ad']).size()
+	d = df.groupby([target_variable, 'familial_ad']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[2])
 	d = df.groupby([target_variable, 'nivelrenta']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[3])
@@ -880,7 +1294,7 @@ def plot_histograma_bygroup_categorical(df, target_variable=None):
 	d = df.groupby([target_variable, 'nivel_educativo']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[1])
-	d = df.groupby([target_variable, 'familiar_ad']).size().unstack(level=1)
+	d = df.groupby([target_variable, 'familial_ad']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[2])
 	d = df.groupby([target_variable, 'nivelrenta']).size().unstack(level=1)
@@ -891,22 +1305,60 @@ def plot_histograma_bygroup_categorical(df, target_variable=None):
 	p = d.plot(kind='bar', ax=ax[4])
 	plt.show()
 	
+def plot_histograma_diet_categorical(df, target_variable=None):
+	""" plot_histograma_diet_categorical
+	Args: datafame, target_variable
+	Output:None
+	"""
+	# df['alfrut'] = df['alfrut'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
+	# df['alcar'] = df['alcar'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
+	# df['aldulc'] = df['aldulc'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
+	# df['alverd'] = df['alverd'].astype('category').cat.rename_categories(['0', '1-2', '3-5','6-7'])
+	
+	# 4 groups:: 'dietaglucemica', 'dietagrasa', 'dietaproteica', 'dietasaludable'
+	nb_of_categories = 4
+	#df['dietaproteica_cut'] = pd.cut(df['dietaproteica'],nb_of_categories)
+	#df['dietagrasa_cut'] = pd.cut(df['dietagrasa'],nb_of_categories)
+	# df['dietaketo_cut'] = pd.cut(df['dietaketo'],nb_of_categories)
+	
+	df['dietaglucemica_cut'] = pd.cut(df['dietaglucemica'],nb_of_categories)
+	df['dietasaludable_cut']= pd.cut(df['dietasaludable'],nb_of_categories)
+	df['dietaproteica_cut']= pd.cut(df['dietaproteica'],nb_of_categories)
+	df['dietagrasa_cut']= pd.cut(df['dietagrasa'],nb_of_categories)
 	#diet in relative numbers
-	fig, ax = plt.subplots(1,3)
+	fig, ax = plt.subplots(1,4)
 	fig.set_size_inches(20,5)
-	fig.suptitle('Conversion by relative numbers, for Alimentation')
-	d = df.groupby([target_variable, 'dietaketo_cut']).size().unstack(level=1)
-	d = d / d.sum()
-	p = d.plot(kind='bar', ax=ax[0])
-	#d = df.groupby([target_variable, 'dietagrasa_cut']).size().unstack(level=1)
-	#d = d / d.sum()
-	#p = d.plot(kind='bar', ax=ax[1])
+	fig.suptitle('Conversion by relative numbers for Alimentation')
 	d = df.groupby([target_variable, 'dietaglucemica_cut']).size().unstack(level=1)
 	d = d / d.sum()
-	p = d.plot(kind='bar', ax=ax[1])
+	p = d.plot(kind='bar', ax=ax[0])
 	d = df.groupby([target_variable, 'dietasaludable_cut']).size().unstack(level=1)
 	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[1])
+	d = df.groupby([target_variable, 'dietaproteica_cut']).size().unstack(level=1)
+	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[2])
+	p = d.plot(kind='bar', ax=ax[3])
+	d = df.groupby([target_variable, 'dietagrasa_cut']).size().unstack(level=1)
+	d = d / d.sum()
+	p = d.plot(kind='bar', ax=ax[3])
+
+def plot_histograma_traumaticbraininjury_categorical(df, target_variable):
+	pdb.set_trace()
+
+def plot_histograma_bygroup_categorical(df, type_of_group, target_variable):
+	""" plot_histograma_bygroup_categorical
+	"""
+	if type_of_group is 'Demographics_s': plot_histograma_demographics_categorical(df, target_variable)
+	if type_of_group is 'Diet_s': plot_histograma_diet_categorical(df, target_variable)
+	if type_of_group is 'EngagementExternalWorld_s': plot_histograma_engagement_categorical(df, target_variable)
+	if type_of_group is 'Anthropometric_s': plot_histograma_anthropometric_categorical(df, target_variable)
+	if type_of_group is 'Sleep_s': plot_histograma_sleep_categorical(df, target_variable)
+	if type_of_group is 'PsychiatricHistory_s': plot_histograma_psychiatrichistory_categorical(df, target_variable)
+	if type_of_group is 'Cardiovascular_s': plot_histograma_cardiovascular_categorical(df, target_variable)
+	if type_of_group is 'TraumaticBrainInjury_s': plot_histograma_traumaticbraininjury_categorical(df, target_variable)
+	 
+
 
 def run_imputations(dataset, type_imput=None):
 	""" run_imputations: datasets with missign values are incompatible with scikit-learn 
@@ -1942,7 +2394,6 @@ def run_votingclassifier(classifiers, X_train, y_train, X_test, y_test):
 	""" run_votingclassifier ensemble methods
 	Args: dictionary of classifiers objects and names"""
 	from sklearn.ensemble import VotingClassifier
-	import sys
 	sys.setrecursionlimit(10000)
 	it_clf = []
 	for key in classifiers.keys():
@@ -2890,8 +3341,8 @@ def chi_square(df, col1):
 	res_chi =  chisquare([df[col1]])
 
 
-def normal_gaussian_test(rv, rv_name =None, method=None):
-	""" normal_gaussian_test: Test isf a dfistribution fllows a Normal Gaussian fistribution 
+def normal_gaussian_test(rv, rv_name =None, method=None, plotcurve=False):
+	""" normal_gaussian_test: Test if a distribution follows a Normal Gaussian fistribution 
 	Args: rv: random variable we need to know its distribution. 
 	'shapiro' Shapiro-Wilk tests if a random sample came from a normal distribution (null hypothesis: data 
 	is normally distributed). Use shapiro only if size < 5000
@@ -2899,43 +3350,59 @@ def normal_gaussian_test(rv, rv_name =None, method=None):
 	As for shapiro, null hypothesis is the sample distribution is identical to the other distribution (Gaussian). 
 	If p < .05 we can reject the null
 	"""
-	#It is completely possible that for p > 0.05 and the data does not come from a normal population. 
+	#It is completely possible that p > 0.05 and the data does not come from a normal population. 
 	#Failure to reject could be from the sample size being too small to detect the non-normality
-	#With a large sample size of 1000 samples or more, a small deviation from normality (some noise in the sample) may be concluded as significant and reject the null.
+	#With a large sample size of 1000 samples or more, a small deviation from normality (some noise in the sample)
+	# may be concluded as significant and reject the null.
 	# The two best tools are the histogram and Q-Q plot. Potentially using the tests as additional indicators.
 	import pylab
+	report_test, sha_report, kol_report = [], [], []
+	header = '***** normal_gaussian_test for variable:%s ***** \n'%(rv_name)
+	report_test.append(header) 
 	p_threshold = 0.05
 	[t_shap, p_shap] = stats.shapiro(rv)
 	
 	if p_shap < p_threshold:
-		print('Shapiro-Wilk test: Reject null hypothesis that sample comes from Gaussian distribution \n')
+		test_r = '\tShapiro-Wilk test: Reject null hypothesis that sample comes from Gaussian distribution **\n'
+		print(test_r)
 	else:
-		print('Shapiro-Wilk test:DO NOT Reject null hypothesis that sample comes from Gaussian distribution \n')
-		print('Likely sample comes from Normal distribution. But the failure to reject could be because of the sample size:{}\n', rv.shape[0])
-	print('Shapiro-Wilk test: t statistic:{} and p-value:{}',t_shap, p_shap)
-	#quantile-quantile (QQ) plot
-	#If the two distributions being compared are from a common distribution, the points in from QQ plot the points in 
-	#the plot will approximately lie on a line, but not necessarily on the line y = x		
-	sm.qqplot(rv, loc = rv.mean(), scale = rv.std(), line='s')
-	plt.title('Shapiro-Wilk: '+ rv_name+ ' . Shapiro p-value='+ str(p_shap))
-	pylab.show()
+		test_r = '\tShapiro-Wilk test: DO NOT Reject null hypothesis that sample comes from Gaussian distribution \n'+\
+		'\tLikely sample comes from Normal distribution. But the failure to reject could be because of the sample size:%s\n'%(str(rv.shape[0]))
+		print(test_r)	
+	sha_report = '\tShapiro-Wilk test: t statistic:%s and p-value:%s \n'%(str(t_shap), str(p_shap))
+	print(sha_report)
+	report_test.append(test_r)
+	report_test.append(sha_report)
+
 	#The Kolmogorov–Smirnov tests if a sample distribution fits a cumulative distribution function (CDF) of are referenced distribution
 	[t_kol, p_kol] = stats.kstest(rv, 'norm', args=(rv.mean(), rv.std()))
 	if p_kol < p_threshold:
-		print('Kolmogorov–Smirnov: Reject null hypothesis that sample comes from Gaussian distribution \n')
+		test_r = '\tKolmogorov–Smirnov: Reject null hypothesis that sample comes from Gaussian distribution **\n'
+		print(test_r)
 	else:
-		print('Kolmogorov–Smirnov: DO NOT Reject null hypothesis that sample comes from Gaussian distribution \n')
-		print('Likely sample comes from Normal distribution. But the failure to reject could be because of the sample size:{}\n', rv.shape[0])
+		test_r = '\tKolmogorov–Smirnov: DO NOT Reject null hypothesis that sample comes from Gaussian distribution \n'+ \
+		'\tLikely sample comes from Normal distribution. But the failure to reject could be because of the sample size:%s\n'%(str(rv.shape[0]))
+		print(test_r)
+	kol_report = '\tKolmogorov test: t statistic:%s and p-value:%s \n'%(str(t_kol), str(p_kol))
+	report_test.append(test_r)
+	report_test.append(kol_report)
+	print(kol_report)
 	#Comparing CDF for KS test
-	print('Kolmogorov test: t statistic:{} and p-value:{}',t_kol, p_kol)
-	length = len(rv)
-	plt.figure(figsize=(12, 7))
-	plt.plot(np.sort(rv), np.linspace(0, 1, len(rv), endpoint=False))
-	plt.plot(np.sort(stats.norm.rvs(loc=rv.mean(), scale=rv.std(), size=len(rv))), np.linspace(0, 1, len(rv), endpoint=False))
-	plt.legend('top right')
-	plt.legend(['Data', 'Theoretical Gaussian Values'])
-	plt.title('Comparing CDFs for KS-Test: '+ rv_name + ' . KS p-value='+str(p_kol))
-		
+	if plotcurve is True:
+		#quantile-quantile (QQ) plot
+		#If the two distributions being compared are from a common distribution, the points in from QQ plot the points in 
+		#the plot will approximately lie on a line, but not necessarily on the line y = x		
+		sm.qqplot(rv, loc = rv.mean(), scale = rv.std(), line='s')
+		plt.title('Shapiro-Wilk: '+ rv_name+ ' . Shapiro p-value='+ str(p_shap))
+		pylab.show()
+		length = len(rv)
+		plt.figure(figsize=(12, 7))
+		plt.plot(np.sort(rv), np.linspace(0, 1, len(rv), endpoint=False))
+		plt.plot(np.sort(stats.norm.rvs(loc=rv.mean(), scale=rv.std(), size=len(rv))), np.linspace(0, 1, len(rv), endpoint=False))
+		plt.legend('top right')
+		plt.legend(['Data', 'Theoretical Gaussian Values'])
+		plt.title('Comparing CDFs for KS-Test: '+ rv_name + ' . KS p-value='+str(p_kol))
+	return report_test
 
 def ks_two_samples_goodness_of_fit(sample1, sample2):
 	"""ks_two_samples_goodness_of_fit: Perform a Kolmogorov-Smirnov two sample test that two data samples come from the same distribution. 
@@ -3033,7 +3500,6 @@ def t_test(dataset, feature1, feature2):
 	#print('Computing Welchs ttest, equal variance is not assumed')
 	#tstat_welch, pval_welch = ttest_ind(dataset[feature1], dataset[feature2], equal_var=False)
 
-
 def print_feature_importances(learner, features):
 	""" print_fearure_importances only for elarners that take feature_importances_
 	XGB, random forest, decision tree (NO SVC, GridSearchCV, mlp_estimator, Bayes, Keras)"""
@@ -3043,20 +3509,20 @@ def print_feature_importances(learner, features):
 
 def detect_multicollinearities(df, target, cols=None):
 	""" detect_multicollinearities 
-	Args:
+	Args:df (target not included), target, cols
 	Output: """
-	f =plt.figure(figsize=(8, 4))
+	f = plt.figure(figsize=(8, 4))
 	sns.countplot(df[target], palette='RdBu')
 	cols.append(target)
 	df = df[cols].dropna(axis=0)
 	# count number of obvs in each class
-
-	nonconverters, converters = df[target].value_counts()
-	print('Number of nonconverters: ', nonconverters)
-	print('Number of converters : ', converters)
+	unique_values = df[target].unique()
+	unique_values = df[target].value_counts()
+	for i in unique_values:
+		print('Number of %s ==%s is %s'%(target, str(unique_values), str(unique_values[0])))
 
 	print(" Generate a scatter plot matrix with the mean columns...\n")# 
-	g = sns.pairplot(data=df.dropna(),hue = target, palette='RdBu')
+	g = sns.pairplot(data=df.dropna(), hue = target, palette='RdBu')
 	dir_images = '/Users/jaime/github/code/tensorflow/production/images'
 	filenametosav = cols[0] + '_scatter.png'
 	g.savefig(os.path.join(dir_images, filenametosav))
@@ -3224,7 +3690,12 @@ def model_interpretation(estimator, X_train, X_test, explanatory_features):
 	# fig, axs = interpreter.partial_dependence.plot_partial_dependence(estimator, X_test, 0) 
 
 def income_charts(dataframe):
+	""" income_charts
+	Args: dataframe
+	Output: None
+	"""
 	#pie chart for distritos/barrios
+	fig = plt.figure()
 	plt.subplot(1, 2, 1)
 	distritos = dataframe['distrito'].dropna()
 	distritos_list = distritos.unique()
@@ -3302,24 +3773,35 @@ def imputing_missing_values(df):
 	# use the parameters to transform the data
 	imputed_data = imr.transform(df.values)
 
-def socioeconomics_infographics(csv_file=None):
+def lifestyle_infographics(dataframe=None, list_features= None, target_variable=None):
+	list_features = features_dict['Diet_s']
+	plot_histograma_bygroup_categorical(dataframe, list_features,'Diet_s',target_variable=target_variable)
+	plot_histograma_bygroup_categorical(dataframe, list_features,'Diet_s',target_variable='dx_corto_visita1')
+	
+
+def socioeconomics_infographics(dataframe=None, list_features= None, target_variable=None):
 	""" socioeconomics_infographics: EDA for wealth, diet etc using groupby
 	Args: csv_file
 	"""
-	plt.close('all')
-	if csv_file is None:csv_file = '/Users/jaime/vallecas/data/scc/Dataset_29052018.csv'
-	dataframe = load_csv_file(csv_file)	
-	target_variable = 'conversionmci'
-	# Feature Selection : cosmetic name changing and select input and output 
-	print('Calling for cosmetic cleanup (all lowercase, /, remove blanks) e.g. cleanup_column_names(df,rename_dict={},do_inplace=True)') 
-	cleanup_column_names(dataframe, {}, True)
-	#combine features to create familiar_ad and physical exercise
-	dataframe = combine_features(dataframe)
-	#copy dataframe with the cosmetic changes e.g. Tiempo is now tiempo
-	dataframe_orig = dataframe.copy()
+	if list_features is None:list_features = ['apoe', 'renta','anos_escolaridad', 'nivel_educativo','mmse_visita1'\
+	 'scd_visita1', 'gds_visita1','reloj_visita1','fcsrtrl1_visita1','animales_visita1', 'dietaproteica', 'dietagrasa', 'dietasaludable']
+	if target_variable is None: target_variable = 'ultimodx'
+	if dataframe is None:
+		csv_file = '/Users/jaime/vallecas/data/scc/Dataset_29052018.csv'
+		dataframe = load_csv_file(csv_file)	
+		# Feature Selection : cosmetic name changing and select input and output 
+		print('Calling for cosmetic cleanup (all lowercase, /, remove blanks) e.g. cleanup_column_names(df,rename_dict={},do_inplace=True)') 
+		cleanup_column_names(dataframe, {}, True)
+	
 	#replace -1 by 0 
-	dataframe['conversionmci'].replace(-1,0, inplace=True)
-	plot_histograma_bygroup_categorical(dataframe_orig, target_variable=target_variable)
+	#dataframe['conversionmci'].replace(-1,0, inplace=True)
+	list_features = features_dict['Demographics_s']
+	plot_histograma_bygroup_categorical(dataframe, list_features,'Demographics_s',target_variable=target_variable)
+	plot_histograma_bygroup_categorical(dataframe, list_features,'Demographics_s',target_variable='dx_corto_visita1')
+	
+
+
+
 	#(4) Descriptive analytics: plot scatter and histograms
 	#longit_xy_scatter = ['scd_visita', 'gds_visita'] #it works for longitudinal
 	#plot_scatter_target_cond(dataframe_orig, ['renta', 'anos_escolaridad'], target_variable=target_variable)
@@ -3361,7 +3843,70 @@ def socioeconomics_infographics(csv_file=None):
 	 	#detect_multicollinearities calls to plot_jointdistributions
 	 	detect_multicollinearities(dataframe, 'conversionmci', features)
 	return 
+def write_listreport_to_file(listres, file):
+	with open(file, 'w') as f:
+		for item in listres:
+			for item_ix in item:
+				f.write("%s\n" % item_ix)
+		f.write("%s\n\n")
+		f.close()
 
+def build_buschke_aggregate(y):
+	"""build_buschke_aggregate: 
+	Args:
+	Output:
+	
+	"""
+	from scipy.integrate import trapz, simps
+	from scipy.interpolate import interp1d
+	from matplotlib.patches import Polygon
+	#f = interp1d(x, y)
+	#f2 = interp1d(x, y, kind='cubic')
+
+	x = np.linspace(1,4,4,dtype=int)
+	if type(y) is list:
+		y = np.asarray(y)
+	# fit polynomial of degree 2 that pass for (x[1:-1], b_list) points
+	# z highest power first
+	z = np.polyfit(x[:], y[:], 3)
+	# line that goes though first and last point to calculate the difference between demorado and first
+	z_fordemo = np.polyfit(x[0::3], y[0::3], 1)
+	print('Interpolation 2nd order polynomial is %sx^2 + %sx + %s'%(str(z[0]), str(z[1]),str(z[2])))
+	pol = np.poly1d(z)
+	pol_line14 = np.poly1d(z)
+	# first derivative of the fitting polynimium
+	polder = np.polyder(pol)
+	polder_line14 = np.polyder(pol_line14)
+	# derivative of line that connects x0y0 with x3y3 on points x0 and x1
+	
+	slopedemo = y[-1] - y[0]
+
+	#libre1, libre2, libre3, demorado = pol(x[1]), pol(x[2]), pol(x[2]), pol(x[3])
+	slope1, slope2, slope3 = polder(x[0]), polder(x[1]), polder(x[2])
+	# compare how the the fitting is libre1 - y[0]
+	delta = y[-1] - y[0] #demorado - libre1 
+	print('Demorado: %s - Libre1: %s == %s'%(str(y[-1]), str(y[0]), str(delta)))
+	# Calcualte the surface of the area under the polynomial
+	# simpson method or trapezopid method trapz(y, x)
+	area_c = simps(y, x) 
+	print('The surface of the polynomial is {:6.5f}'.format(area_c))
+	print('The S to maximize is: The sum of the surface under the fitted polynomial + \
+		the first derivative at points 1,2,3 and the slope of line between first and last point : S + dy/dx(1,2,3) + dline1-4(4)')
+	s_maximize = area_c + slope1 + slope2 + slope3 + slopedemo
+	print('The S to maximize is =%10.3f \n'%(s_maximize))
+	plot_integral = True
+	if plot_integral is True:
+		x = x[0:]
+		y = y[0:]
+		xp = x
+		xp = np.linspace(1, 5, 10)
+		_ = plt.plot(x, y, '.', xp, pol(xp), '-')
+		plt.ylim(0,16)
+		plt.show()
+		pdb.set_trace()
+		
+
+	return b_aggregate
 if __name__ == "__name__":
 	#print(Parallel(n_jobs=2)(parallel_func() for _ in range(3)))  # forgot delayed around parallel_func here
 	main()
