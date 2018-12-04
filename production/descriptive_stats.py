@@ -95,7 +95,6 @@ def main():
 	# numeric values only
 	df_num = dataframe.select_dtypes(include = ['float64', 'int64'])
 	all_num_features = df_num.columns.tolist()
-	pdb.set_trace()
 	# Copy dataframe with the cosmetic changes e.g. Tiempo is now tiempo
 	dataframe_orig = dataframe.copy()
 	print('Build dictionary with features ontology and check the features are in the dataframe\n') 
@@ -108,6 +107,24 @@ def main():
 	print('Original dataframe pre dict selection {}=',format(dataframe.shape))
 	dataframe = dataframe[flat_features_list]
 	print('Columns selected in dataframe {}=',format(dataframe.shape))
+	print('Compute the Buschke aggregate \n')
+	b_cols = ['fcsrtrl1_visita1','fcsrtrl2_visita1','fcsrtrl3_visita1','fcsrtlibdem_visita1']
+	dataframe['b_aggregate'] = 0
+	b_res_array = np.empty((dataframe.shape[0],1))
+	for ix, b_row in enumerate(dataframe[b_cols].values.tolist()):
+		b_res = build_buschke_aggregate(b_row)
+		b_res_array[ix] = b_res
+		#dataframe.set_value(index=ix,col='b_aggregate',value=b_res)
+	dataframe['b_aggregate'] = b_res_array
+	b_cols.append('b_aggregate')
+	dataframe_b = dataframe[b_cols]
+	dataframe_b.to_csv('eda_output/buschke.csv')
+	pdb.set_trace()
+	
+	#results = pd.DataFrame([build_buschke_aggregate(*x) for x in dataframe[b_cols].values.tolist()])
+
+	#bis= datafrmae[buschke_cols]
+	#build_buschke_aggregate()
 
 	###########################################################################################
 	##################  3.0. EDA     ##########################################################
@@ -3862,8 +3879,8 @@ def build_buschke_aggregate(y):
 	from matplotlib.patches import Polygon
 	#f = interp1d(x, y)
 	#f2 = interp1d(x, y, kind='cubic')
-
-	x = np.linspace(1,4,4,dtype=int)
+	npx = 3
+	x = np.linspace(1,npx,npx,dtype=int)
 	if type(y) is list:
 		y = np.asarray(y)
 	# fit polynomial of degree 2 that pass for (x[1:-1], b_list) points
@@ -3892,8 +3909,8 @@ def build_buschke_aggregate(y):
 	print('The surface of the polynomial is {:6.5f}'.format(area_c))
 	print('The S to maximize is: The sum of the surface under the fitted polynomial + \
 		the first derivative at points 1,2,3 and the slope of line between first and last point : S + dy/dx(1,2,3) + dline1-4(4)')
-	s_maximize = area_c + slope1 + slope2 + slope3 + slopedemo
-	print('The S to maximize is =%10.3f \n'%(s_maximize))
+	s_maximize = area_c + slope1 + slope2 #+ slope3 #+ slopedemo
+	print('The S to maximize is =%10.3f =%10.3f + %10.3f + %10.3f \n'%(s_maximize, area_c, slope1, slope2))
 	plot_integral = True
 	if plot_integral is True:
 		x = x[0:]
@@ -3903,10 +3920,11 @@ def build_buschke_aggregate(y):
 		_ = plt.plot(x, y, '.', xp, pol(xp), '-')
 		plt.ylim(0,16)
 		plt.show()
-		pdb.set_trace()
-		
+	print('The build_buschke_aggregate function is finished with s_maximize=%.3f\n'%(s_maximize))	
+	return s_maximize
 
-	return b_aggregate
+
+
 if __name__ == "__name__":
 	#print(Parallel(n_jobs=2)(parallel_func() for _ in range(3)))  # forgot delayed around parallel_func here
 	main()
