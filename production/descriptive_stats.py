@@ -107,20 +107,21 @@ def main():
 	print('Original dataframe pre dict selection {}=',format(dataframe.shape))
 	dataframe = dataframe[flat_features_list]
 	print('Columns selected in dataframe {}=',format(dataframe.shape))
+	###### Buschke #####
 	print('Compute the Buschke aggregate \n')
-	b_cols = ['fcsrtrl1_visita1','fcsrtrl2_visita1','fcsrtrl3_visita1','fcsrtlibdem_visita1']
-	dataframe['b_aggregate'] = 0
-	b_res_array = np.empty((dataframe.shape[0],1))
-	for ix, b_row in enumerate(dataframe[b_cols].values.tolist()):
-		b_res = build_buschke_aggregate(b_row)
-		b_res_array[ix] = b_res
-		#dataframe.set_value(index=ix,col='b_aggregate',value=b_res)
-	dataframe['b_aggregate'] = b_res_array
-	b_cols.append('b_aggregate')
-	dataframe_b = dataframe[b_cols]
-	dataframe_b.to_csv('eda_output/buschke.csv')
-	pdb.set_trace()
-	
+
+	# b_cols = ['fcsrtrl1_visita1','fcsrtrl2_visita1','fcsrtrl3_visita1','fcsrtlibdem_visita1']
+	# dataframe['b_aggregate'] = 0
+	# b_res_array = np.empty((dataframe.shape[0],1))
+	# for ix, b_row in enumerate(dataframe[b_cols].values.tolist()):
+	# 	b_res = build_buschke_aggregate(b_row)
+	# 	b_res_array[ix] = b_res
+	# 	#dataframe.set_value(index=ix,col='b_aggregate',value=b_res)
+	# dataframe['b_aggregate'] = b_res_array
+	# b_cols.append('b_aggregate')
+	# dataframe_b = dataframe[b_cols]
+	# dataframe_b.to_csv('eda_output/buschke.csv')
+	###### Buschke end #####
 	#results = pd.DataFrame([build_buschke_aggregate(*x) for x in dataframe[b_cols].values.tolist()])
 
 	#bis= datafrmae[buschke_cols]
@@ -129,15 +130,19 @@ def main():
 	###########################################################################################
 	##################  3.0. EDA     ##########################################################
 	# plot quick  histogram
-	#dataframe[['edad','pabd']].hist(figsize=(16, 20), bins=None, xlabelsize=8, ylabelsize=8)
-	#dataframe.hist(figsize=(16, 20), bins=None, xlabelsize=8, ylabelsize=8)
+	plot_figures_of_paper(dataframe)
+	pdb.set_trace()
+	# dataframe[['edad','pabd']].hist(figsize=(16, 20), bins=None, xlabelsize=8, ylabelsize=8)
+	# dataframe.hist(figsize=(16, 20), bins=None, xlabelsize=8, ylabelsize=8)
 	target_variable = 'ultimodx' #'conversionmci'
 	dataframe_2ormorevisits = dataframe[dataframe['dx_corto_visita2'].notnull()]
-	plot_static = False
+	plot_static = True
 	if plot_static is True:
 		# Plot histogram for all static variables plot_histograma_bygroup_categorical(df, type, target)
 		# plot  distribution qualitative feaatures == barrio, municipio, distrito
+
 		plot_distribution_categorical(dataframe, categorical_features=None)
+		pdb.set_trace()
 		# plot distribution and kde for list of features
 		plot_distribution_kde(dataframe, features = ['sue_noc','edad','pabd', 'peso','talla','imc', 'depre_num','ansi_num','tabac_cant','ictus_num'])
 
@@ -163,6 +168,7 @@ def main():
 		categorical_features = ['apoe', 'ansi','depre','ictus', 'tabac','cor', 'sp','fcsrtlibdem_visita1']
 		df_categ = dataframe_2ormorevisits[categorical_features]
 		plot_box_categorical_to_quantitative(df_categ, categorical_features, target_variable='fcsrtlibdem_visita1')
+		pdb.set_trace()
 	plot_longit = False
 	if plot_longit is True:
 		print('Plot longitudinal features ...\n')
@@ -3923,7 +3929,487 @@ def build_buschke_aggregate(y):
 	print('The build_buschke_aggregate function is finished with s_maximize=%.3f\n'%(s_maximize))	
 	return s_maximize
 
+def bins_labels(bins, **kwargs):
+    bin_w = (max(bins) - min(bins)) / (len(bins) - 1)
+    plt.xticks(np.arange(min(bins)+bin_w/2, max(bins), bin_w), bins, **kwargs)
+    plt.xlim(bins[0], bins[-1])
 
+def plot_figures_of_paper(dataframe):
+	"""plot figures of EDA paper
+	"""
+	# dataframe2plot remove 9s no sabe no contesta
+	dataframe2plot = dataframe
+
+	figures_dir ='/Users/jaime/github/papers/EDA_pv/figures'
+	# EngagementExternalWorld
+	fig_filename = 'Fig_engage.png'
+	# BUG replace 0 by 1 row 10
+	dataframe['a10'].replace(0,1, inplace=True)
+	#['a03' amigos, 'a04' travel, 'a05' ong, 'a06' church, 'a08' cine, 'a09' sport, 'a10' music, 'a11' tv, 'a12' read, 'a13' internet]
+	engage_list = ['a02', 'a03', 'a04', 'a05', 'a06', 'a07', 'a08', 'a09', 'a10', 'a11', 'a12', 'a13']
+	fig= dataframe2plot[engage_list].hist(figsize=(12, 12), bins=None, xlabelsize=8, ylabelsize=8, rwidth=0.9,grid=False, color = "dodgerblue")
+	titles = ['creative', 'friends','travel','NGO','church','soc club','movies','sports','music', 'tv/radio', 'books', 'internet']
+	i = 0
+	points = np.arange(1,5)
+	for x in fig.ravel():
+		title=titles[i]
+		x.set_title(title)
+		x.set_xticks(points)
+		x.set_xticklabels(('Never', 'Few', 'Often'))
+		i+=1
+	plt.tight_layout()
+	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+
+	# tce == tbi
+	fig_filename = 'Fig_tce.png'
+	tce_list = ['tce']
+	fig, axes = plt.subplots(nrows=1, ncols=1, sharey=True)
+	newdf = dataframe2plot.groupby('tce')['tce'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	newdf[0:-1].plot(ax=axes,kind='bar', color='indianred')
+	axes.set_title(r'suffered TBI', color='C0')
+	axes.set_xticklabels([r'No',r'Yes'])
+	axes.set_ylabel('# subjects')
+	axes.set_xlabel(' ')
+	axes.get_legend().remove()
+	plt.tight_layout()
+	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+
+	fig_filename = 'Fig_phys.png'
+	phys_list = ['ejfre', 'ejminut']
+	fig, axes = plt.subplots(nrows=1, ncols=2, sharey=True)
+	dataframe2plot[['ejfre']].plot(ax=axes[0],kind='hist',color='firebrick')
+	axes[0].set_xlabel('days/week')
+	axes[0].set_ylabel('# subjects')
+	axes[0].set_title('physical exercise d/w', color='C0')
+	#axes[0].legend(['hola'])
+	axes[0].get_legend().remove()
+	points = [0, 30, 60, 120,180]
+	bins = pd.cut(dataframe2plot['ejminut'], points)
+	newdf = dataframe2plot.groupby(bins)['a01'].agg(['count'])
+	newdf.plot(ax=axes[1], kind='bar',color='firebrick');
+	axes[1].set_xlabel('minutes/session')
+	#axes[1].set_ylabel('# subjects')
+	axes[1].set_title(r'avg session minutes', color='C0')
+	axes[1].set_xticklabels([r'0-1/2h',r'1/2-1h',r'1-2h',r'2-3h'])
+	axes[1].get_legend().remove()
+	plt.tight_layout()
+	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+
+	fig_filename = 'Fig_cardio.png'
+	fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(18,16), sharey=False)
+	#arryt
+	newdf = dataframe2plot.groupby('arri')['arri'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	if newdf.ix[9]['count'] >0: newdf = newdf[0:-1]
+	newdf.plot(ax=axes[0,0],kind='bar', color='indianred')
+	axes[0,0].set_title(r'arrhythmias', color='C0')
+	axes[0,0].set_xticklabels([r'No',r'Auric', r'Arr'])
+	#axes[0,0].set_ylabel('# subjects')
+	axes[0,0].set_xlabel(' ')
+	axes[0,0].get_legend().remove()
+	
+	#bmi
+	np.arange(15,50,5)
+	bins = pd.cut(dataframe2plot['imc'], points)
+	#newdf = dataframe2plot.groupby(bins)['imc'].agg(['count'])
+	dataframe2plot['imc'].plot(ax=axes[0,1], kind='hist',color='firebrick');
+	axes[0,1].set_xlabel('')
+	#axes[1].set_ylabel('# subjects')
+	axes[0,1].set_title(r'BMI', color='C0')
+	axes[0,1].axvline(x=25, color="red", linestyle='--')
+	axes[0,1].axvline(x=30, color="red", linestyle='--')
+	#axes[0,1].set_xticklabels([r'0-1/2h',r'1/2-1h',r'1-2h',r'2-3h'])
+	
+	# cor angina
+	newdf = dataframe2plot.groupby('cor')['cor'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	if newdf.ix[9]['count'] >0: newdf = newdf[0:-1]
+	newdf.plot(ax=axes[0,2],kind='bar', color='indianred')
+	axes[0,2].set_title(r'arrhythmias', color='C0')
+	axes[0,2].set_xticklabels([r'No',r'Angina', r'Stroke'],rotation=0)
+	#axes[0,0].set_ylabel('# subjects')
+	axes[0,2].set_xlabel(' ')
+	axes[0,2].get_legend().remove()
+	# diabetes glu
+	newdf = dataframe2plot.groupby('glu')['glu'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	newdf.plot(ax=axes[1,0],kind='bar', color='indianred')
+	axes[1,0].set_title(r'diabetes', color='C0')
+	axes[1,0].set_xticklabels([r'No',r'Diabetes mell.', r'Carbs intol.'],rotation=0)
+	#axes[0,0].set_ylabel('# subjects')
+	axes[1,0].set_xlabel(' ')
+	axes[1,0].get_legend().remove()
+	# hta hipertension
+	newdf = dataframe2plot.groupby('hta')['hta'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	newdf.plot(ax=axes[1,1],kind='bar', color='indianred')
+	axes[1,1].set_title(r'blood preassure', color='C0')
+	axes[1,1].set_xticklabels([r'No',r'HBP'],rotation=0)
+	#axes[0,0].set_ylabel('# subjects')
+	axes[1,1].set_xlabel(' ')
+	axes[1,1].get_legend().remove()
+	# ictus 
+	newdf = dataframe2plot.groupby('ictus')['ictus'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	if newdf.ix[9]['count'] >0: newdf = newdf[0:-1]
+	newdf.plot(ax=axes[1,2],kind='bar', color='indianred')
+	axes[1,2].set_title(r'ictus', color='C0')
+	axes[1,2].set_xticklabels([r'No',r'Ischemic', r'Hemorr'],rotation=0)
+	#axes[0,0].set_ylabel('# subjects')
+	axes[1,2].set_xlabel(' ')
+	axes[1,2].get_legend().remove()
+	# lipid colesterol  
+	newdf = dataframe2plot.groupby('lipid')['lipid'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	if newdf.ix[9]['count'] >0: newdf = newdf[0:-1]
+	newdf.plot(ax=axes[2,0],kind='bar', color='indianred')
+	axes[2,0].set_title(r'cholesterol', color='C0')
+	axes[2,0].set_xticklabels(['No', 'Hyper chol', 'Hyper trig', 'Hyper chol&trig'],rotation=0)
+	#axes[0,0].set_ylabel('# subjects')
+	axes[2,0].set_xlabel(' ')
+	axes[2,0].get_legend().remove()
+	#smoke
+	newdf = dataframe2plot.groupby('tabac')['tabac'].agg(['count'])
+	newdf.plot(ax=axes[2,1],kind='bar', color='indianred')
+	axes[2,1].set_title(r'smoke', color='C0')
+	axes[2,1].set_xticklabels(['No', 'Smoker', 'Ex smoker'],rotation=0)
+	#axes[0,0].set_ylabel('# subjects')
+	axes[2,1].set_xlabel(' ')
+	axes[2,1].get_legend().remove()
+	#tiroides
+	newdf = dataframe2plot.groupby('tir')['tir'].agg(['count'])
+	if newdf.ix[9]['count'] >0: newdf = newdf[0:-1]
+	newdf.plot(ax=axes[2,2],kind='bar', color='indianred')
+	axes[2,2].set_title(r'thyroiditis', color='C0')
+	axes[2,2].set_xticklabels(['No', 'Hyper thyroiditis', 'Hipo thyroidism'],rotation=0)
+	axes[2,2].set_xlabel(' ')
+	axes[2,2].get_legend().remove()
+	plt.tight_layout()
+	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+
+	fig_filename = 'Fig_apoe.png'
+
+	fig, axes = plt.subplots(nrows=1, ncols=1, sharey=True)
+	newdf = dataframe2plot.groupby('apoe')['apoe'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	newdf.plot(ax=axes,kind='bar', color='darkolivegreen')
+	axes.set_title(r'APOE', color='C0')
+	axes.set_xticklabels([r'Negative', r'APOE4 Hetero', r'APOE4 Homo'], rotation=0)
+	axes.set_ylabel('# subjects')
+	axes.set_xlabel(' ')
+	axes.get_legend().remove()
+	plt.tight_layout()
+	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+	
+	# fig= dataframe[['apoe']].hist(figsize=(5, 5), bins=None, xlabelsize=8, ylabelsize=8, grid=False, color = "darkolivegreen")
+	# for x in fig.ravel():
+	# 	x.set_title('APOE')
+	# 	points = np.arange(0,3)
+	# 	#points = points[0]+0.5,points[1]+0.5,points[2]-0.5 
+	#  	x.set_xticks(points)
+	#  	x.set_xticklabels(('Negative', 'APOE4 Hetero', 'APOE4 Homo'))
+	# plt.tight_layout()
+	# plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+	# pdb.set_trace()
+
+	fig_filename = 'Fig_food.png'
+	foods_df = dataframe[['alaceit', 'alaves', 'alcar', 'aldulc', 'alemb', 'alfrut', 'alhuev', 'allact', 'alleg', 'alpan', 'alpast', 'alpesblan', 'alpeszul', 'alverd']]
+	#sns.pairplot(foods_df, hue='species', size=2.5);
+	fig = dataframe[['alaceit', 'alaves', 'alcar', 'aldulc', 'alemb', 'alfrut', 'alhuev', 'allact', 'alleg', 'alpan', 'alpast', 'alpesblan', 'alpeszul', 'alverd']].hist(figsize=(18, 16), bins=None, rwidth=0.9, xlabelsize=8, ylabelsize=8,grid=False, color = "chocolate")
+	plt.tight_layout()
+	plt.grid(axis='y', alpha=0.75)	
+	titles=['olive oil', 'white meat', 'red meat', 'sweets', 'charcuterie', 'fruit', 'eggs', 'lact', 'legumes', 'bread', 'pasta', 'white fish', 'blue fish', 'vegetables']
+	i=0
+	for x in fig.ravel()[0:-2]:
+		title=titles[i]
+		x.grid(axis='y', alpha=0.75)
+		x.set_title(title)
+		points = np.arange(0,4)
+	 	x.set_xticks(points)
+	 	x.set_xticklabels(('0d/w', '1-2d/w', '3-5d/w', '6-7d/w'))
+		i=i+1	
+	plt.tight_layout()
+	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+
+	fig_filename = 'Fig_diet.png'
+	list_diet = ['dietaglucemica', 'dietagrasa', 'dietaproteica', 'dietasaludable']
+	fig = dataframe[list_diet].hist(figsize=(8, 8), bins=None, rwidth=0.9, grid=False, xlabelsize=8, ylabelsize=8,color = "khaki")
+	titles=['glucemic', 'fat', 'proteic', 'medit']
+	i=0
+	for x in fig.ravel():
+		title=list_diet[i]
+		x.grid(axis='y', alpha=0.75)
+		x.set_title(title)
+		x.axvline(x=np.mean(dataframe[title]), color="red", linestyle='--')
+		i=i+1	
+	plt.tight_layout()
+	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+
+	fig_filename = 'Fig_visits.png'
+	print('Plotting Figure 1 (Fig_visits.png): number of visits in 7 years')
+	nb_visits= [np.sum(dataframe['mmse_visita1']>0), np.sum(dataframe['mmse_visita2']>0), np.sum(dataframe['mmse_visita3']>0),\
+	np.sum(dataframe['mmse_visita4']>0), np.sum(dataframe['mmse_visita5']>0), np.sum(dataframe['mmse_visita6']>0),np.sum(dataframe['mmse_visita7']>0)]
+	print(nb_visits)
+	fig, ax = plt.subplots()
+	x = np.arange(7)
+	plt.bar(x, nb_visits)
+	plt.xticks(x, ('y1', 'y2', 'y3', 'y4', 'y5','y6','y7'))
+	plt.title('Vallecas Project number of visits')
+	plt.xlabel('Years')
+	plt.grid(axis='y', alpha=0.75)
+	plt.ylabel('# Visits')
+	plt.tight_layout()
+	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+	
+	print('Plotting Figure 2 (Fig_anthro.png): Anthropometric (peso,talla, imc,pabd)')
+	fig_filename = 'Fig_sexlat.png'
+	phys_lat = ['sexo','lat_manual']
+	fig, axes = plt.subplots(nrows=1, ncols=2, sharey=True)
+	newdf = dataframe2plot.groupby('lat_manual')['lat_manual'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	newdf.plot(ax=axes[0],kind='bar', color='yellowgreen')
+	axes[0].set_title(r'Hand laterality', color='C0')
+	axes[0].set_xticklabels([r'Right',r'Left',r'Ambi',r'LeftC'],rotation=0)
+	#axes[0,0].set_ylabel('# subjects')
+	axes[0].set_xlabel(' ')
+	axes[0].grid(axis='y', alpha=0.75)
+	axes[0].get_legend().remove()
+	#sex
+	newdf = dataframe2plot.groupby('sexo')['sexo'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	newdf.plot(ax=axes[1],kind='bar', color='yellowgreen')
+	axes[1].set_title(r'Sex', color='C0')
+	axes[1].set_xticklabels([r'Male',r'Female'],rotation=0)
+	#axes[0,0].set_ylabel('# subjects')
+	axes[1].set_xlabel(' ')
+	axes[1].grid(axis='y', alpha=0.75)
+	axes[1].get_legend().remove()
+	plt.tight_layout()
+	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+	#############
+	
+	print('Plotting Figure 2 (Fig_anthro.png): Anthropometric (peso,talla, imc,pabd)')
+	fig_filename ='Fig_anthro.png'
+	list_anthro = ['peso','talla', 'imc','pabd']
+	fig = dataframe[list_anthro].hist(figsize=(10, 10), grid=False, bins=None, xlabelsize=8, ylabelsize=8, rwidth=0.9,color = "skyblue")
+	#[x.title.set_size(32) for x in fig.ravel()]
+	titles=['BMI', 'Abdo perim', 'Weight', 'Height']
+	i=0
+	list_anthro.sort()
+	for x in fig.ravel():
+		title=titles[i]
+		x.grid(axis='y', alpha=0.75)
+		x.axvline(x=np.mean(dataframe[list_anthro[i]]), color="red", linestyle='--')
+		x.set_title(title)
+		i=i+1
+	plt.tight_layout()
+	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+	
+	#plot_distribution_kde(dataframe, features = ['imc','pabd','peso','talla'])
+	#https://matplotlib.org/examples/color/named_colors.html
+	print('Plotting Figure 3 (Fig_ages.png):')
+	fig_filename = 'Fig_ages.png'
+	list_ages = ['edad','edad_visita6']
+	fig = dataframe[list_ages].hist(figsize=(8, 6), grid=False, bins=None, xlabelsize=8, ylabelsize=8, rwidth=0.9, color = "gray")
+	titles=['age y1', 'age y6']
+	i=0
+	list_ages.sort()
+	for x in fig.ravel():
+		title=titles[i]
+		x.set_title(title)
+		x.grid(axis='y', alpha=0.75)
+		x.axvline(x=np.mean(dataframe[list_ages[i]]), color="red", linestyle='--')
+		i=i+1
+	plt.tight_layout()
+	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+
+	#### Educ Level
+	print('Plotting Figure 4 (Fig_demo_s.png): Demographic (sdestciv,numhij, sdatrb,sdeconom,nivel_educativo,sdvive)')
+	fig_filename = 'Fig_demo.png'
+	list_demo = ['sdestciv','numhij', 'sdatrb','sdeconom','nivel_educativo','sdvive']
+	fig, axes = plt.subplots(nrows=3, ncols=2, figsize=(12,12), sharey=False)
+	#educ level
+
+	newdf = dataframe2plot.groupby('nivel_educativo')['nivel_educativo'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	#if newdf.ix[9]['count'] >0: newdf = newdf[0:-1]
+	newdf.plot(ax=axes[0,0],kind='bar', color='bisque')
+	axes[0,0].set_title(r'educ level', color='C0')
+	axes[0,0].set_xticklabels([r'No',r'Prim', r'Sec',r'Univ'],rotation=0)
+	#axes[0,0].set_ylabel('# subjects')
+	axes[0,0].set_xlabel(' ')
+	axes[0,0].get_legend().remove()
+	# sons
+	bins =[-np.inf,0, 1, 2, 3, 4, 5, np.inf]
+	bins = pd.cut(dataframe2plot['numhij'],bins, include_lowest =True)
+	newdf = bins.groupby(bins).agg(['count'])
+	newdf.plot(ax=axes[0,1],kind='bar', color='bisque')
+	axes[0,1].set_title(r'#sons', color='C0')
+	axes[0,1].set_xticklabels([r'0',r'1',r'2',r'3',r'4',r'5',r'6+'],rotation=0)
+	#axes[0,0].set_ylabel('# subjects')
+	axes[0,1].set_xlabel(' ')
+	axes[0,1].grid(axis='y', alpha=0.75)
+	axes[0,1].get_legend().remove()
+
+	# years employee
+	bins =[-np.inf,0, 10, 20, 30, 40, 50, np.inf]
+	bins = pd.cut(dataframe2plot['sdatrb'],bins, include_lowest =True)
+	newdf = bins.groupby(bins).agg(['count'])
+	newdf.plot(ax=axes[1,0],kind='bar', color='bisque')
+	axes[1,0].set_title(r'#years employee', color='C0')
+	axes[1,0].set_xticklabels([r'0',r'10',r'20',r'30',r'40',r'50',r'50+'],rotation=0)
+	#axes[0,0].set_ylabel('# subjects')
+	axes[1,0].set_xlabel(' ')
+	axes[1,0].grid(axis='y', alpha=0.75)
+	axes[1,0].axvline(x=np.mean(dataframe2plot['sdatrb']), color="red", linestyle='--')
+	axes[1,0].get_legend().remove()
+
+	bins = pd.cut(dataframe2plot['sdeconom'],np.arange(0,10,1))
+	#newdf = dataframe2plot.groupby(bins)['imc'].agg(['count'])
+	dataframe2plot['sdeconom'].plot(ax=axes[1,1], kind='hist',color='bisque',rwidth=0.9);
+	axes[1,1].set_xlabel('')
+	#axes[1].set_ylabel('# subjects')
+	axes[1,1].set_title(r'perceived socioecon. status', color='C0')
+	axes[1,1].axvline(x=np.mean(dataframe2plot['sdeconom']), color="bisque", linestyle='--')
+
+	newdf = dataframe2plot.groupby('sdestciv')['sdestciv'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	#if newdf.ix[9]['count'] >0: newdf = newdf[0:-1]
+	newdf.plot(ax=axes[2,0],kind='bar', color='bisque')
+	axes[2,0].set_title(r'marital status', color='C0')
+	axes[2,0].set_xticklabels([r'Single', r'Married',r'Widowed', r'Divorced'],rotation=0)
+	#axes[0,0].set_ylabel('# subjects')
+	axes[2,0].set_xlabel(' ')
+	axes[2,0].get_legend().remove()
+
+	bins =[-np.inf, 1, 2, 3, 4, 5, np.inf]
+	bins = pd.cut(dataframe2plot['sdvive'],bins)
+	newdf = bins.groupby(bins).agg(['count'])
+	newdf.plot(ax=axes[2,1], kind='bar',color='bisque');
+	#axes[1].set_ylabel('# subjects')
+	axes[2,1].set_title(r'#residents home', color='C0')
+	axes[2,1].set_xticklabels([r'1',r'2', r'3',r'4', r'5',r'6+'],rotation=0)
+	axes[2,1].axvline(x=np.mean(dataframe2plot['sdvive']), color="red", linestyle='--')
+	axes[2,1].set_xlabel('')
+	plt.tight_layout()
+	axes[2,1].get_legend().remove()
+	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+
+	print('Plotting Figure (Fig_sleep.png):Sleep sue_con, sue_dia, sue_hor, sue_man, sue_mov, sue_noc, sue_pro, sue_rec, sue_ron, sue_rui, sue_suf]')
+	fig_filename = 'Fig_sleep.png'
+	
+	bins =[-np.inf,0, 1, 2, 3, np.inf]
+	bins = pd.cut(dataframe2plot['sue_dia'],bins, include_lowest =True)
+	newdf = bins.groupby(bins).agg(['count'])
+	newdf.plot(ax=axes[0,0],kind='bar', color='bisque')
+	axes[0,0].set_title(r'#sons', color='C0')
+	axes[0,0].set_xticklabels([r'0',r'1',r'2',r'3',r'3+'],rotation=0)
+	#axes[0,0].set_ylabel('# subjects')
+	axes[0,0].set_xlabel(' ')
+	axes[0,0].grid(axis='y', alpha=0.75)
+	axes[0,0].get_legend().remove()
+
+	# Sleep	
+	print('Plotting Figure (Fig_sleep.png):Sleep sue_con, sue_dia, sue_hor, sue_man, sue_mov, sue_noc, sue_pro, sue_rec, sue_ron, sue_rui, sue_suf]')
+	fig_filename = 'Fig_sleep.png'
+	# sue dia
+	fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(18,16), sharey=False)
+	bins =[-np.inf,0, 1, 2, 3, np.inf]
+	bins = pd.cut(dataframe2plot['sue_dia'],bins, include_lowest =True)
+	newdf = bins.groupby(bins).agg(['count'])
+	newdf.plot(ax=axes[0,0],kind='bar', color='slateblue')
+	axes[0,0].set_title(r'#hrs sleep day', color='C0')
+	axes[0,0].set_xticklabels([r'0',r'1',r'2',r'3',r'4+'],rotation=0)
+	#axes[0,0].set_ylabel('# subjects')
+	axes[0,0].set_xlabel(' ')
+	axes[0,0].grid(axis='y', alpha=0.75)
+	axes[0,0].get_legend().remove()
+	# sue noc
+	bins =[-np.inf,0, 2, 4, 6, 8, 10,np.inf]
+	bins = pd.cut(dataframe2plot['sue_noc'],bins, include_lowest =True)
+	newdf = bins.groupby(bins).agg(['count'])
+	newdf.plot(ax=axes[0,1],kind='bar', color='slateblue')
+	axes[0,1].set_title(r'#hrs sleep night', color='C0')
+	axes[0,1].set_xticklabels([r'0',r'2',r'4',r'6', r'8', r'10', r'12+'],rotation=0)
+	#axes[0,0].set_ylabel('# subjects')
+	axes[0,1].set_xlabel(' ')
+	axes[0,1].grid(axis='y', alpha=0.75)
+	axes[0,1].get_legend().remove()
+	# sue prof 1,2,3
+	newdf = dataframe2plot.groupby('sue_pro')['sue_pro'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	newdf[0:-1].plot(ax=axes[0,2],kind='bar', color='slateblue')
+	axes[0,2].set_xticklabels([r'Light',r'Moderate', r'Important'],rotation=0)
+	axes[0,2].set_title(r'suffered TBI', color='C0')
+	axes[0,2].get_legend().remove()
+	axes[0,2].set_xlabel(' ')
+	newdf = dataframe2plot.groupby('sue_suf')['sue_suf'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	newdf[0:-1].plot(ax=axes[1,0],kind='bar', color='slateblue')
+	axes[1,0].set_xticklabels([r'No',r'Yes'],rotation=0)
+	axes[1,0].set_title(r'sufficient sleep', color='C0')
+	axes[1,0].get_legend().remove()
+	axes[1,0].set_xlabel(' ')
+	newdf = dataframe2plot.groupby('sue_rec')['sue_rec'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	newdf[0:-1].plot(ax=axes[1,1],kind='bar', color='slateblue')
+	axes[1,1].set_xticklabels([r'No',r'Yes'],rotation=0)
+	axes[1,1].set_title(r'remember dreams', color='C0')
+	axes[1,1].get_legend().remove()
+	axes[1,1].set_xlabel(' ')
+	newdf = dataframe2plot.groupby('sue_mov')['sue_mov'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	newdf[0:-1].plot(ax=axes[1,2],kind='bar', color='slateblue')
+	axes[1,2].set_xticklabels([r'No',r'Yes'],rotation=0)
+	axes[1,2].set_title(r'moves while sleeps', color='C0')
+	axes[1,2].get_legend().remove()
+	axes[1,2].set_xlabel(' ')
+	newdf = dataframe2plot.groupby('sue_ron')['sue_ron'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	newdf[0:-1].plot(ax=axes[2,0],kind='bar', color='slateblue')
+	axes[2,0].set_xticklabels([r'No',r'Yes', r'Snore&Breath int.'],rotation=0)
+	axes[2,0].set_title(r'snores while sleeps', color='C0')
+	axes[2,0].get_legend().remove()
+	axes[2,0].set_xlabel(' ')
+	newdf = dataframe2plot.groupby('sue_rui')['sue_rui'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	newdf[0:-1].plot(ax=axes[2,1],kind='bar', color='slateblue')
+	axes[2,1].set_xticklabels([r'No',r'Yes'],rotation=0)
+	axes[2,1].set_title(r'make noises while sleeps', color='C0')
+	axes[2,1].get_legend().remove()
+	axes[2,1].set_xlabel(' ')
+	newdf = dataframe2plot.groupby('sue_hor')['sue_hor'].agg(['count'])
+	#dont take 9 no sabe no contesta
+	newdf[0:-1].plot(ax=axes[2,2],kind='bar', color='slateblue')
+	axes[2,2].set_xticklabels([r'No',r'Yes'],rotation=0)
+	axes[2,2].set_title(r'tingling while sleeps', color='C0')
+	axes[2,2].get_legend().remove()
+	axes[2,2].set_xlabel(' ')
+	plt.tight_layout()
+	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+	return
+	# fig = dataframe[['sue_dia','sue_noc','sue_suf','sue_pro','sue_ron', 'sue_mov','sue_hor','sue_rec', 'sue_rui']].hist(figsize=(18, 16), bins=None, rwidth=0.9, xlabelsize=8, ylabelsize=8,color = "maroon")
+	# plt.grid(axis='y', alpha=0.75)
+	# titles=['sleep hrs day', 'tingling', 'movements', 'sleep hrs night', 'deep sleep', 'remember dreams', 'snoring', 'noises', 'suff sleep']
+	# i=0
+	# for x in fig.ravel():
+	# 	title=titles[i]
+	# 	x.set_title(title)
+	# 	i=i+1	
+	# plt.tight_layout()
+	# plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+
+
+
+	
+
+
+
+def bins_labels(bins, **kwargs):
+    bin_w = (max(bins) - min(bins)) / (len(bins) - 1)
+    plt.xticks(np.arange(min(bins)+bin_w/2, max(bins), bin_w), bins, **kwargs)
+    plt.xlim(bins[0], bins[-1])
 
 if __name__ == "__name__":
 	#print(Parallel(n_jobs=2)(parallel_func() for _ in range(3)))  # forgot delayed around parallel_func here
