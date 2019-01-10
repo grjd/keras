@@ -79,6 +79,8 @@ from keras.optimizers import SGD, RMSprop, Adam
 from keras.utils import np_utils, plot_model
 from keras.layers.core import Dense, Activation, Dropout
 from keras.callbacks import Callback
+sys.path.append('/Users/jaime/github/papers/EDA_pv/code')
+import area_under_curve 
 
 import networkx as nx
 from adspy_shared_utilities import plot_class_regions_for_classifier, plot_decision_tree, plot_feature_importances, plot_class_regions_for_classifier_subplot
@@ -88,6 +90,8 @@ def main():
 	print('You must activate Keras: source github/code/tensorflow/bin/activate \n')
 	# get the data in csv format
 	csv_file = "/Users/jaime/vallecas/data/BBDD_vallecas/Proyecto_Vallecas_7visitas_19_nov_2018.csv"
+	csv_file = "/Users/jaime/vallecas/data/BBDD_vallecas/Proyecto_Vallecas_7visitas_4_dec_2018.csv"
+
 	dataframe = load_csv_file(csv_file)
 	# Feature Selection : cosmetic name changing and select input and output 
 	print('Cosmetic cleanup (lowercase, /, remove blanks) e.g. cleanup_column_names(df,rename_dict={},do_inplace=True)\n\n') 
@@ -108,8 +112,8 @@ def main():
 	dataframe = dataframe[flat_features_list]
 	print('Columns selected in dataframe {}=',format(dataframe.shape))
 	###### Buschke #####
-	print('Compute the Buschke aggregate \n')
-
+	df_addedb = compute_buchske_agg_df(dataframe)
+	pdb.set_trace()
 	# b_cols = ['fcsrtrl1_visita1','fcsrtrl2_visita1','fcsrtrl3_visita1','fcsrtlibdem_visita1']
 	# dataframe['b_aggregate'] = 0
 	# b_res_array = np.empty((dataframe.shape[0],1))
@@ -130,8 +134,12 @@ def main():
 	###########################################################################################
 	##################  3.0. EDA     ##########################################################
 	# plot quick  histogram
-	plot_figures_of_paper(dataframe)
+	#pdb.set_trace()
+	plot_figures_longitudinal_of_paper(dataframe,features_dict)
 	pdb.set_trace()
+	plot_figures_of_paper(dataframe)
+	
+	
 	# dataframe[['edad','pabd']].hist(figsize=(16, 20), bins=None, xlabelsize=8, ylabelsize=8)
 	# dataframe.hist(figsize=(16, 20), bins=None, xlabelsize=8, ylabelsize=8)
 	target_variable = 'ultimodx' #'conversionmci'
@@ -729,7 +737,7 @@ def vallecas_features_dictionary(dataframe):
 	'valcvida2_visita6', 'valcvida2_visita7','valsatvid2_visita1', 'valsatvid2_visita2', 'valsatvid2_visita3',\
 	'valsatvid2_visita4', 'valsatvid2_visita5', 'valsatvid2_visita6', 'valsatvid2_visita7', 'valfelc2_visita1',\
 	'valfelc2_visita2', 'valfelc2_visita3', 'valfelc2_visita4', 'valfelc2_visita5', 'valfelc2_visita6', \
-	'valfelc2_visita7'],'SocialEngagement_s':['relafami', 'relaamigo','relaocio','rsoled'],'PhysicalExercise_s':['ejfre', 'ejminut'], 'Diet_s':['alaceit', 'alaves', 'alcar', \
+	'valfelc2_visita7'],'SocialEngagement_s':['relafami', 'relaamigo','relaocio_visita1','rsoled_visita1'],'PhysicalExercise_s':['ejfre', 'ejminut'], 'Diet_s':['alaceit', 'alaves', 'alcar', \
 	'aldulc', 'alemb', 'alfrut', 'alhuev', 'allact', 'alleg', 'alpan', 'alpast', 'alpesblan', 'alpeszul', \
 	'alverd','dietaglucemica', 'dietagrasa', 'dietaproteica', 'dietasaludable'],'EngagementExternalWorld_s':\
 	['a01', 'a02', 'a03', 'a04', 'a05', 'a06', 'a07', 'a08', 'a09', 'a10', 'a11', 'a12', 'a13', 'a14'],\
@@ -843,7 +851,7 @@ def cleanup_column_names(df,rename_dict={},do_inplace=True):
     Output: pandas dataframe
     """
     #Rename columns eg df.rename(index=str, columns={"A": "a", "B": "c"})
-    df.rename(index=str, columns={"Edad_visita1": "edad"}, inplace=True) 
+    df.rename(index=str, columns={"edad_visita1": "edad"}, inplace=True) 
     #df.drop('lat_visita1', inplace=True)
     if not rename_dict:
         return df.rename(columns={col: col.replace('/','').lower().replace(' ','_') 
@@ -854,27 +862,31 @@ def cleanup_column_names(df,rename_dict={},do_inplace=True):
 def plot_histograma_one_longitudinal(df, longit_pattern=None):
 	""" plot_histogram_pair_variables: plot histograma for each year of a longitudinal variable
 	Args: Pandas dataframe , regular expression pattern eg mmse_visita """
-
+	figures_dir = '/Users/jaime/github/papers/EDA_pv/figures'
 	if type(longit_pattern) is list:
 		longit_status_columns = longit_pattern
 	else:
 		longit_status_columns = [x for x in df.columns if (longit_pattern.match(x))]
+	fig_filename = longit_status_columns[0][:-1]
 	df[longit_status_columns].head(10)
 	# plot histogram for longitudinal pattern
 	nb_rows, nb_cols = 2, 4
 	fig, ax = plt.subplots(nb_rows, nb_cols, sharey=False, sharex=False)
 	fig.set_size_inches(15,10)
+	rand_color = np.random.rand(3,)
 	for i in range(len(longit_status_columns)):
 		row,col = int(i/(2**nb_rows)), int(i%(nb_cols))
 		histo  = df[longit_status_columns[i]].value_counts()
 		min_r, max_r =df[longit_status_columns[i]].min(), df[longit_status_columns[i]].max()
 		#sns.distplot(df[longit_status_columns[i]], color='g', bins=None, hist_kws={'alpha': 0.4})
-		ax[row,col].bar(histo.index, histo, align='center', color='g')
+		ax[row,col].bar(histo.index, histo, align='center', color=rand_color)
 		ax[row,col].set_xticks(np.arange(min_r,max_r+1))
 		ax[row,col].set_title(longit_status_columns[i])
 	plt.tight_layout(pad=3.0, w_pad=0.5, h_pad=1.0)
 	#remove axis for 8th year plot
 	ax[-1, -1].axis('off')
+	plt.tight_layout()
+	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
 	plt.show()
 
 def plot_histograma_bygroup(df, label=None):
@@ -4013,7 +4025,7 @@ def plot_figures_of_paper(dataframe):
 	np.arange(15,50,5)
 	bins = pd.cut(dataframe2plot['imc'], points)
 	#newdf = dataframe2plot.groupby(bins)['imc'].agg(['count'])
-	dataframe2plot['imc'].plot(ax=axes[0,1], kind='hist',color='firebrick');
+	dataframe2plot['imc'].plot(ax=axes[0,1], kind='hist',color='indianred');
 	axes[0,1].set_xlabel('')
 	#axes[1].set_ylabel('# subjects')
 	axes[0,1].set_title(r'BMI', color='C0')
@@ -4026,7 +4038,7 @@ def plot_figures_of_paper(dataframe):
 	#dont take 9 no sabe no contesta
 	if newdf.ix[9]['count'] >0: newdf = newdf[0:-1]
 	newdf.plot(ax=axes[0,2],kind='bar', color='indianred')
-	axes[0,2].set_title(r'arrhythmias', color='C0')
+	axes[0,2].set_title(r'stroke', color='C0')
 	axes[0,2].set_xticklabels([r'No',r'Angina', r'Stroke'],rotation=0)
 	#axes[0,0].set_ylabel('# subjects')
 	axes[0,2].set_xlabel(' ')
@@ -4189,7 +4201,7 @@ def plot_figures_of_paper(dataframe):
 	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
 	#############
 	
-	print('Plotting Figure 2 (Fig_anthro.png): Anthropometric (peso,talla, imc,pabd)')
+	print('Plotting Figure 2 (Fig_anthro.png): Anthropometric (peso,talla,imc,pabd)')
 	fig_filename ='Fig_anthro.png'
 	list_anthro = ['peso','talla', 'imc','pabd']
 	fig = dataframe[list_anthro].hist(figsize=(10, 10), grid=False, bins=None, xlabelsize=8, ylabelsize=8, rwidth=0.9,color = "skyblue")
@@ -4296,20 +4308,6 @@ def plot_figures_of_paper(dataframe):
 	axes[2,1].get_legend().remove()
 	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
 
-	print('Plotting Figure (Fig_sleep.png):Sleep sue_con, sue_dia, sue_hor, sue_man, sue_mov, sue_noc, sue_pro, sue_rec, sue_ron, sue_rui, sue_suf]')
-	fig_filename = 'Fig_sleep.png'
-	
-	bins =[-np.inf,0, 1, 2, 3, np.inf]
-	bins = pd.cut(dataframe2plot['sue_dia'],bins, include_lowest =True)
-	newdf = bins.groupby(bins).agg(['count'])
-	newdf.plot(ax=axes[0,0],kind='bar', color='bisque')
-	axes[0,0].set_title(r'#sons', color='C0')
-	axes[0,0].set_xticklabels([r'0',r'1',r'2',r'3',r'3+'],rotation=0)
-	#axes[0,0].set_ylabel('# subjects')
-	axes[0,0].set_xlabel(' ')
-	axes[0,0].grid(axis='y', alpha=0.75)
-	axes[0,0].get_legend().remove()
-
 	# Sleep	
 	print('Plotting Figure (Fig_sleep.png):Sleep sue_con, sue_dia, sue_hor, sue_man, sue_mov, sue_noc, sue_pro, sue_rec, sue_ron, sue_rui, sue_suf]')
 	fig_filename = 'Fig_sleep.png'
@@ -4341,7 +4339,7 @@ def plot_figures_of_paper(dataframe):
 	#dont take 9 no sabe no contesta
 	newdf[0:-1].plot(ax=axes[0,2],kind='bar', color='slateblue')
 	axes[0,2].set_xticklabels([r'Light',r'Moderate', r'Important'],rotation=0)
-	axes[0,2].set_title(r'suffered TBI', color='C0')
+	axes[0,2].set_title(r'deep sleep', color='C0')
 	axes[0,2].get_legend().remove()
 	axes[0,2].set_xlabel(' ')
 	newdf = dataframe2plot.groupby('sue_suf')['sue_suf'].agg(['count'])
@@ -4400,11 +4398,61 @@ def plot_figures_of_paper(dataframe):
 	# plt.tight_layout()
 	# plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
 
-
-
-	
-
-
+def plot_figures_longitudinal_of_paper(dataframe, features_dict):
+	"""plot figures of EDA paper
+	"""
+	# dataframe2plot remove 9s no sabe no contesta
+	print('Plotting longitudional features....\n')
+	list_clusters = features_dict.keys()
+	for ix in list_clusters:
+		print('Longitudinal histogram of group:{}',format(ix))
+		list_longi = features_dict[ix]
+		type_of_tests = []
+		if ix is 'CognitivePerformance':
+			type_of_tests = ['mmse_', 'reloj_', 'faq_', 'fcsrtlibdem_', 'fcsrtrl1_', 'cn', 'cdrsum_']
+		elif ix is 'Diagnoses':
+			type_of_tests = ['dx_corto_', 'dx_largo_']
+		elif ix is 'Neuropsychiatric':
+			type_of_tests = ['stai_','gds_', 'act_ansi_', 'act_depre_']
+		elif ix is 'QualityOfLife':
+			type_of_tests = ['eq5dmov_','eq5dsalud_', 'eq5deva_', 'valsatvid2_','valfelc2_']
+		elif ix is 'SCD':
+			#dificultad orientarse  86, 84 toma decisiones, 10 perdida memo afecta su vida
+			type_of_tests = ['scd_','peorotros_', 'preocupacion_', 'eqm86_','eqm84_','eqm10_']
+		if len(type_of_tests) > 0:
+			for j in type_of_tests:
+				longi_items_per_group = filter(lambda k: j in k, list_longi)
+				df_longi = dataframe[longi_items_per_group]
+				plot_histograma_one_longitudinal(df_longi, longi_items_per_group)
+	print('DONE...exiting\n')
+	return 0			
+def compute_buchske_agg_df(dataframe):
+	""" """
+	import scipy.stats.mstats as mstats
+	print('Compute the Buschke aggregate \n')
+	S = [0] * dataframe.shape[0]
+	# arithmetic, gemoetric mean and sum of Bischke scores
+	mean_a, mean_g, suma = S[:], S[:], S[:]
+	bus_scores = ['fcsrtrl1_visita1', 'fcsrtrl2_visita1', 'fcsrtrl3_visita1']
+	df_year = dataframe[bus_scores]
+	df_year = df_year.values
+	#bus_scores = ['fcsrtrl1_visita2', 'fcsrtrl2_visita2', 'fcsrtrl3_visita2']
+	for ix, y in enumerate(df_year):	
+		#print(row[bus_scores[0]], row[bus_scores[1]],row[bus_scores[2]])
+		#pdb.set_trace()
+		bes = area_under_curve.buschke_aggregate(y)
+		S[ix]=bes[0]
+		mean_a[ix] = np.mean(y)
+		mean_g[ix] = mstats.gmean(y)
+		suma[ix] = np.sum(y) 
+		print('Total Aggregate S=', bes[0])
+		print('arithmetic mean:', mean_a[ix], ' Geometric mean:', mean_g[ix], ' Sum:',suma[ix])
+		print('Poly1d exponents drecresaing' ,bes[-1])
+		print('Poly2 exponents drecreasing',bes[-2])
+		print('\n')
+		#pdb.set_trace()
+	dataframe['S'] = S 
+	return dataframe
 
 def bins_labels(bins, **kwargs):
     bin_w = (max(bins) - min(bins)) / (len(bins) - 1)
