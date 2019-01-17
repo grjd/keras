@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """
 #/Users/jaime/github/code/tensorflow/production/descriptive_stats.py
+#REMEMBER to Activate Keras source ~/github/code/tensorflow/bin/activate
 ========================
 Data Pipeline:
 	Import data (csv or xlsx)
@@ -111,33 +112,81 @@ def main():
 	print('Original dataframe pre dict selection {}=',format(dataframe.shape))
 	dataframe = dataframe[flat_features_list]
 	print('Columns selected in dataframe {}=',format(dataframe.shape))
-	###### Buschke #####
-	df_addedb = compute_buchske_agg_df(dataframe)
+	###### Buschke add bus_visita and add bus_ in dictionary #####
+	dataframe, features_dict = compute_buschke_integral_df(dataframe, features_dict)
+	### compute the probability distribution of a data frame
+	buschke_features= features_dict
+	buschke_features = ['fcsrtlibdem_visita1', 'fcsrtlibdem_visita2', 'fcsrtlibdem_visita3', 'fcsrtlibdem_visita4', \
+	'fcsrtlibdem_visita5', 'fcsrtlibdem_visita6', 'fcsrtlibdem_visita7', 'fcsrtrl1_visita1', 'fcsrtrl1_visita2', \
+	'fcsrtrl1_visita3', 'fcsrtrl1_visita4', 'fcsrtrl1_visita5', 'fcsrtrl1_visita6', 'fcsrtrl1_visita7', 'fcsrtrl2_visita1', \
+	'fcsrtrl2_visita2', 'fcsrtrl2_visita3', 'fcsrtrl2_visita4', 'fcsrtrl2_visita5', 'fcsrtrl2_visita6', 'fcsrtrl2_visita7', \
+	'fcsrtrl3_visita1', 'fcsrtrl3_visita2', 'fcsrtrl3_visita3', 'fcsrtrl3_visita4', 'fcsrtrl3_visita5', 'fcsrtrl3_visita6', \
+	'fcsrtrl3_visita7','bus_int_visita1', 'bus_sum_visita1', 'bus_int_visita2', 'bus_sum_visita2', 'bus_int_visita3', \
+	'bus_sum_visita3', 'bus_int_visita4', 'bus_sum_visita4', 'bus_int_visita5', 'bus_sum_visita5', 'bus_int_visita6', \
+	'bus_sum_visita6', 'bus_int_visita7', 'bus_sum_visita7']
+	
+	pdfs = compute_pdf_df(dataframe[buschke_features])
+	print('Dataframe of Buschke columns:',pdfs.columns)
+	for colname in pdfs.columns:
+		for yy in itertools.combinations(np.arange(0,7),2):kl_distances = compute_KL_divergence(pdfs, yy[0], yy[-1], colname)
+			
 	pdb.set_trace()
-	# b_cols = ['fcsrtrl1_visita1','fcsrtrl2_visita1','fcsrtrl3_visita1','fcsrtlibdem_visita1']
-	# dataframe['b_aggregate'] = 0
-	# b_res_array = np.empty((dataframe.shape[0],1))
-	# for ix, b_row in enumerate(dataframe[b_cols].values.tolist()):
-	# 	b_res = build_buschke_aggregate(b_row)
-	# 	b_res_array[ix] = b_res
-	# 	#dataframe.set_value(index=ix,col='b_aggregate',value=b_res)
-	# dataframe['b_aggregate'] = b_res_array
-	# b_cols.append('b_aggregate')
-	# dataframe_b = dataframe[b_cols]
-	# dataframe_b.to_csv('eda_output/buschke.csv')
-	###### Buschke end #####
-	#results = pd.DataFrame([build_buschke_aggregate(*x) for x in dataframe[b_cols].values.tolist()])
-
-	#bis= datafrmae[buschke_cols]
+	# Outdated Buschke integral + differential
 	#build_buschke_aggregate()
+	## plot histograms for longitudinal variables.
+	#the actual features to plot are hardcoded
+	#plot_figures_longitudinal_of_paper(dataframe, features_dict)
 
 	###########################################################################################
 	##################  3.0. EDA     ##########################################################
-	# plot quick  histogram
-	#pdb.set_trace()
-	plot_figures_longitudinal_of_paper(dataframe,features_dict)
+	## plot curve of ratio of H/SCD/SCD+ MCI AD each year
+	ratios = plot_diagnoses_years(dataframe)
+	print("Ratio of Healthy/year is {}".format(ratios[0]), '\n',"Ratio of SCD/year is {}".format(ratios[1]),'\n',"Ratio of SCD+/year is {}".format(ratios[2]),'\n',"Ratio of MCI/year is {}".format(ratios[3]),'\n',"Ratio of AD/year is {}".format(ratios[4]))
+
+	## plot histograms for static variables (hardcoded in the function)
+	#plot_figures_static_of_paper(dataframe)
+	
+	## plot histograms for longitudinal variables.
+	#features_dict is the list of clusters, the actual features to plot are hardcoded
+	plot_figures_longitudinal_of_paper(dataframe, features_dict)
+	
+	## plot time series of longituninal compressed in mean + std
+	matching_features = [s for s in features_dict['QualityOfLife'] if "eq5dmov_" in s]
+	plot_figures_longitudinal_timeseries_of_paper(dataframe[matching_features])	
+	matching_features = [s for s in features_dict['QualityOfLife'] if "eq5ddol_" in s]
+	plot_figures_longitudinal_timeseries_of_paper(dataframe[matching_features])	
+	matching_features = [s for s in features_dict['QualityOfLife'] if "eq5dsalud_" in s]
+	plot_figures_longitudinal_timeseries_of_paper(dataframe[matching_features])	
+	matching_features = [s for s in features_dict['QualityOfLife'] if "valfelc2_" in s]
+	plot_figures_longitudinal_timeseries_of_paper(dataframe[matching_features])	
+
+	# do not plot time series of neuropsychiatric bnecause they are z-transform
+	#matching_features = [s for s in features_dict['Neuropsychiatric'] if "gds_" in s]
+	#plot_figures_longitudinal_timeseries_of_paper(dataframe[matching_features])	
+	#matching_features = [s for s in features_dict['Neuropsychiatric'] if "stai_" in s]
+	#plot_figures_longitudinal_timeseries_of_paper(dataframe[matching_features])
+
+	matching_features = [s for s in features_dict['CognitivePerformance'] if "animales_" in s]
+	plot_figures_longitudinal_timeseries_of_paper(dataframe[matching_features])	
+	matching_features = [s for s in features_dict['CognitivePerformance'] if "p_" in s]
+	plot_figures_longitudinal_timeseries_of_paper(dataframe[matching_features])
+	matching_features = [s for s in features_dict['CognitivePerformance'] if "cn_" in s]
+	plot_figures_longitudinal_timeseries_of_paper(dataframe[matching_features])
+	matching_features = [s for s in features_dict['CognitivePerformance'] if "mmse_" in s]
+	plot_figures_longitudinal_timeseries_of_paper(dataframe[matching_features])
+
+	matching_features = [s for s in features_dict['CognitivePerformance'] if "bus_int" in s]
+	plot_figures_longitudinal_timeseries_of_paper(dataframe[matching_features])
+	matching_features = [s for s in features_dict['CognitivePerformance'] if "bus_sum" in s]
+	plot_figures_longitudinal_timeseries_of_paper(dataframe[matching_features])
+	matching_features = [s for s in features_dict['CognitivePerformance'] if "bus_meana" in s]
+	plot_figures_longitudinal_timeseries_of_paper(dataframe[matching_features])
+	matching_features = [s for s in features_dict['CognitivePerformance'] if "fcsrtlibdem_" in s]
+	plot_figures_longitudinal_timeseries_of_paper(dataframe[matching_features])
 	pdb.set_trace()
+	# plot quick  histograms for longitudinal variables
 	plot_figures_of_paper(dataframe)
+
 	
 	
 	# dataframe[['edad','pabd']].hist(figsize=(16, 20), bins=None, xlabelsize=8, ylabelsize=8)
@@ -712,19 +761,21 @@ def vallecas_features_dictionary(dataframe):
 	'act_depre_visita7','gds_visita1', 'gds_visita2', 'gds_visita3', 'gds_visita4', \
 	'gds_visita5', 'gds_visita6', 'gds_visita7','stai_visita1', 'stai_visita2', \
 	'stai_visita3', 'stai_visita4', 'stai_visita5', 'stai_visita6', 'stai_visita7'],\
-	'CognitivePerformance':['mmse_visita1', 'mmse_visita2', 'mmse_visita3', 'mmse_visita4',\
-	'mmse_visita5', 'mmse_visita6', 'mmse_visita7','reloj_visita1', 'reloj_visita2',\
-	'reloj_visita3', 'reloj_visita4', 'reloj_visita5', 'reloj_visita6', 'reloj_visita7',\
-	'faq_visita1', 'faq_visita2', 'faq_visita3', 'faq_visita4', 'faq_visita5', 'faq_visita6',\
-	'faq_visita7','fcsrtlibdem_visita1', 'fcsrtlibdem_visita2', 'fcsrtlibdem_visita3', \
+	'CognitivePerformance':['animales_visita1', 'animales_visita2', 'animales_visita3', \
+	'animales_visita4','animales_visita5','animales_visita6','animales_visita7',\
+	'p_visita1', 'p_visita2', 'p_visita3', 'p_visita4','p_visita5','p_visita6','p_visita7',\
+	'mmse_visita1', 'mmse_visita2', 'mmse_visita3', 'mmse_visita4','mmse_visita5', 'mmse_visita6', 'mmse_visita7',\
+	'reloj_visita1', 'reloj_visita2','reloj_visita3', 'reloj_visita4', 'reloj_visita5', 'reloj_visita6', 'reloj_visita7',\
+	#'faq_visita1', 'faq_visita2', 'faq_visita3', 'faq_visita4', 'faq_visita5', 'faq_visita6','faq_visita7',\
+	'fcsrtlibdem_visita1', 'fcsrtlibdem_visita2', 'fcsrtlibdem_visita3', \
 	'fcsrtlibdem_visita4', 'fcsrtlibdem_visita5', 'fcsrtlibdem_visita6', 'fcsrtlibdem_visita7',\
 	'fcsrtrl1_visita1', 'fcsrtrl1_visita2', 'fcsrtrl1_visita3', 'fcsrtrl1_visita4', 'fcsrtrl1_visita5',\
 	'fcsrtrl1_visita6', 'fcsrtrl1_visita7', 'fcsrtrl2_visita1', 'fcsrtrl2_visita2', 'fcsrtrl2_visita3',\
 	'fcsrtrl2_visita4', 'fcsrtrl2_visita5', 'fcsrtrl2_visita6', 'fcsrtrl2_visita7', 'fcsrtrl3_visita1', \
-	'fcsrtrl3_visita2', 'fcsrtrl3_visita3', 'fcsrtrl3_visita4', 'fcsrtrl3_visita5', 'fcsrtrl3_visita6', \
-	'fcsrtrl3_visita7', 'cn_visita1', 'cn_visita2', 'cn_visita3', 'cn_visita4','cn_visita5', 'cn_visita6',\
-	'cn_visita7','cdrsum_visita1', 'cdrsum_visita2', 'cdrsum_visita3', 'cdrsum_visita4', 'cdrsum_visita5',\
-	'cdrsum_visita6', 'cdrsum_visita7'],'QualityOfLife':['eq5dmov_visita1', 'eq5dmov_visita2', 'eq5dmov_visita3',\
+	'fcsrtrl3_visita2', 'fcsrtrl3_visita3', 'fcsrtrl3_visita4', 'fcsrtrl3_visita5', 'fcsrtrl3_visita6', 'fcsrtrl3_visita7',\
+	'cn_visita1', 'cn_visita2', 'cn_visita3', 'cn_visita4','cn_visita5', 'cn_visita6','cn_visita7',\
+	#'cdrsum_visita1', 'cdrsum_visita2', 'cdrsum_visita3', 'cdrsum_visita4', 'cdrsum_visita5','cdrsum_visita6', 'cdrsum_visita7'
+	],'QualityOfLife':['eq5dmov_visita1', 'eq5dmov_visita2', 'eq5dmov_visita3',\
 	'eq5dmov_visita4', 'eq5dmov_visita5', 'eq5dmov_visita6', 'eq5dmov_visita7','eq5dcp_visita1', 'eq5dcp_visita2',\
 	'eq5dcp_visita3', 'eq5dcp_visita4', 'eq5dcp_visita5', 'eq5dcp_visita6', 'eq5dcp_visita7','eq5dact_visita1',\
 	'eq5dact_visita2', 'eq5dact_visita3', 'eq5dact_visita4', 'eq5dact_visita5', 'eq5dact_visita6', 'eq5dact_visita7',\
@@ -880,7 +931,8 @@ def plot_histograma_one_longitudinal(df, longit_pattern=None):
 		min_r, max_r =df[longit_status_columns[i]].min(), df[longit_status_columns[i]].max()
 		#sns.distplot(df[longit_status_columns[i]], color='g', bins=None, hist_kws={'alpha': 0.4})
 		ax[row,col].bar(histo.index, histo, align='center', color=rand_color)
-		ax[row,col].set_xticks(np.arange(min_r,max_r+1))
+		ax[row,col].set_xticks(np.arange(int(min_r),int(max_r+1)))
+		ax[row,col].set_xticklabels(np.arange(int(min_r),int(max_r+1)),fontsize=8, rotation='vertical')
 		ax[row,col].set_title(longit_status_columns[i])
 	plt.tight_layout(pad=3.0, w_pad=0.5, h_pad=1.0)
 	#remove axis for 8th year plot
@@ -3886,8 +3938,9 @@ def write_listreport_to_file(listres, file):
 		f.write("%s\n\n")
 		f.close()
 
-def build_buschke_aggregate(y):
-	"""build_buschke_aggregate: 
+def build_buschke_integral_differential(y):
+	"""build_buschke_integral_differential:Computes Buchske suming the integral to the differential
+	OUTDATED function, REPLACEED BY area_under_curve.buschke_aggregate(y)
 	Args:
 	Output:
 	
@@ -3938,7 +3991,7 @@ def build_buschke_aggregate(y):
 		_ = plt.plot(x, y, '.', xp, pol(xp), '-')
 		plt.ylim(0,16)
 		plt.show()
-	print('The build_buschke_aggregate function is finished with s_maximize=%.3f\n'%(s_maximize))	
+	print('The build_buschke_integral_differential function is finished with s_maximize=%.3f\n'%(s_maximize))	
 	return s_maximize
 
 def bins_labels(bins, **kwargs):
@@ -3946,7 +3999,7 @@ def bins_labels(bins, **kwargs):
     plt.xticks(np.arange(min(bins)+bin_w/2, max(bins), bin_w), bins, **kwargs)
     plt.xlim(bins[0], bins[-1])
 
-def plot_figures_of_paper(dataframe):
+def plot_figures_static_of_paper(dataframe):
 	"""plot figures of EDA paper
 	"""
 	# dataframe2plot remove 9s no sabe no contesta
@@ -4398,8 +4451,97 @@ def plot_figures_of_paper(dataframe):
 	# plt.tight_layout()
 	# plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
 
+def plot_diagnoses_years(dataframe):
+	"""plot_diagnoses_years : plot ratio of subjects for each condition 0, SCD,SCD+ MCI and AD
+	Args:dataframe
+	"""
+	figures_dir ='/Users/jaime/github/papers/EDA_pv/figures'
+	fig_filename = 'conversion_years'
+	nb_years = 7
+	x = np.linspace(1, nb_years,nb_years)
+	cols = ['dx_largo_visita1','dx_largo_visita2','dx_largo_visita3','dx_largo_visita4',\
+	'dx_largo_visita5','dx_largo_visita6','dx_largo_visita7']
+	controls = [0] * nb_years
+	scd = [0] * nb_years
+	scdplus = [0] * nb_years
+	mci = [0] * nb_years
+	ad = [0] * nb_years
+	for ix, name in enumerate(cols):
+		controls[ix] = float(np.sum(dataframe[name]==0))/dataframe[name].count()
+		scd[ix] = float(np.sum(dataframe[name]==1))/dataframe[name].count()
+		scdplus[ix] = float(np.sum(dataframe[name]==2))/dataframe[name].count()
+		mci[ix] = float(np.sum(dataframe[name]==3))/dataframe[name].count()
+		ad[ix] = float(np.sum(dataframe[name]==4))/dataframe[name].count()
+	ratios = [controls, scd, scdplus, mci,ad]
+	plt.plot(x, controls, 'g-', label='Control')
+	plt.plot(x, scd, 'b-', label='SCD')
+	plt.plot(x, scdplus, 'b+-', label='SCD +')
+	plt.plot(x, mci, 'm-', label='MCI')
+	plt.plot(x, ad, 'r-', label='AD')
+	plt.ylabel('ratio subjects')
+	plt.xlabel('years')
+	plt.title('Ratio of diagnose H,SCD,SCD+,MCI,AD /Total subjects year')
+	#plt.text(x, mu_years, textlegend, fontdict=font)
+	plt.legend()
+	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+	
+	plt.show() 
+	return ratios		
+
+def plot_figures_longitudinal_timeseries_of_paper(dataframe):
+	""" plot_figures_longitudinal_timeseries_of_paper
+	"""
+	figures_dir ='/Users/jaime/github/papers/EDA_pv/figures'
+	fig  = plt.figure(figsize=(8,6))
+	cols = dataframe.columns
+	fig_filename = cols[0] +'_years'
+	nb_years = len(cols)
+	x = np.linspace(1, nb_years,nb_years)
+	mu_years = [0] * nb_years
+	std_years = [0] * nb_years
+	title = cols[0][:-1]+'1-'+str(nb_years)
+	ylabel = '$\\mu$ +- $\\sigma$'
+	for ix, name in enumerate(cols):
+		mu_years[ix] = dataframe[name].mean()
+		std_years[ix] = dataframe[name].std()
+		if cols[0].find('dx_corto_') > -1:
+			mu_years[ix] = float(np.sum(dataframe[name]>0))/dataframe[name].count()
+			std_years[ix] = mu_years[ix]
+			ylabel = 'Ratio subjects with MCI/AD diagnose in each year'
+		elif cols[0].find('dx_largo_') > -1:
+			#plot scd, scd plus and mci
+			print('plot healthy, scd, scd plus, mci and ad') 
+			mu_years[ix] = float(np.sum(dataframe[name]==2))/dataframe[name].count()
+			std_years[ix] = mu_years[ix]
+			ylabel = 'Ratio subjects with SCD + diagnose in each year'
+			title = 'SCD Plus visits 1,7'
+
+		#textlegend[ix] = (mu_years[ix],std_years[ix])
+	mu_years = np.asarray(mu_years)
+	std_years = np.asarray(std_years)
+	fill_max, fill_min = mu_years-std_years, mu_years+std_years
+	plt.plot(x, mu_years, 'k-')
+	# if cols[0].find('stai_') ==0:
+	# 	stai_yrs = []
+	# 	for i in range(1,nb_years+1):stai_yrs.append('stai_visita'+str(i))
+	# 	# stai is a z transform -2, 4
+	# 	fill_max, fill_min = dataframe[stai_yrs].max().max(), dataframe[stai_yrs].min().min()
+	# 	plt.ylim(top=fill_max+0.2, bottom=fill_min-0.2)
+	# else:
+	plt.ylim(top=np.max(mu_years)+ np.max(std_years), bottom=0)
+
+	if cols[0].find('dx_') <= -1:plt.fill_between(x, fill_max, fill_min, facecolor='papayawhip', interpolate=True)
+	plt.ylabel(ylabel)
+	plt.xlabel('years')
+	plt.title(title)
+	#plt.text(x, mu_years, textlegend, fontdict=font)
+	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+	plt.show()
+
 def plot_figures_longitudinal_of_paper(dataframe, features_dict):
-	"""plot figures of EDA paper
+	"""plot_figures_longitudinal_of_paper plot longitudinal figures of EDA paper
+	Args: list of clusters, the actual features to plot are hardcoded 
+	Output : 0
 	"""
 	# dataframe2plot remove 9s no sabe no contesta
 	print('Plotting longitudional features....\n')
@@ -4409,50 +4551,105 @@ def plot_figures_longitudinal_of_paper(dataframe, features_dict):
 		list_longi = features_dict[ix]
 		type_of_tests = []
 		if ix is 'CognitivePerformance':
-			type_of_tests = ['mmse_', 'reloj_', 'faq_', 'fcsrtlibdem_', 'fcsrtrl1_', 'cn', 'cdrsum_']
-		elif ix is 'Diagnoses':
-			type_of_tests = ['dx_corto_', 'dx_largo_']
+			type_of_tests = ['bus_int_', 'bus_sum_','bus_meana_','fcsrtlibdem_','p_', 'cn', 'animales_', 'mmse_']
 		elif ix is 'Neuropsychiatric':
-			type_of_tests = ['stai_','gds_', 'act_ansi_', 'act_depre_']
+			#type_of_tests = ['stai_','gds_', 'act_ansi_', 'act_depre_']
+			type_of_tests = ['gds_','stai_']
 		elif ix is 'QualityOfLife':
-			type_of_tests = ['eq5dmov_','eq5dsalud_', 'eq5deva_', 'valsatvid2_','valfelc2_']
-		elif ix is 'SCD':
-			#dificultad orientarse  86, 84 toma decisiones, 10 perdida memo afecta su vida
-			type_of_tests = ['scd_','peorotros_', 'preocupacion_', 'eqm86_','eqm84_','eqm10_']
+			type_of_tests = ['eq5dmov_','eq5ddol_','eq5dsalud_','valfelc2_']
+		#elif ix is 'Diagnoses':
+		#	type_of_tests = ['dx_corto_', 'dx_largo_']
+		#elif ix is 'SCD':
+		#dificultad orientarse  86, 84 toma decisiones, 10 perdida memo afecta su vida
+		#	type_of_tests = ['scd_','peorotros_', 'preocupacion_', 'eqm86_','eqm84_','eqm10_']
 		if len(type_of_tests) > 0:
 			for j in type_of_tests:
 				longi_items_per_group = filter(lambda k: j in k, list_longi)
 				df_longi = dataframe[longi_items_per_group]
+				#pdb.set_trace()
 				plot_histograma_one_longitudinal(df_longi, longi_items_per_group)
-	print('DONE...exiting\n')
+	print('DONE...plot_figures_longitudinal_of_paper Exiting\n')
 	return 0			
-def compute_buchske_agg_df(dataframe):
-	""" """
+
+def compute_KL_divergence(pdfs, y_ini, y_end, colname):
+	"""compute_KL_divergence: compute the KL divergence 
+	Args: dataframe containing probability distributions, 2 distribution slected for same feature two different years
+	Output: matrix of distance
+	"""
+	#y_ini, y_end = 0,1
+	#colname = 'bus_init'
+
+	p_ = pdfs[colname][y_ini]
+	q_ = pdfs[colname][y_end]
+
+	kull = (p_*np.log(p_/q_)).sum()
+	print('The KL divergence for :', colname,' years', y_ini, ' and', y_end, ' is:', kull)
+	return kull
+
+def compute_pdf_df(dataframe):
+	"""compute_pdf : 
+	Args: dataframe
+	Output: df_bus dataframe feature_list = ['int', 'sum', 'means', 'demo', 'p1','p2','p3']
+	"""
+	# %# Q2. groupby on marks
+	# %df.groupby('sum')['bus'].value_counts() / df.groupby('sum')['bus'].count()
+	# % https://stackoverflow.com/questions/31617597/generate-probability-vectors-from-python-pandas-dataframe-and-calculate-dot-prod
+	# %dataframe['bus_visita1'].value_counts()/dataframe['bus_visita1'].count()
+	nb_years = 7
+	feature_list = ['bus_int', 'bus_sum', 'fcsrtlibdem', 'fcsrtrl1','fcsrtrl2','fcsrtrl3']
+	df_bus = pd.DataFrame([], index=np.arange(nb_years), columns=feature_list)
+	for yy in np.arange(1,nb_years+1):
+		for ff in feature_list:
+			col_name = ff + '_visita'+str(yy)
+			#pdb.set_trace()
+			df_bus[ff][yy-1] = dataframe[col_name].value_counts()/dataframe[col_name].count()
+			print('Updated col name: ',col_name, 'year:', yy, ' ==',df_bus[ff][yy-1], '\n')
+	return df_bus
+
+
+def compute_buschke_integral_df(dataframe, features_dict=None):
+	""" compute_buchske_integral_df compute new Buschke 
+	Args: dataframe with the columns fcsrtrl1_visita[1-7]
+	Output:return the dataframe including the columns bus_visita[1-7]"""
+
 	import scipy.stats.mstats as mstats
 	print('Compute the Buschke aggregate \n')
 	S = [0] * dataframe.shape[0]
 	# arithmetic, gemoetric mean and sum of Bischke scores
+	nb_years = 7
 	mean_a, mean_g, suma = S[:], S[:], S[:]
-	bus_scores = ['fcsrtrl1_visita1', 'fcsrtrl2_visita1', 'fcsrtrl3_visita1']
-	df_year = dataframe[bus_scores]
-	df_year = df_year.values
-	#bus_scores = ['fcsrtrl1_visita2', 'fcsrtrl2_visita2', 'fcsrtrl3_visita2']
-	for ix, y in enumerate(df_year):	
-		#print(row[bus_scores[0]], row[bus_scores[1]],row[bus_scores[2]])
-		#pdb.set_trace()
-		bes = area_under_curve.buschke_aggregate(y)
-		S[ix]=bes[0]
-		mean_a[ix] = np.mean(y)
-		mean_g[ix] = mstats.gmean(y)
-		suma[ix] = np.sum(y) 
-		print('Total Aggregate S=', bes[0])
-		print('arithmetic mean:', mean_a[ix], ' Geometric mean:', mean_g[ix], ' Sum:',suma[ix])
-		print('Poly1d exponents drecresaing' ,bes[-1])
-		print('Poly2 exponents drecreasing',bes[-2])
-		print('\n')
-		#pdb.set_trace()
-	dataframe['S'] = S 
-	return dataframe
+	#longit_pattern= re.compile("^fcsrtrl[1-3]_+visita+[1-7]")
+	#longit_status_columns = [x for x in dataframe.columns if (longit_pattern.match(x))]
+	for i in range(1, nb_years+1):
+		coda='visita'+ format(i)
+		#bus_scores = ['fcsrtrl1_visita1', 'fcsrtrl2_visita1', 'fcsrtrl3_visita1']
+		bus_scores = ['fcsrtrl1_'+coda, 'fcsrtrl2_'+coda,'fcsrtrl3_'+coda]
+		df_year = dataframe[bus_scores]
+		df_year = df_year.values
+		#bus_scores = ['fcsrtrl1_visita2', 'fcsrtrl2_visita2', 'fcsrtrl3_visita2']
+		for ix, y in enumerate(df_year):	
+			#print(row[bus_scores[0]], row[bus_scores[1]],row[bus_scores[2]])
+			#pdb.set_trace()
+			bes = area_under_curve.buschke_aggregate(y)
+			S[ix]=bes[0]
+			mean_a[ix] = np.mean(y)
+			mean_g[ix] = mstats.gmean(y)
+			suma[ix] = np.sum(y) 
+			print('Total Aggregate S=', bes[0])
+			print('arithmetic mean:', mean_a[ix], ' Geometric mean:', mean_g[ix], ' Sum:',suma[ix])
+			print('Poly1d exponents decreasing' ,bes[-1])
+			print('Poly2 exponents decreasing',bes[-2])
+			print('\n')
+		coda_col= 'bus_int_'+ coda
+		# add bus_visita[1-7] in features_dict
+		features_dict['CognitivePerformance'].append(coda_col);
+		features_dict['CognitivePerformance'].append('bus_sum_'+coda);
+		features_dict['CognitivePerformance'].append('bus_meana_'+coda);
+		dataframe[coda_col] = S
+		dataframe['bus_sum_'+coda] = suma
+		dataframe['bus_meana_'+coda] = mean_a
+	
+	return dataframe, features_dict
 
 def bins_labels(bins, **kwargs):
     bin_w = (max(bins) - min(bins)) / (len(bins) - 1)
