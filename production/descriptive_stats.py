@@ -92,7 +92,7 @@ def main():
 	# get the data in csv format
 	csv_file = "/Users/jaime/vallecas/data/BBDD_vallecas/Proyecto_Vallecas_7visitas_19_nov_2018.csv"
 	csv_file = "/Users/jaime/vallecas/data/BBDD_vallecas/Proyecto_Vallecas_7visitas_4_dec_2018.csv"
-
+	csv_file = "/Users/jaime/vallecas/data/BBDD_vallecas/PVDB_pve_sub-new.csv"
 	dataframe = load_csv_file(csv_file)
 	# Feature Selection : cosmetic name changing and select input and output 
 	print('Cosmetic cleanup (lowercase, /, remove blanks) e.g. cleanup_column_names(df,rename_dict={},do_inplace=True)\n\n') 
@@ -124,13 +124,23 @@ def main():
 	'fcsrtrl3_visita7','bus_int_visita1', 'bus_sum_visita1', 'bus_int_visita2', 'bus_sum_visita2', 'bus_int_visita3', \
 	'bus_sum_visita3', 'bus_int_visita4', 'bus_sum_visita4', 'bus_int_visita5', 'bus_sum_visita5', 'bus_int_visita6', \
 	'bus_sum_visita6', 'bus_int_visita7', 'bus_sum_visita7']
+	conversion_features =['conversionmci','dx_corto_visita1', 'dx_corto_visita2','dx_corto_visita3',\
+	 'dx_corto_visita4','dx_corto_visita5','dx_corto_visita6','dx_corto_visita7']
 	
+	#### YS normalize time series without nans 
+	#normaltest_of_paper(dataframe, buschke_features=['bus_int_visita1', 'bus_int_visita2', 'bus_int_visita3', \
+	#'bus_int_visita4', 'bus_int_visita5', 'bus_int_visita6', 'bus_int_visita7'])
+	df_ts_per_subject = get_timeseriesbuschke_of_paper(dataframe,buschke_features)
+	pdb.set_trace()
+
 	pdfs = compute_pdf_df(dataframe[buschke_features])
+	#YS test pdfs are probability distributions \sum==1
 	print('Dataframe of Buschke columns:',pdfs.columns)
 	for colname in pdfs.columns:
 		for yy in itertools.combinations(np.arange(0,7),2):kl_distances = compute_KL_divergence(pdfs, yy[0], yy[-1], colname)
-			
 	pdb.set_trace()
+	corr_table = compute_correlation_with_conversion_of_paper(dataframe, buschke_features, conversion_features)		
+	
 	# Outdated Buschke integral + differential
 	#build_buschke_aggregate()
 	## plot histograms for longitudinal variables.
@@ -201,7 +211,7 @@ def main():
 		plot_distribution_categorical(dataframe, categorical_features=None)
 		pdb.set_trace()
 		# plot distribution and kde for list of features
-		plot_distribution_kde(dataframe, features = ['sue_noc','edad','pabd', 'peso','talla','imc', 'depre_num','ansi_num','tabac_cant','ictus_num'])
+		plot_distribution_kde(dataframe, features = ['sue_noc','edad_visita1','pabd', 'peso','talla','imc', 'depre_num','ansi_num','tabac_cant','ictus_num'])
 
 		# Plot Correlation based with QuaLitative target
 		print('Ploting groupby for qualitative static features....\n')
@@ -714,7 +724,7 @@ def vallecas_features_dictionary(dataframe):
 	Output: cluster_dict tpe is dict
 	""" 
 
-	cluster_dict = {'Demographics':['edad','edad_visita2', 'edad_visita3', 'edad_visita4', 'edad_visita5', \
+	cluster_dict = {'Demographics':['edad_visita1','edad_visita2', 'edad_visita3', 'edad_visita4', 'edad_visita5', \
 	'edad_visita6', 'edad_visita7', 'edadinicio_visita1', 'edadinicio_visita2', 'edadinicio_visita3',\
 	'edadinicio_visita4', 'edadinicio_visita5', 'edadinicio_visita6', 'edadinicio_visita7'],'Demographics_s':\
 	['renta','nivelrenta','educrenta', 'municipio', 'barrio','distrito','sexo','nivel_educativo',\
@@ -1354,7 +1364,7 @@ def plot_histograma_demographics_categorical(df, target_variable=None):
 	df['nivel_educativo'] = df['nivel_educativo'].astype('category').cat.rename_categories(['~Pr', 'Pr', 'Se', 'Su'])
 	df['familial_ad'] = df['familial_ad'].astype('category').cat.rename_categories(['NoFam', 'Fam'])
 	df['nivelrenta'] = df['nivelrenta'].astype('category').cat.rename_categories(['Baja', 'Media', 'Alta'])
-	df['edad'] = pd.cut(df['edad'], range(0, 100, 10), right=False)
+	df['edad_visita1'] = pd.cut(df['edad_visita1'], range(0, 100, 10), right=False)
 	#in absolute numbers
 	fig, ax = plt.subplots(1,5)
 	fig.set_size_inches(20,5)
@@ -1368,7 +1378,7 @@ def plot_histograma_demographics_categorical(df, target_variable=None):
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[2])
 	d = df.groupby([target_variable, 'nivelrenta']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[3])
-	d = df.groupby([target_variable, 'edad']).size()
+	d = df.groupby([target_variable, 'edad_visita1']).size()
 	p = d.unstack(level=1).plot(kind='bar', ax=ax[4])
 
 	#in relative numbers
@@ -1387,7 +1397,7 @@ def plot_histograma_demographics_categorical(df, target_variable=None):
 	d = df.groupby([target_variable, 'nivelrenta']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[3])
-	d = df.groupby([target_variable, 'edad']).size().unstack(level=1)
+	d = df.groupby([target_variable, 'edad_visita1']).size().unstack(level=1)
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[4])
 	plt.show()
@@ -1430,8 +1440,6 @@ def plot_histograma_diet_categorical(df, target_variable=None):
 	d = d / d.sum()
 	p = d.plot(kind='bar', ax=ax[3])
 
-def plot_histograma_traumaticbraininjury_categorical(df, target_variable):
-	pdb.set_trace()
 
 def plot_histograma_bygroup_categorical(df, type_of_group, target_variable):
 	""" plot_histograma_bygroup_categorical
@@ -1544,7 +1552,7 @@ def split_features_in_groups():
 	Output: dictionaty 'group name':list of features"""
 	dict_features = {}
 
-	vanilla = ['sexo', 'lat_manual', 'edad', 'edad_ultimodx'] #remove apoe , edad_ultimodx
+	vanilla = ['sexo', 'lat_manual', 'edad_visita1', 'edad_ultimodx'] #remove apoe , edad_ultimodx
 	#vanilla = ['sexo', 'lat_manual', 'nivel_educativo', 'edad']
 	#sleep = ['hsnoct' , 'sue_dia' , 'sue_noc' , 'sue_con' , 'sue_man' , 'sue_suf' , 'sue_pro' , 'sue_ron' , 'sue_mov' , 'sue_rui' , 'sue_hor', 'sue_rec']
 	sleep = ['sue_noc', 'sue_rec']
@@ -3385,6 +3393,7 @@ def calculate_network_metrics(G):
 
 	return G_metrics
 
+
 def run_correlation_matrix(dataset,feature_label=None):
 	""" run_correlation_matrix: calculate the correlation matrix and plot sns map with correlation matrix. feature_label MUST be a subset of the dataset.keys()
 	Args: dataset pandas dataframe, feature_label list of features of interest, if None calculate corr with all features in te dataframe
@@ -4275,7 +4284,7 @@ def plot_figures_static_of_paper(dataframe):
 	#https://matplotlib.org/examples/color/named_colors.html
 	print('Plotting Figure 3 (Fig_ages.png):')
 	fig_filename = 'Fig_ages.png'
-	list_ages = ['edad','edad_visita6']
+	list_ages = ['edad_visita1','edad_visita6']
 	fig = dataframe[list_ages].hist(figsize=(8, 6), grid=False, bins=None, xlabelsize=8, ylabelsize=8, rwidth=0.9, color = "gray")
 	titles=['age y1', 'age y6']
 	i=0
@@ -4365,7 +4374,7 @@ def plot_figures_static_of_paper(dataframe):
 	print('Plotting Figure (Fig_sleep.png):Sleep sue_con, sue_dia, sue_hor, sue_man, sue_mov, sue_noc, sue_pro, sue_rec, sue_ron, sue_rui, sue_suf]')
 	fig_filename = 'Fig_sleep.png'
 	# sue dia
-	fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(18,16), sharey=False)
+	fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(18,16), sharex=True, sharey=False)
 	bins =[-np.inf,0, 1, 2, 3, np.inf]
 	bins = pd.cut(dataframe2plot['sue_dia'],bins, include_lowest =True)
 	newdf = bins.groupby(bins).agg(['count'])
@@ -4573,7 +4582,7 @@ def plot_figures_longitudinal_of_paper(dataframe, features_dict):
 
 def compute_KL_divergence(pdfs, y_ini, y_end, colname):
 	"""compute_KL_divergence: compute the KL divergence 
-	Args: dataframe containing probability distributions, 2 distribution slected for same feature two different years
+	Args: dataframe containing probability distributions, 2 distribution selected for same feature two different years
 	Output: matrix of distance
 	"""
 	#y_ini, y_end = 0,1
@@ -4581,10 +4590,129 @@ def compute_KL_divergence(pdfs, y_ini, y_end, colname):
 
 	p_ = pdfs[colname][y_ini]
 	q_ = pdfs[colname][y_end]
-
 	kull = (p_*np.log(p_/q_)).sum()
 	print('The KL divergence for :', colname,' years', y_ini, ' and', y_end, ' is:', kull)
 	return kull
+
+
+def normaltest_of_paper(dataframe, buschke_features):
+	"""normaltest_of_paper  tests the null hypothesis that a sample comes from a normal distribution.
+	Args: the samples are dataframe[buschke_features]
+	Output None, report
+	"""
+	from sklearn.preprocessing import StandardScaler
+	from math import sqrt
+	figures_dir, fig_filename = '/Users/jaime/github/papers/EDA_pv/figures', 'KDE_bus_int'
+	alpha = 1e-3
+	for col in buschke_features:
+		print('Testing if sample:', col , ' is Normal with A 2-sided chi squared probability for the hypothesis test.\n')
+		k2, p = stats.normaltest(dataframe[col],nan_policy='omit')
+		print('p==',p,'k2==',k2, '\n')
+		if p < alpha:  # null hypothesis: x comes from a normal distribution
+			print("The null hypothesis -comes from a normal distribution- can be rejected for", col)
+		else:
+			print("The null hypothesis -comes from a normal distribution- cannot be rejected for", col)
+
+			
+def plotkdebuschke_of_paper(dataframe, buschke_features):
+	"""plotkdebuschke_of_paper: plot KDE of buschke_features from dataframe
+	Args:dataframe, buschke_features 
+	Output:ax
+	"""		
+	fig, ax = plt.subplots()
+	
+	for feat in buschke_features:
+		ax.set_ylim(0,0.125, auto=True)
+		sns.kdeplot(dataframe[feat], ax=ax)
+	ax.set_title('KDE Buschke $\\int$')	
+	ax.set_xlabel('B$\\int$ scores', fontsize=10)
+	plt.savefig(os.path.join(figures_dir, fig_filename), bbox_inches='tight')
+	#plot volatility of the scores for each subject across years
+	# compress the dataframe replacing Nans by -1 
+	return ax
+
+def get_timeseriesbuschke_of_paper(dataframe, buschke_features):
+	"""get_timeseriesbuschke_of_paper: obtain the time series of the buschke_features
+	taking into account missing years
+	Args:
+	Output: ts_list list of lists. ts_list[subject][col]
+	"""
+
+	fig = plt.figure()
+	dataframe_filled = dataframe.fillna(-1)
+	list_features = ['bus_int_visita', 'bus_sum_visita', 'fcsrtrl1_visita', 'fcsrtrl2_visita', 'fcsrtrl3_visita','fcsrtlibdem_visita']
+	for head_f in list_features:
+		col_mean_name = head_f.split('_visita')[0] + '_mean_ts'
+		col_std_name = head_f.split('_visita')[0] + '_std_ts'
+		feat = re.compile(head_f)
+		newlist = list(filter(feat.match, buschke_features)) 
+		# add mean and std of each row excluding the non visit years	
+		means = dataframe_filled[newlist][dataframe_filled[newlist]>=0].mean(axis=1)
+		stds = dataframe_filled[newlist][dataframe_filled[newlist]>=0].std(axis=1)
+		dataframe_filled[col_mean_name] = means
+		dataframe_filled[col_std_name] = stds
+		#dataframe_filled[newlist].iloc(0)[0]
+	# list of created columns
+	newlistcols = ['bus_sum_mean_ts', 'bus_sum_std_ts', 'bus_int_mean_ts', 'bus_int_std_ts',\
+	'fcsrtrl1_mean_ts', 'fcsrtrl1_std_ts','fcsrtrl2_mean_ts', 'fcsrtrl2_std_ts',\
+	'fcsrtrl3_mean_ts', 'fcsrtrl3_std_ts', 'fcsrtlibdem_mean_ts','fcsrtlibdem_std_ts']	# plot scatter of Sum and Int
+	ax1 = dataframe_filled.plot.scatter(x='bus_sum_mean_ts', y='bus_int_mean_ts', c='fcsrtlibdem_mean_ts',colormap='viridis')
+	ax1.set_title('Scatter plot of subjects\' time series of Buschke $\\sum$ and $\\int$')
+	#ax2 = dataframe_filled.plot.scatter(x='bus_sum_mean_ts', y='bus_int_mean_ts', c='conversionmci',colormap='viridis')
+	fig.savefig(os.path.join('/Users/jaime/github/papers/EDA_pv/figures', 'scatter_time_series_bus'), bbox_inches='tight')
+	fig.savefig(os.path.join('/Users/jaime/github/papers/pnas_template/figures/', 'scatter_time_series_bus'), bbox_inches='tight')
+	# plot mean and error bars of buscke same range (0,16) libdem and b123 measures 	
+	ax2 = dataframe_filled[newlistcols[4:]].plot.box()
+	plt.title('Box plot of subjects\' time series of Buschcke scores(0,16)')
+	plt.ylabel('Buschke score')
+	plt.xticks(fontsize = 8, rotation = 45)
+	fig.savefig(os.path.join('/Users/jaime/github/papers/EDA_pv/figures', 'box_time_series_busdem123'), bbox_inches='tight')
+	fig.savefig(os.path.join('/Users/jaime/github/papers/pnas_template/figures/', 'box_time_series_busdem123'), bbox_inches='tight')
+	# plot mean and error bars of buscke sum and integral previous standarize 
+	
+	z_score = (dataframe_filled[newlistcols[0:4]] - dataframe_filled[newlistcols[0:4]].mean())/dataframe_filled[newlistcols[0:4]].std(ddof=0)
+	normal_score = (dataframe_filled[newlistcols[0:4]] - dataframe_filled[newlistcols[0:4]].min())/(dataframe_filled[newlistcols[0:4]].max() - dataframe_filled[newlistcols[0:4]].min())
+	ax3 = z_score.plot.box()
+	ax4 = normal_score.plot.box()
+	fig, (ax5, ax6) = plt.subplots(nrows=1, ncols=2, figsize=(9, 4), sharey=True)
+	sns.set(style="whitegrid")
+	sns.violinplot(x='bus_sum_mean_ts', data=normal_score, ax=ax5)
+	sns.violinplot(x='bus_int_mean_ts', data=normal_score, ax=ax6)
+	pdb.set_trace()
+	return dataframe_filled
+	
+		
+def compute_correlation_with_conversion_of_paper(dataframe, buschke_features, conversion_features):
+	""" compute_correlation_with_conversion_of_paper:
+	Args: dataframe
+	Output:df_corr and table
+	"""
+	nb_years=7
+	df_final = pd.DataFrame({'conversionmci':0.0, 'dx_corto_visita1':0.0, 'dx_corto_visita2':0.0,\
+		'dx_corto_visita3':0.0,'dx_corto_visita4':0.0,'dx_corto_visita5':0.0,'dx_corto_visita6':0.0,\
+		'dx_corto_visita7':0.0}, index=['bus_int', 'bus_sum', 'libdem', 'bus1', 'bus2', \
+		'bus3', 'mmse'])
+	print('Plotting correlation matrix of Buschke features against conversion \n')
+	df_corr = dataframe[buschke_features+conversion_features].corr()
+	for i in np.arange(1, nb_years+1):
+		dxvisita = 'dx_corto_visita'+str(i)
+		print('\n Corr BUS INT SUM with dx_corto_visita',i, '\n')
+		sumint = df_corr.loc['bus_int_visita1':'bus_sum_visita7',[dxvisita,'conversionmci']]
+		print(sumint)
+		print('\n Corr BUS libdem with dx_corto_visita',i, '\n')
+		dem = df_corr.loc['fcsrtlibdem_visita1':'fcsrtlibdem_visita7',[dxvisita,'conversionmci']]
+		print(dem)
+		print('\n Corr p1 with dx_corto_visita',i, '\n')
+		p1 = df_corr.loc['fcsrtrl1_visita1':'fcsrtrl1_visita7',[dxvisita,'conversionmci']]
+		print(p1)
+		print('\n Corr p2 with dx_corto_visita',i, '\n')
+		p2 = df_corr.loc['fcsrtrl2_visita1':'fcsrtrl2_visita7',[dxvisita,'conversionmci']]
+		print(p2)
+		print('\n Corr p3 with dx_corto_visita',i, '\n')
+		p3 = df_corr.loc['fcsrtrl3_visita1':'fcsrtrl3_visita7',[dxvisita,'conversionmci']]
+		print(p3)
+	corr_table=[sumint, dem, p1, p2, p3]	
+	return df_corr
 
 def compute_pdf_df(dataframe):
 	"""compute_pdf : 
@@ -4597,16 +4725,21 @@ def compute_pdf_df(dataframe):
 	# %dataframe['bus_visita1'].value_counts()/dataframe['bus_visita1'].count()
 	nb_years = 7
 	feature_list = ['bus_int', 'bus_sum', 'fcsrtlibdem', 'fcsrtrl1','fcsrtrl2','fcsrtrl3']
-	df_bus = pd.DataFrame([], index=np.arange(nb_years), columns=feature_list)
+	range_dis=[32, 48, 16, 16, 16, 16]
+	#df_bus = pd.DataFrame([], index=np.arange(nb_years), columns=feature_list)
+	df_bus = pd.DataFrame([], index=np.arange(32+1), columns=feature_list)
+	
 	for yy in np.arange(1,nb_years+1):
-		for ff in feature_list:
+		for ix, ff in enumerate(feature_list):
 			col_name = ff + '_visita'+str(yy)
-			#pdb.set_trace()
+			#dataframe[col_name].value_counts().index
+			#df_bus[ff][yy-1] = dataframe[col_name].value_counts(bins=np.arange(0,range_dis[ix]+1))/dataframe[col_name].count()
 			df_bus[ff][yy-1] = dataframe[col_name].value_counts()/dataframe[col_name].count()
+			#fill with 0s if number is not present
 			print('Updated col name: ',col_name, 'year:', yy, ' ==',df_bus[ff][yy-1], '\n')
 	return df_bus
 
-
+#YS: compute_buschke_integral_df MOVE to Buschke Library
 def compute_buschke_integral_df(dataframe, features_dict=None):
 	""" compute_buchske_integral_df compute new Buschke 
 	Args: dataframe with the columns fcsrtrl1_visita[1-7]
@@ -4651,6 +4784,227 @@ def compute_buschke_integral_df(dataframe, features_dict=None):
 	
 	return dataframe, features_dict
 
+def fsl_anat_postprocessing(images_path, df=None):
+	"""fsl_anat_postprocessing: computes fslmaths and other fsl utils 
+	Directory with fsl result must have the format pv_ID_yY.anat. (ID 4 digits number)
+	Args: path with the results from fsl_anat, expected id_yi.anat directories, df(None)
+	Output: datafame with 9 columns for volumes 3 tissues, saved as csv
+	"""
+	import fnmatch, re
+	import glob
+	#images_path= '/Users/jaime/Downloads/test_code'
+	#visit = 1
+	#fslstats -V output <voxels> <volume> (for nonzero voxels)
+	T1_vols = {'scaling2MNI':[],'volume_bnative':[], 'volume_bMNI':[] }
+	col_scaling = []
+	for b in T1_vols.keys():
+		col_scaling.append(b+ '_visita1')
+	brain_dict = {'csf_volume':[],'gm_volume':[], 'wm_volume':[], 'csf_mni_volume':[],'gm_mni_volume':[], 'wm_mni_volume':[]}
+	col_names = []
+	for b in brain_dict.keys():
+		col_names.append(b+ '_visita1')
+	brain_sub_dict = {'BrStem':[],'L_Accu':[], 'L_Amyg':[], 'L_Caud':[],'L_Hipp':[], 'L_Pall':[], 'L_Puta':[],'L_Thal':[],\
+	'R_Accu':[], 'R_Amyg':[], 'R_Caud':[],'R_Hipp':[], 'R_Pall':[], 'R_Puta':[],'R_Thal':[]}
+	col_sub_names = []
+	for b in brain_sub_dict.keys():
+		col_sub_names.append(b+ '_visita1')	
+	# open csv with subjects 
+	if df is None: df = pd.read_csv(os.path.join(images_path, 'PVDB.csv'))
+	print('Dataframe stored Shape==', df.shape)
+
+	# remove / last char in id 
+	df['id'] = df['id'].astype(str).str[:-1].astype(np.int64)
+	# set index the subject id vallecas
+	#df.set_index('id', inplace=True, verify_integrity=True)
+	# add empty columns for scaling and brain volumes
+	for col in col_scaling:
+		df[col] = np.nan
+	# add empty columns for the results of tissue segmentation
+	for col in col_names:
+		df[col] = np.nan
+	# add empty columns for the results of subcortical segmentation
+	for col in col_sub_names:
+		df[col] = np.nan
+	print('Columns added for storing tissue segmentation Shape==', df.shape)
+	# to access by subject id: df.loc[[id]], to access by row df.iloc[[row]]
+	# check last row for last subject it is the same df.loc[[1213]] == df.iloc[[df.shape[0]-1]]
+	for root, directories, filenames in os.walk(images_path):
+		for directory in directories:
+			ff = os.path.join(root, directory) 
+			anatdir = os.path.basename(os.path.normpath(ff))
+			# Expected dir name is pv_ID_yY.anat
+			if ff.endswith('.anat') & anatdir.startswith('pv_'):
+				print('anat directory at:',ff)
+				#id_subject = os.path.basename(os.path.normpath(ff))[0:4]
+				id_subject = anatdir.split('_')[1]
+				print('ID SUBJECT==',id_subject)
+				# read scaling and brain volume from T1_vols.txt file 
+				brain_dict_subject = compute_T1vol(ff, T1_vols)
+				for col in T1_vols.keys():
+					colname_indf = [s for s in col_scaling if col in s][0]
+					df.loc[df['id']==int(id_subject), colname_indf] = brain_dict_subject[col]
+					#df.iloc[int(id_subject), df.columns.get_loc(colname_indf)] = brain_dict_subject[col]
+					print('T1s vols Updated in df for subject id:', id_subject, ' column:', colname_indf, ' key', col, '==', brain_dict_subject[col] )
+
+				# call to compute_tissue_segmentation for PVE of CSG; GM and WM
+				brain_dict_subject = compute_tissue_segmentation(ff, brain_dict)
+				for col in brain_dict.keys():
+					colname_indf = [s for s in col_names if col in s][0]
+					df.loc[df['id']==int(id_subject), colname_indf] = brain_dict_subject[col]
+					#df.iloc[int(id_subject), df.columns.get_loc(colname_indf)] = brain_dict_subject[col]
+					print('Tissue vols Updated in df for subject id:', id_subject, ' column:', colname_indf, ' key', col, '==', brain_dict_subject[col] )
+				# call to compute_subcortical_segmentation for Segmentation of subcortical strutures
+				brain_dict_subject = compute_subcortical_segmentation(ff, brain_sub_dict)
+
+				for col in brain_sub_dict.keys():
+					colname_indf = [s for s in col_sub_names if col in s][0]
+					df.loc[df['id']==int(id_subject), colname_indf] = brain_dict_subject[col]
+					#df.iloc[int(id_subject), df.columns.get_loc(colname_indf)] = brain_dict_subject[col]
+					print('SubCort vols Updated in df for subject id:', id_subject, ' column:', colname_indf, ' key', col, '==', brain_dict_subject[col] )
+
+	#types =  [type(x) == int for x in df['wm_mni_volume_visita1']]
+	#pd.isnull(df['gm_volume_visita1']).all()
+	# ave dataframe as csv
+	csv_name = 'PVDB_pve_sub.csv'
+	csv_name = os.path.join(images_path, csv_name)
+	
+	df.to_csv(csv_name)
+	print('Saved csv at:', csv_name, '\\n')
+
+	return df
+
+def compute_T1vol(ff, T1_vols):
+	"""compute_T1vol :  read .anat/T1_vols.txt file and get 
+	Scaling factor from T1 to MNI, Brain volume in mm^3 (native/original space) an
+	Brain volume in mm^3 (normalised to MNI)
+	Args:
+	Output:T1_vols if T1_vols does not exist return T1_vbols all 0
+	"""
+	scaling = 'Scaling factor'
+	native = 'native/original space'
+	normal = 'normalised to MNI'
+	T1vols_file = os.path.join(ff, 'T1_vols.txt')
+	T1_vols = dict.fromkeys(T1_vols, np.nan)
+	#T1_vols['scaling2MNI'],T1_vols['volume_bnative'],T1_vols['volume_bMNI'] = 0,0,0 
+	if os.path.exists(T1vols_file) is False:
+		print(T1vols_file)
+		warnings.warn("WARNING expected T1_vols.txt file  DOES NOT exist!!!! \n\n")
+	else:
+		with open(T1vols_file,'r') as f:
+			for line in f:
+				if line.find(scaling) != -1:
+					T1_vols['scaling2MNI']= float(line.split()[-1])
+				elif line.find(native) != -1:
+					T1_vols['volume_bnative']= float(line.split()[-1])
+				elif line.find(normal) != -1:
+					T1_vols['volume_bMNI']= float(line.split()[-1])
+	return T1_vols
+
+def compute_subcortical_segmentation(ff, brain_dict):
+	"""compute_subcortical_segmentation: compute statistics of subcortical regions segmented with fsl_anat.
+	Convert the mesh (.vtk file) into a .nii file and calculate the volume with fslstats
+	Args: ff path where to dind first_resukts/.vtk files for the subcortical structures
+	brain_dict: dictionary with keys each subcortical structure
+	Output:brain_dict: dictionary with keys each subcortical structure
+	"""
+	import warnings
+	from subprocess import check_output
+	# first_util labels for each subcortical https://fsl.fmrib.ox.ac.uk/fsl/fslwiki/FIRST/UserGuide
+	first_u_labels = {'BrStem':16,'L_Accu':26, 'L_Amyg':18, 'L_Caud':11,'L_Hipp':17, 'L_Pall':13, 'L_Puta':12,'L_Thal':10,\
+	'R_Accu':58, 'R_Amyg':54, 'R_Caud':50,'R_Hipp':53, 'R_Pall':52, 'R_Puta':51,'R_Thal':49}
+	first_path = os.path.join(ff, 'first_results')
+	vtkhead, vtktail = 'T1_first-', '_first.vtk'
+	t1_file = os.path.join(ff, 'T1.nii.gz')
+	if os.path.exists(t1_file) is False:
+		warnings.warn("ERROR T1 :", T1_file," DOES NOT exist!! Exiting function. \n")
+	if os.path.exists(first_path) is False:
+		warnings.warn("ERROR expected first_results directory: DOES NOT exist!!Exiting function. \n")
+		
+	else:
+		#Convert mesh (vtk) to nii (Volume) and from that calculate the volume of the structure
+		for sub in brain_dict.keys():
+			vtk = vtkhead + sub + vtktail #T1_first-R_Accu_first.vtk
+			vtk = os.path.join(first_path, vtk)
+			if os.path.exists(vtk) is False:
+				warnings.warn("ERROR vtk file:", vtk," DOES NOT exist \n")
+			else:
+				label = str(first_u_labels[sub])
+				out_vol = sub + "_meshvolume"
+				out_vol = os.path.join(first_path, out_vol)
+				#first_utils --meshToVol -m mesh.vtk -i t1_image.nii.gz -l fill_value -o output_name
+				print("Calling to:: first_utils","--meshToVol", "-m",vtk, "-i", t1_file, "-l", label, "-o", out_vol)
+				util_command = check_output(['first_utils','--meshToVol', '-m', vtk, '-i', t1_file, '-l', label, '-o', out_vol])
+				
+				print('Calling to:: fslstats', out_vol, "-M", "-V")
+				stats_command = check_output(["fslstats",out_vol, "-M", "-V"])
+				stats_command = stats_command.split(' ')
+				volmm3 = float(stats_command[0])*float(stats_command[2])
+				volvoxels = float(stats_command[0])*float(stats_command[1])
+				brain_dict[sub] = int(round(volmm3))
+				print('DONE with::', vtk, ' Mesh Volume ==', volmm3, '\n\n')
+				#fslstats mesh_right_hipp -M -V | awk '{ print $1 * $2 }' #mean voxel \times nb voxels
+	print('compute_subcortical_segmentation ENDED \n')		
+	return brain_dict
+
+
+def compute_tissue_segmentation(ff, brain_dict):
+	"""compute_tissue_segmentation:
+	Args:ff is the .anat directory containing the pve files from fsl_anat
+	Output: dict: dictionary with tissue measures volume and voxel intensity per tissue
+	dict = {'GM_volume':[],'CSF_volume':[], 'WM_volume':[], 'GM_voxel_int':[], 'CSF_voxel_int':[], 'WM_voxel_int':[]}
+	"""
+	import warnings
+	from subprocess import check_output
+
+	if os.path.exists(ff) is False:
+		warnings.warn("ERROR expected .anat directory:", ff," DOES NOT exist")
+	else:
+		#-M output mean (for nonzero voxels) -V output <voxels> <volume> (for nonzero voxels)
+		# volume in mm3. 
+		#fslstats structural_bet_pve_1 -M -V | awk '{ print $1 * $3 }'
+		file_root, file_coda = 'T1_fast_pve_', '.nii.gz'
+		csf_file = file_root+str(0) + file_coda
+		csf_mni_file = file_root+str(0) + '_MNI' + file_coda
+		gm_file = file_root+str(1) + file_coda
+		gm_mni_file = file_root+str(1) + '_MNI' + file_coda
+		wm_file = file_root+str(2) + file_coda
+		wm_mni_file = file_root+str(2) + '_MNI' + file_coda
+		#'T1_fast_pve_0.nii.gz', 'T1_fast_pve_1.nii.gz', 'T1_fast_pve_2.nii.gz'
+		#tissues = [csf_file, gm_file, wm_file] 
+		for i in np.arange(0,2+1):
+			if i==0:
+				tif,tifmni  = csf_file, csf_mni_file
+				vol_label, vol_mni_label = 'csf_volume', 'csf_mni_volume'
+			elif i==1:
+				tif,tifmni  = gm_file, gm_mni_file
+				vol_label, vol_mni_label = 'gm_volume', 'gm_mni_volume'
+			elif i==2:
+				tif,tifmni  = wm_file, wm_mni_file
+				vol_label, vol_mni_label = 'wm_volume', 'wm_mni_volume'
+			
+			tifpath = os.path.join(ff, tif)
+			out = check_output(["fslstats",tifpath, "-M", "-V"])
+			out = out.split(' ')
+			#pdb.set_trace()
+			volmm3 = float(out[0])*float(out[2])
+			volvoxels = float(out[0])*float(out[1])
+			brain_dict[vol_label] = int(round(volmm3))
+			print('Label for ', tifpath, ' ', vol_label, '==', volmm3)
+			# if pve_i_MNI exists 
+			tifpath = os.path.join(ff, tifmni)
+			if os.path.exists(tifpath) is True:
+				out = check_output(["fslstats",tifpath, "-M", "-V"])
+				out = out.split(' ')
+				volmm3 = float(out[0])*float(out[2])
+				volvoxels = float(out[0])*float(out[1])
+				brain_dict[vol_mni_label] = int(round(volmm3))
+				print('Label for ', tifpath, ' ', vol_mni_label,  '==', volmm3)
+			else:
+				print('**** pve_i_MNI not found at', tifpath,' skipping...\n')
+				# assign dummy values to pve_i_MNI
+				brain_dict[vol_mni_label] = np.nan
+		return brain_dict	
+			
 def bins_labels(bins, **kwargs):
     bin_w = (max(bins) - min(bins)) / (len(bins) - 1)
     plt.xticks(np.arange(min(bins)+bin_w/2, max(bins), bin_w), bins, **kwargs)
